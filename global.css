@@ -99,3 +99,11 @@
   line-height: 1.4em;
   font-weight: 400;
 }
+
+/* Web only: suppress the browser's default input focus ring so our own
+   border/highlight styling shows instead. No effect on native. */
+input:focus,
+textarea:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}

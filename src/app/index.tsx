@@ -1,4 +1,5 @@
-import { ScrollView, Text, View } from "react-native";
+import { Link } from "expo-router";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
 const SWATCHES = [
   { label: "Gym Crew Yellow", className: "bg-brand-yellow" },
@@ -18,6 +19,13 @@ export default function Index() {
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-6 p-6 pb-16">
       <Text className="heading-1 text-text-primary">GYMCREW</Text>
+
+      <Link href="/onboarding" asChild>
+        <Pressable className="self-start rounded-full bg-brand-yellow px-5 py-3">
+          <Text className="body-lg text-brand-iron">Open Onboarding →</Text>
+        </Pressable>
+      </Link>
+
       <Text className="heading-2 text-text-primary">Section Title</Text>
       <Text className="heading-3 text-text-primary">Card Title</Text>
       <Text className="heading-4 text-text-primary">Subheading</Text>
