@@ -1,0 +1,101 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css";
+
+@import "nativewind/theme";
+
+/* ---------------------------------------------------------------- */
+/* GymCrew design tokens — mirrors src/theme/colors.ts + fonts.ts   */
+/* ---------------------------------------------------------------- */
+@layer theme {
+  @theme {
+    /* Brand */
+    --color-brand-yellow: #e3ff00;
+    --color-brand-green: #00c853;
+    --color-brand-white: #ffffff;
+    --color-brand-iron: #1f2328;
+
+    /* Semantic */
+    --color-success: #00c853;
+    --color-warning: #ffb800;
+    --color-streak: #ff6d00;
+    --color-error: #ff3b30;
+    --color-info: #2979ff;
+
+    /* Neutrals */
+    --color-text-primary: #edeff2;
+    --color-text-secondary: #8b929e;
+    --color-divider: #2c3138;
+    --color-surface: #161a20;
+    --color-background: #0d1117;
+
+    /* Fonts — one family per weight, since RN does not synthesize
+       bold/medium for custom fonts (see src/theme/fonts.ts). */
+    --font-heading: "BebasNeue-Regular";
+    --font-body: "Poppins-Regular";
+    --font-body-medium: "Poppins-Medium";
+    --font-body-semibold: "Poppins-SemiBold";
+    --font-body-bold: "Poppins-Bold";
+  }
+}
+
+/* ---------------------------------------------------------------- */
+/* Type scale utilities — H1-H4, body, caption                      */
+/* Bundles family + size + line-height + weight so screens can do   */
+/* <Text className="heading-1 text-text-primary">                  */
+/* ---------------------------------------------------------------- */
+@utility heading-1 {
+  font-family: var(--font-heading);
+  font-size: 64px;
+  line-height: 1.1em;
+  font-weight: 700;
+}
+
+@utility heading-2 {
+  font-family: var(--font-heading);
+  font-size: 40px;
+  line-height: 1.2em;
+  font-weight: 700;
+}
+
+@utility heading-3 {
+  font-family: var(--font-heading);
+  font-size: 28px;
+  line-height: 1.3em;
+  font-weight: 700;
+}
+
+@utility heading-4 {
+  font-family: var(--font-body-semibold);
+  font-size: 20px;
+  line-height: 1.4em;
+  font-weight: 600;
+}
+
+@utility body-lg {
+  font-family: var(--font-body-medium);
+  font-size: 16px;
+  line-height: 1.6em;
+  font-weight: 500;
+}
+
+@utility body-md {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6em;
+  font-weight: 400;
+}
+
+@utility body-sm {
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.6em;
+  font-weight: 400;
+}
+
+@utility caption {
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1.4em;
+  font-weight: 400;
+}

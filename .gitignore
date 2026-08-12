@@ -41,3 +41,8 @@ example
 # generated native folders
 /ios
 /android
+
+# local agent tooling / design references (not app source)
+/.agents/
+/.claude/skills/
+/prompt_material/
