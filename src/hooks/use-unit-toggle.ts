@@ -1,22 +1,22 @@
 import { useState } from "react";
 
 type UseUnitToggleOptions = {
-  initialValue: string;
+  initialValue: number;
   units: readonly [string, string];
   factor: number;
+  decimals?: number;
 };
 
-export function useUnitToggle({ initialValue, units, factor }: UseUnitToggleOptions) {
+export function useUnitToggle({ initialValue, units, factor, decimals = 1 }: UseUnitToggleOptions) {
   const [unit, setUnit] = useState<string>(units[0]);
   const [value, setValue] = useState(initialValue);
 
   function toggle() {
-    const current = parseFloat(value) || 0;
     if (unit === units[0]) {
-      setValue((current * factor).toFixed(1));
+      setValue(Number((value * factor).toFixed(decimals)));
       setUnit(units[1]);
     } else {
-      setValue((current / factor).toFixed(0));
+      setValue(Number((value / factor).toFixed(decimals)));
       setUnit(units[0]);
     }
   }
