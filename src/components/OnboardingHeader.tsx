@@ -21,7 +21,7 @@ export function OnboardingHeader({ title, subtitle }: OnboardingHeaderProps) {
       <View className="gap-2">
         <Animated.Text
           entering={FadeInDown.springify().damping(14).mass(0.6)}
-          className="font-body-bold text-5xl leading-tight text-brand-yellow"
+          className="font-body-bold text-5xl italic leading-tight text-brand-yellow"
         >
           {title}
         </Animated.Text>

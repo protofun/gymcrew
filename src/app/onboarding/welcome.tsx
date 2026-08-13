@@ -1,4 +1,4 @@
-import { SafeAreaView, View } from "react-native";
+import { Text, SafeAreaView, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
 import { router } from "expo-router";
 
@@ -13,15 +13,10 @@ export default function OnboardingWelcomeScreen() {
         <View className="gap-2">
           <Animated.Text
             entering={FadeInDown.springify().damping(14).mass(0.6)}
-            className="font-body-bold text-5xl leading-tight text-text-primary"
+            className="font-body-bold text-5xl italic leading-none"
           >
-            Welcome to
-          </Animated.Text>
-          <Animated.Text
-            entering={FadeInDown.delay(80).springify().damping(14).mass(0.6)}
-            className="font-body-bold text-5xl leading-tight text-brand-yellow"
-          >
-            GymCrew
+            <Text className="text-text-primary">Welcome to{"\n"}</Text>
+            <Text className="text-brand-yellow">GymCrew</Text>
           </Animated.Text>
           <Animated.Text
             entering={FadeInUp.delay(180).springify().damping(14).mass(0.6)}
