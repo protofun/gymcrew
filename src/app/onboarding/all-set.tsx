@@ -28,7 +28,7 @@ export default function AllSetScreen() {
           <Animated.Image
             entering={ZoomIn.delay(150).springify().damping(11).mass(0.7)}
             source={images.mascotSplash}
-            style={{ width: 500, height: 500 * (250 / 261) }}
+            style={{ width: 400, height: 400 * (250 / 261) }}
             resizeMode="contain"
           />
         </View>
@@ -36,7 +36,7 @@ export default function AllSetScreen() {
         <OnboardingFooter
           label="Start My Journey"
           activeIndex={3}
-          onPress={() => router.replace("/")}
+          onPress={() => router.push("/sign-up")}
         />
       </View>
     </SafeAreaView>

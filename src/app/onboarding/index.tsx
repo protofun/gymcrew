@@ -22,7 +22,8 @@ export default function OnboardingIntroScreen() {
 
           <Animated.Text
             entering={FadeInUp.delay(150).springify().damping(14).mass(0.6)}
-            className="font-heading text-8xl italic leading-none text-center"
+            className="font-heading text-8xl leading-none text-center"
+            style={{ fontStyle: "italic", transform: [{ skewX: "-10deg" }] }}
           >
             <Text className="text-text-primary">GYM</Text>
             <Text className="text-brand-yellow">CREW</Text>

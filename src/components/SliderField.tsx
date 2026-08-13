@@ -1,10 +1,9 @@
 import { useEffect, type ReactNode } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import Slider from "@react-native-community/slider";
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 
+import { Slider } from "@/components/Slider";
 import { useEditableNumber } from "@/hooks/use-editable-number";
-import { colors } from "@/theme";
 
 type SliderFieldProps = {
   label: string;
@@ -71,16 +70,7 @@ export function SliderField({
         )}
       </View>
 
-      <Slider
-        value={value}
-        onValueChange={onChange}
-        minimumValue={min}
-        maximumValue={max}
-        step={step}
-        minimumTrackTintColor={colors.brand.yellow}
-        maximumTrackTintColor={colors.neutral.divider}
-        thumbTintColor={colors.brand.yellow}
-      />
+      <Slider value={value} onValueChange={onChange} minimumValue={min} maximumValue={max} step={step} />
 
       <View className="flex-row justify-between">
         <Text className="caption text-text-secondary">{min}</Text>
