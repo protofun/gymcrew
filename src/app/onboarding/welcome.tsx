@@ -13,7 +13,8 @@ export default function OnboardingWelcomeScreen() {
         <View className="gap-2">
           <Animated.Text
             entering={FadeInDown.springify().damping(14).mass(0.6)}
-            className="font-body-bold text-5xl italic leading-none"
+            className="font-body-bold text-5xl leading-none"
+            style={{ fontStyle: "italic", transform: [{ skewX: "-10deg" }] }}
           >
             <Text className="text-text-primary">Welcome to{"\n"}</Text>
             <Text className="text-brand-yellow">GymCrew</Text>

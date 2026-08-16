@@ -12,16 +12,16 @@ export function FormField({ label, rightAdornment, onFocus, onBlur, ...inputProp
   const [focused, setFocused] = useState(false);
 
   return (
-    <View className="gap-2">
-      <Text className="body-md text-text-primary">{label}</Text>
-      <View
-        className={`flex-row items-center rounded-xl border bg-surface px-4 ${
-          focused ? "border-brand-yellow" : "border-divider"
-        }`}
-      >
+    <View
+      className={`flex-row items-center rounded-xl border bg-surface px-4 py-2 ${
+        focused ? "border-brand-yellow" : "border-divider"
+      }`}
+    >
+      <View className="flex-1">
+        <Text className="body-sm text-text-secondary">{label}</Text>
         <TextInput
           placeholderTextColor={colors.neutral.textSecondary}
-          className="body-md flex-1 py-4 text-text-primary"
+          className="body-lg text-text-primary"
           style={{ outlineWidth: 0, outlineColor: "transparent" }}
           onFocus={(event) => {
             setFocused(true);
@@ -33,8 +33,8 @@ export function FormField({ label, rightAdornment, onFocus, onBlur, ...inputProp
           }}
           {...inputProps}
         />
-        {rightAdornment}
       </View>
+      {rightAdornment}
     </View>
   );
 }

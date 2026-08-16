@@ -1,4 +1,5 @@
-import { Link } from "expo-router";
+import { useAuth } from "@clerk/expo";
+import { Link, Redirect } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 const SWATCHES = [
@@ -16,9 +17,24 @@ const SWATCHES = [
 ];
 
 export default function Index() {
+  const { isLoaded, isSignedIn } = useAuth();
+
+  if (!isLoaded) {
+    return null;
+  }
+
+  if (!isSignedIn) {
+    return <Redirect href="/onboarding" />;
+  }
+
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-6 p-6 pb-16">
-      <Text className="heading-1 text-text-primary">GYMCREW</Text>
+      <Text
+        className="heading-1 text-text-primary"
+        style={{ fontStyle: "italic", transform: [{ skewX: "-10deg" }] }}
+      >
+        GYMCREW
+      </Text>
 
       <Link href="/onboarding" asChild>
         <Pressable className="self-start rounded-full bg-brand-yellow px-5 py-3">
