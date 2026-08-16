@@ -9,18 +9,25 @@ import { SliderField } from "@/components/SliderField";
 import { Stepper } from "@/components/Stepper";
 import { UnitToggle } from "@/components/UnitToggle";
 import { useUnitToggle } from "@/hooks/use-unit-toggle";
+import { type Gender, useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
 const CM_TO_IN = 0.393701;
 const KG_TO_LB = 2.20462;
 
-type Gender = "male" | "female";
-
 export default function YourStatsScreen() {
+  const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
   const [age, setAge] = useState(24);
   const [gender, setGender] = useState<Gender>("male");
   const height = useUnitToggle({ initialValue: 180, units: ["cm", "in"], factor: CM_TO_IN });
   const weight = useUnitToggle({ initialValue: 75, units: ["kg", "lb"], factor: KG_TO_LB });
+
+  function handleContinue() {
+    const heightCm = height.unit === "cm" ? height.value : height.value / CM_TO_IN;
+    const weightKg = weight.unit === "kg" ? weight.value : weight.value / KG_TO_LB;
+    setOnboardingData({ age, gender, heightCm, weightKg });
+    router.push("/onboarding/your-goal");
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
@@ -84,7 +91,7 @@ export default function YourStatsScreen() {
           />
         </Animated.ScrollView>
 
-        <OnboardingFooter label="Continue" activeIndex={3} onPress={() => router.push("/onboarding/your-goal")} />
+        <OnboardingFooter label="Continue" activeIndex={3} onPress={handleContinue} />
       </View>
     </SafeAreaView>
   );

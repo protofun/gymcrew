@@ -44,6 +44,7 @@
 /* Bundles family + size + line-height + weight so screens can do   */
 /* <Text className="heading-1 text-text-primary">                  */
 /* ---------------------------------------------------------------- */
+
 @utility heading-1 {
   font-family: var(--font-heading);
   font-size: 64px;

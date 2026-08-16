@@ -4,7 +4,7 @@ import Animated, { FadeInUp, ZoomIn } from "react-native-reanimated";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
-import { colors } from "@/theme";
+import { colors, typography } from "@/theme";
 
 export default function OnboardingIntroScreen() {
   return (
@@ -20,14 +20,12 @@ export default function OnboardingIntroScreen() {
             resizeMode="contain"
           />
 
-          <Animated.Text
-            entering={FadeInUp.delay(150).springify().damping(14).mass(0.6)}
-            className="font-heading text-8xl leading-none text-center"
-            style={{ fontStyle: "italic", transform: [{ skewX: "-10deg" }] }}
-          >
-            <Text className="text-text-primary">GYM</Text>
-            <Text className="text-brand-yellow">CREW</Text>
-          </Animated.Text>
+          <Animated.View entering={FadeInUp.delay(150).springify().damping(14).mass(0.6)}>
+            <Text style={typography.heroItalic}>
+              <Text style={{ color: colors.neutral.textPrimary }}>GYM</Text>
+              <Text style={{ color: colors.brand.yellow }}>CREW</Text>
+            </Text>
+          </Animated.View>
 
           <Animated.View
             entering={FadeInUp.delay(250).springify().damping(14).mass(0.6)}

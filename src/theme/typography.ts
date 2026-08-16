@@ -15,4 +15,19 @@ export const typography = {
   bodyMedium: { fontFamily: fontFamily.bodyRegular, fontSize: 14, lineHeight: 14 * 1.6, fontWeight: "400" as const },
   bodySmall: { fontFamily: fontFamily.bodyRegular, fontSize: 12, lineHeight: 12 * 1.6, fontWeight: "400" as const },
   caption: { fontFamily: fontFamily.bodyRegular, fontSize: 11, lineHeight: 11 * 1.4, fontWeight: "400" as const },
+  /**
+   * Big italic brand wordmark (e.g. "GYMCREW" hero titles). Always inline
+   * style, never a `className` — NativeWind does not reliably compile
+   * `transform`/`font-style` from a custom @utility (or alongside a
+   * sibling `className`) onto native, so the skew silently drops on
+   * device even though it renders fine on web.
+   */
+  heroItalic: {
+    fontFamily: fontFamily.heading,
+    fontSize: 96,
+    lineHeight: 96,
+    fontStyle: "italic" as const,
+    textAlign: "center" as const,
+    transform: [{ skewX: "-10deg" }],
+  },
 } as const;

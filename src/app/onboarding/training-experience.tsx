@@ -5,6 +5,7 @@ import { router } from "expo-router";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
 const EXPERIENCE_LEVELS = [
@@ -15,7 +16,13 @@ const EXPERIENCE_LEVELS = [
 ] as const;
 
 export default function TrainingExperienceScreen() {
+  const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
   const [selected, setSelected] = useState<string>("intermediate");
+
+  function handleContinue() {
+    setOnboardingData({ experienceLevel: selected });
+    router.push("/onboarding/your-metrics");
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
@@ -40,7 +47,7 @@ export default function TrainingExperienceScreen() {
           })}
         </Animated.ScrollView>
 
-        <OnboardingFooter label="Continue" activeIndex={2} onPress={() => router.push("/onboarding/your-metrics")} />
+        <OnboardingFooter label="Continue" activeIndex={2} onPress={handleContinue} />
       </View>
     </SafeAreaView>
   );

@@ -55,7 +55,7 @@ export default function SignUpScreen() {
       return getClerkErrorMessage(finalizeError);
     }
 
-    router.replace("/");
+    router.replace("/build-crew");
   }
 
   async function handleSocialAuth(strategy: "oauth_google" | "oauth_facebook" | "oauth_apple") {
@@ -63,7 +63,7 @@ export default function SignUpScreen() {
     try {
       const { createdSessionId } = await startSSOFlow({ strategy });
       if (createdSessionId) {
-        router.replace("/");
+        router.replace("/build-crew");
       }
     } catch (error) {
       setFormError(getClerkErrorMessage(error));
