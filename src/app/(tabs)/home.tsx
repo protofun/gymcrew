@@ -1,5 +1,8 @@
 import { ScrollView } from "react-native";
 
+import { CrewCard } from "@/components/CrewCard";
+import { GoalsWidget } from "@/components/GoalsWidget";
+import { LastWorkoutWidget } from "@/components/LastWorkoutWidget";
 import { MuscleSuggestions } from "@/components/MuscleSuggestions";
 import { TrainingCalendar } from "@/components/TrainingCalendar";
 import { WelcomeWidget } from "@/components/WelcomeWidget";
@@ -15,6 +18,9 @@ export default function HomeScreen() {
       <WelcomeWidget name={firstName} onPressStartWorkout={() => {}} />
       <TrainingCalendar sessions={MOCK_WORKOUT_SESSIONS} />
       <MuscleSuggestions sessions={MOCK_WORKOUT_SESSIONS} />
+      <LastWorkoutWidget sessions={MOCK_WORKOUT_SESSIONS} />
+      <GoalsWidget sessions={MOCK_WORKOUT_SESSIONS} />
+      <CrewCard />
     </ScrollView>
   );
 }

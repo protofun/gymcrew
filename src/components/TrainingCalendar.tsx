@@ -97,30 +97,30 @@ export function TrainingCalendar({ sessions }: TrainingCalendarProps) {
 
   return (
     <View className="mx-4 mt-8 gap-4">
-      <View className="flex-row items-center justify-between">
-        <View>
-          <Text className="heading-4 text-text-primary">Training Calendar</Text>
-          <Text className="caption text-text-secondary">{trainedCountThisView} sessions this month</Text>
-        </View>
-
-        <View className="flex-row items-center gap-3">
-          <Pressable onPress={goToPrevMonth} hitSlop={8}>
-            <Ionicons name="chevron-back" size={20} color={colors.neutral.textSecondary} />
-          </Pressable>
-          <Text className="body-md w-24 text-center text-text-primary">
-            {visibleMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-          </Text>
-          <Pressable onPress={goToNextMonth} hitSlop={8} disabled={isCurrentMonth}>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={isCurrentMonth ? colors.neutral.divider : colors.neutral.textSecondary}
-            />
-          </Pressable>
-        </View>
-      </View>
-
       <View className="gap-3 rounded-3xl border border-divider bg-surface p-4">
+        <View className="flex-row items-center justify-between">
+          <View>
+            <Text className="heading-4 text-text-primary">Training Calendar</Text>
+            <Text className="caption text-text-secondary">{trainedCountThisView} sessions this month</Text>
+          </View>
+
+          <View className="flex-row items-center gap-3">
+            <Pressable onPress={goToPrevMonth} hitSlop={8}>
+              <Ionicons name="chevron-back" size={20} color={colors.neutral.textSecondary} />
+            </Pressable>
+            <Text className="body-md w-24 text-center text-text-primary">
+              {visibleMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            </Text>
+            <Pressable onPress={goToNextMonth} hitSlop={8} disabled={isCurrentMonth}>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={isCurrentMonth ? colors.neutral.divider : colors.neutral.textSecondary}
+              />
+            </Pressable>
+          </View>
+        </View>
+
         <View className="flex-row justify-between">
           {WEEKDAY_LABELS.map((label) => (
             <Text key={label} className="caption flex-1 text-center text-text-secondary">

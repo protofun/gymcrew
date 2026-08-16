@@ -38,36 +38,41 @@ export function MuscleSuggestions({ sessions }: MuscleSuggestionsProps) {
 
   return (
     <View className="mx-4 mt-8 gap-4">
-      <View>
-        <Text className="heading-4 text-text-primary">Muscle Suggestions</Text>
-        <Text className="caption text-text-secondary">Based on your training this week</Text>
-      </View>
-
-      <View className="flex-row items-center gap-4 rounded-3xl border border-divider bg-surface p-4">
-        <View className="flex-1 gap-4">
-          {suggestions.map((suggestion, index) => (
-            <View
-              key={suggestion.group}
-              className={`flex-row items-center gap-3 ${
-                index < suggestions.length - 1 ? "border-b border-divider pb-4" : ""
-              }`}
-            >
-              <View className="h-10 w-10 items-center justify-center rounded-xl bg-background">
-                <Ionicons name="alert-circle-outline" size={18} color={PRIORITY_COLOR[suggestion.priority]} />
-              </View>
-              <View>
-                <Text className="body-md font-body-semibold text-text-primary">
-                  {formatMuscleLabel(suggestion.group)}
-                </Text>
-                <Text className="caption font-body-semibold" style={{ color: PRIORITY_COLOR[suggestion.priority] }}>
-                  {suggestion.priority} Priority
-                </Text>
-              </View>
-            </View>
-          ))}
+      <View className="gap-4 rounded-3xl border border-divider bg-surface p-4">
+        <View>
+          <Text className="heading-4 text-text-primary">Muscle Suggestions</Text>
+          <Text className="caption text-text-secondary">Based on your training this week</Text>
         </View>
 
-        <MuscleHeatmap muscleIntensity={heatmapIntensity} height={190} showLegend={false} />
+        <View className="flex-row items-center gap-4">
+          <View className="flex-1 gap-4">
+            {suggestions.map((suggestion, index) => (
+              <View
+                key={suggestion.group}
+                className={`flex-row items-center gap-3 ${
+                  index < suggestions.length - 1 ? "border-b border-divider pb-4" : ""
+                }`}
+              >
+                <View className="h-10 w-10 items-center justify-center rounded-xl bg-background">
+                  <Ionicons name="alert-circle-outline" size={18} color={PRIORITY_COLOR[suggestion.priority]} />
+                </View>
+                <View>
+                  <Text className="body-md font-body-semibold text-text-primary">
+                    {formatMuscleLabel(suggestion.group)}
+                  </Text>
+                  <Text
+                    className="caption font-body-semibold"
+                    style={{ color: PRIORITY_COLOR[suggestion.priority] }}
+                  >
+                    {suggestion.priority} Priority
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <MuscleHeatmap muscleIntensity={heatmapIntensity} height={190} showLegend={false} />
+        </View>
       </View>
     </View>
   );

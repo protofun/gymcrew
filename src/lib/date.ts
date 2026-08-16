@@ -8,3 +8,13 @@ export function toDateKey(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+/**
+ * Parses a `toDateKey` string back into a local midnight Date. Unlike
+ * `new Date("yyyy-mm-dd")`, which the JS spec parses as UTC, this stays in
+ * the same local timezone `toDateKey` used to produce the string.
+ */
+export function fromDateKey(key: string): Date {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
