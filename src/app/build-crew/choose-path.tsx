@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { type ImageSourcePropType, Pressable, SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut } from "react-native-reanimated";
+import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
@@ -47,9 +48,11 @@ export default function ChoosePathScreen() {
   const setCrewData = useOnboardingStore((state) => state.setCrewData);
   const completeCrewSelection = useOnboardingStore((state) => state.completeCrewSelection);
   const [selected, setSelected] = useState<PathKey>("join");
+  const posthog = usePostHog();
 
   function handleContinue() {
     setCrewData({ choice: selected });
+    posthog.capture("crew_path_chosen", { choice: selected });
     if (selected === "join") router.push("/build-crew/join");
     else if (selected === "create") router.push("/build-crew/create");
     else {

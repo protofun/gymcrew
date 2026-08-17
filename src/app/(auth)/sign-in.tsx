@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { usePostHog } from "posthog-react-native";
 
 import { AuthDivider } from "@/components/AuthDivider";
 import { AuthHeader } from "@/components/AuthHeader";
@@ -15,6 +16,7 @@ import { colors } from "@/theme";
 export default function SignInScreen() {
   const { signIn } = useSignIn();
   const { startSSOFlow } = useSSO();
+  const posthog = usePostHog();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -45,6 +47,7 @@ export default function SignInScreen() {
       return;
     }
 
+    posthog.capture("user_signed_in", { auth_method: "email" });
     router.replace("/build-crew");
   }
 
@@ -53,6 +56,8 @@ export default function SignInScreen() {
     try {
       const { createdSessionId } = await startSSOFlow({ strategy });
       if (createdSessionId) {
+        const provider = strategy.replace("oauth_", "");
+        posthog.capture("user_signed_in", { auth_method: provider });
         router.replace("/build-crew");
       }
     } catch (error) {

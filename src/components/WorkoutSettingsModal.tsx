@@ -1,0 +1,95 @@
+import { Ionicons } from "@expo/vector-icons";
+import { Modal, Pressable, Text, TextInput, View } from "react-native";
+import Animated, { FadeInUp } from "react-native-reanimated";
+
+import type { WeightUnit } from "@/store/active-workout-store";
+import { colors } from "@/theme";
+
+type WorkoutSettingsModalProps = {
+  visible: boolean;
+  onClose: () => void;
+  name: string;
+  onChangeName: (name: string) => void;
+  unit: WeightUnit;
+  onChangeUnit: (unit: WeightUnit) => void;
+  onDiscard: () => void;
+};
+
+export function WorkoutSettingsModal({
+  visible,
+  onClose,
+  name,
+  onChangeName,
+  unit,
+  onChangeUnit,
+  onDiscard,
+}: WorkoutSettingsModalProps) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "rgba(0,0,0,0.7)",
+          paddingHorizontal: 24,
+        }}
+      >
+        <Animated.View
+          entering={FadeInUp.springify().damping(16).mass(0.7)}
+          className="w-full gap-4 rounded-3xl border border-divider bg-surface p-5"
+        >
+          <View className="flex-row items-center justify-between">
+            <Text className="heading-4 text-text-primary">Workout Settings</Text>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
+            </Pressable>
+          </View>
+
+          <View className="gap-1.5">
+            <Text className="body-sm text-text-secondary">Workout Name</Text>
+            <TextInput
+              value={name}
+              onChangeText={onChangeName}
+              placeholder="Workout"
+              placeholderTextColor={colors.neutral.textSecondary}
+              className="body-md rounded-xl bg-background px-4 py-3 text-text-primary"
+            />
+          </View>
+
+          <View className="gap-1.5">
+            <Text className="body-sm text-text-secondary">Weight Unit</Text>
+            <View className="flex-row gap-2">
+              {(["kg", "lbs"] as WeightUnit[]).map((option) => {
+                const selected = unit === option;
+                return (
+                  <Pressable
+                    key={option}
+                    onPress={() => onChangeUnit(option)}
+                    className={`flex-1 items-center rounded-full border py-2.5 ${
+                      selected ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-background"
+                    }`}
+                  >
+                    <Text className={`body-md font-body-semibold ${selected ? "text-brand-iron" : "text-text-secondary"}`}>
+                      {option.toUpperCase()}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View className="h-px bg-divider" />
+
+          <Pressable
+            onPress={onDiscard}
+            className="flex-row items-center justify-center gap-2 rounded-full border border-error py-3"
+          >
+            <Ionicons name="trash-outline" size={18} color={colors.semantic.error} />
+            <Text className="body-md font-body-semibold text-error">Discard Workout</Text>
+          </Pressable>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}

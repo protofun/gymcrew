@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 
 import { WorkoutSummaryModal } from "@/components/WorkoutSummaryModal";
-import { EXERCISES } from "@/data/exercises";
+import { findExerciseByDisplayName } from "@/data/exercises";
 import type { WorkoutSession } from "@/data/workout-log";
 import { getLastWorkout } from "@/lib/workout-history";
 import { colors } from "@/theme";
@@ -19,7 +19,7 @@ export function LastWorkoutWidget({ sessions }: LastWorkoutWidgetProps) {
 
   if (!lastWorkout) return null;
   const { date, session } = lastWorkout;
-  const exercise = EXERCISES[session.primaryExercise.name];
+  const exercise = findExerciseByDisplayName(session.primaryExercise.name);
 
   return (
     <>

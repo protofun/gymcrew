@@ -3,6 +3,7 @@ import { Pressable, SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
@@ -21,9 +22,11 @@ const GOALS = [
 export default function YourGoalScreen() {
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
   const [selected, setSelected] = useState<string>("build-muscle");
+  const posthog = usePostHog();
 
   function handleContinue() {
     setOnboardingData({ goal: selected });
+    posthog.capture("onboarding_goal_selected", { goal: selected });
     router.push("/onboarding/training-experience");
   }
 
