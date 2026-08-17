@@ -55,8 +55,8 @@ export function Stepper({ label, value, onChange, step, min, max, decimals = 0, 
               keyboardType="decimal-pad"
               autoFocus
               selectTextOnFocus
-              className="heading-4 min-w-[56px] text-center text-2xl text-text-primary"
-              style={{ outlineWidth: 0, outlineColor: "transparent" }}
+              className="heading-4 min-w-[56px] text-2xl text-text-primary"
+              style={{ outlineWidth: 0, outlineColor: "transparent", textAlign: "center" }}
             />
           ) : (
             <Pressable onPress={startEditing}>

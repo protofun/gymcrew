@@ -7,6 +7,7 @@ import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
 import { SearchableSelectField } from "@/components/SearchableSelectField";
 import { TRAINING_SPLITS } from "@/data/training-splits";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
 const DURATIONS = ["30 min", "45 min", "60+ min"] as const;
@@ -14,10 +15,21 @@ const MIN_WORKOUTS_PER_WEEK = 1;
 const MAX_WORKOUTS_PER_WEEK = 7;
 
 export default function WorkoutPreferencesScreen() {
+  const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
   const [trainingSplit, setTrainingSplit] = useState<string>("Push / Pull / Legs");
   const [workoutsPerWeek, setWorkoutsPerWeek] = useState(4);
   const [duration, setDuration] = useState<(typeof DURATIONS)[number]>("60+ min");
   const [restTimer, setRestTimer] = useState(true);
+
+  function handleContinue() {
+    setOnboardingData({
+      trainingSplit,
+      workoutsPerWeek,
+      workoutDuration: duration,
+      restTimerEnabled: restTimer,
+    });
+    router.push("/onboarding/notifications");
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
@@ -79,7 +91,7 @@ export default function WorkoutPreferencesScreen() {
           </View>
         </Animated.ScrollView>
 
-        <OnboardingFooter label="Continue" activeIndex={2} onPress={() => router.push("/onboarding/notifications")} />
+        <OnboardingFooter label="Continue" activeIndex={2} onPress={handleContinue} />
       </View>
     </SafeAreaView>
   );

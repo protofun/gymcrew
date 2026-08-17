@@ -5,6 +5,7 @@ import { router } from "expo-router";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
 type NotificationRowProps = {
@@ -32,10 +33,23 @@ function NotificationRow({ title, subtitle, value, onValueChange }: Notification
 }
 
 export default function NotificationsScreen() {
+  const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
+  const completeOnboarding = useOnboardingStore((state) => state.completeOnboarding);
   const [workoutReminders, setWorkoutReminders] = useState(true);
   const [crewChallenges, setCrewChallenges] = useState(true);
   const [progressUpdates, setProgressUpdates] = useState(true);
   const [marketingTips, setMarketingTips] = useState(false);
+
+  function handleContinue() {
+    setOnboardingData({
+      workoutReminders,
+      crewChallengeAlerts: crewChallenges,
+      progressUpdates,
+      marketingTips,
+    });
+    completeOnboarding();
+    router.push("/onboarding/all-set");
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
@@ -69,7 +83,7 @@ export default function NotificationsScreen() {
           />
         </Animated.ScrollView>
 
-        <OnboardingFooter label="Continue" activeIndex={3} onPress={() => router.push("/onboarding/all-set")} />
+        <OnboardingFooter label="Continue" activeIndex={3} onPress={handleContinue} />
       </View>
     </SafeAreaView>
   );

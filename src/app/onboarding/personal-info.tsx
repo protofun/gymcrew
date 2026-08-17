@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { router } from "expo-router";
@@ -5,6 +6,7 @@ import { router } from "expo-router";
 import { FormField } from "@/components/FormField";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
 function CameraIcon() {
@@ -48,7 +50,36 @@ function CameraIcon() {
   );
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function PersonalInfoScreen() {
+  const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
+  const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [errors, setErrors] = useState<{ fullName?: string; username?: string; email?: string }>({});
+
+  function handleContinue() {
+    const trimmedName = fullName.trim();
+    const trimmedUsername = username.trim();
+    const trimmedEmail = email.trim();
+
+    const nextErrors: typeof errors = {};
+    if (!trimmedName) nextErrors.fullName = "Enter your full name.";
+    if (!trimmedUsername) nextErrors.username = "Choose a username.";
+    if (!trimmedEmail) nextErrors.email = "Enter your email.";
+    else if (!EMAIL_REGEX.test(trimmedEmail)) nextErrors.email = "Enter a valid email address.";
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
+    setErrors({});
+    setOnboardingData({ fullName: trimmedName, username: trimmedUsername, email: trimmedEmail });
+    router.push("/onboarding/your-stats");
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -62,14 +93,45 @@ export default function PersonalInfoScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <FormField label="Full Name" placeholder="Enter your name" />
-            <FormField label="Username" placeholder="Choose a username" autoCapitalize="none" />
-            <FormField
-              label="Email"
-              placeholder="Enter your email"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
+            <View className="gap-1">
+              <FormField
+                label="Full Name"
+                placeholder="Enter your name"
+                value={fullName}
+                onChangeText={(text) => {
+                  setFullName(text);
+                  setErrors((prev) => ({ ...prev, fullName: undefined }));
+                }}
+              />
+              {errors.fullName && <Text className="body-sm text-error">{errors.fullName}</Text>}
+            </View>
+            <View className="gap-1">
+              <FormField
+                label="Username"
+                placeholder="Choose a username"
+                autoCapitalize="none"
+                value={username}
+                onChangeText={(text) => {
+                  setUsername(text);
+                  setErrors((prev) => ({ ...prev, username: undefined }));
+                }}
+              />
+              {errors.username && <Text className="body-sm text-error">{errors.username}</Text>}
+            </View>
+            <View className="gap-1">
+              <FormField
+                label="Email"
+                placeholder="Enter your email"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setErrors((prev) => ({ ...prev, email: undefined }));
+                }}
+              />
+              {errors.email && <Text className="body-sm text-error">{errors.email}</Text>}
+            </View>
 
             <View className="gap-2">
               <Text className="body-md text-text-primary">Profile Picture</Text>
@@ -79,11 +141,7 @@ export default function PersonalInfoScreen() {
             </View>
           </Animated.ScrollView>
 
-          <OnboardingFooter
-            label="Continue"
-            activeIndex={2}
-            onPress={() => router.push("/onboarding/your-stats")}
-          />
+          <OnboardingFooter label="Continue" activeIndex={2} onPress={handleContinue} />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

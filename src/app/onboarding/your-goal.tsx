@@ -3,9 +3,11 @@ import { Pressable, SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
 const GOALS = [
@@ -18,7 +20,15 @@ const GOALS = [
 ] as const satisfies readonly { key: string; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[];
 
 export default function YourGoalScreen() {
+  const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
   const [selected, setSelected] = useState<string>("build-muscle");
+  const posthog = usePostHog();
+
+  function handleContinue() {
+    setOnboardingData({ goal: selected });
+    posthog.capture("onboarding_goal_selected", { goal: selected });
+    router.push("/onboarding/training-experience");
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
@@ -49,11 +59,7 @@ export default function YourGoalScreen() {
           </View>
         </Animated.ScrollView>
 
-        <OnboardingFooter
-          label="Continue"
-          activeIndex={1}
-          onPress={() => router.push("/onboarding/training-experience")}
-        />
+        <OnboardingFooter label="Continue" activeIndex={1} onPress={handleContinue} />
       </View>
     </SafeAreaView>
   );

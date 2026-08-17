@@ -8,6 +8,7 @@ import { OnboardingHeader } from "@/components/OnboardingHeader";
 import { Stepper } from "@/components/Stepper";
 import { UnitToggle } from "@/components/UnitToggle";
 import { useUnitToggle } from "@/hooks/use-unit-toggle";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
 const KG_TO_LB = 2.20462;
@@ -22,10 +23,25 @@ function liftStepperProps(unit: string) {
 }
 
 export default function YourMetricsScreen() {
+  const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
   const benchPress = useUnitToggle({ initialValue: 80, units: ["kg", "lb"], factor: KG_TO_LB });
   const squat = useUnitToggle({ initialValue: 100, units: ["kg", "lb"], factor: KG_TO_LB });
   const deadlift = useUnitToggle({ initialValue: 120, units: ["kg", "lb"], factor: KG_TO_LB });
   const [bodyFat, setBodyFat] = useState(15);
+
+  function toKg(unitValue: { value: number; unit: string }) {
+    return unitValue.unit === "kg" ? unitValue.value : unitValue.value / KG_TO_LB;
+  }
+
+  function handleContinue() {
+    setOnboardingData({
+      benchPress1RM: toKg(benchPress),
+      squat1RM: toKg(squat),
+      deadlift1RM: toKg(deadlift),
+      bodyFatPercent: bodyFat,
+    });
+    router.push("/onboarding/workout-preferences");
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
@@ -70,11 +86,7 @@ export default function YourMetricsScreen() {
           />
         </Animated.ScrollView>
 
-        <OnboardingFooter
-          label="Continue"
-          activeIndex={2}
-          onPress={() => router.push("/onboarding/workout-preferences")}
-        />
+        <OnboardingFooter label="Continue" activeIndex={2} onPress={handleContinue} />
       </View>
     </SafeAreaView>
   );

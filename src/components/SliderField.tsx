@@ -57,8 +57,8 @@ export function SliderField({
             keyboardType="decimal-pad"
             autoFocus
             selectTextOnFocus
-            className="heading-4 min-w-[64px] text-right text-2xl text-brand-yellow"
-            style={{ outlineWidth: 0, outlineColor: "transparent" }}
+            className="heading-4 min-w-[64px] text-2xl text-brand-yellow"
+            style={{ outlineWidth: 0, outlineColor: "transparent", textAlign: "right" }}
           />
         ) : (
           <Pressable onPress={startEditing} className="flex-row items-baseline gap-1">
