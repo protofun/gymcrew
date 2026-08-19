@@ -1,4 +1,7 @@
 import type { Ionicons } from "@expo/vector-icons";
+import type { ImageSourcePropType } from "react-native";
+
+import { exerciseImages } from "@/constants/images";
 
 export type WorkoutTemplate = {
   key: string;
@@ -112,6 +115,28 @@ const DAY_TEMPLATES = {
 } as const satisfies Record<string, WorkoutTemplate>;
 
 type DayTemplateKey = keyof typeof DAY_TEMPLATES;
+
+/** A representative exercise photo per day template, for hero-image spots like the crew's Today's Plan card. */
+const DAY_TEMPLATE_HERO_IMAGE: Record<DayTemplateKey, ImageSourcePropType> = {
+  push: exerciseImages.benchPress,
+  pull: exerciseImages.pullUp,
+  legs: exerciseImages.squat,
+  upper: exerciseImages.benchPress,
+  lower: exerciseImages.squat,
+  fullBodyA: exerciseImages.squat,
+  fullBodyB: exerciseImages.deadlift,
+  chest: exerciseImages.benchPress,
+  back: exerciseImages.deadlift,
+  shoulders: exerciseImages.shoulderPress,
+  arms: exerciseImages.barbellCurl,
+  glutes: exerciseImages.lunge,
+  bodyweightFull: exerciseImages.plank,
+};
+
+/** Day template display name (e.g. "Leg Day") → hero photo, for screens that only know the workout's name. */
+export const WORKOUT_NAME_HERO_IMAGE: Record<string, ImageSourcePropType> = Object.fromEntries(
+  Object.values(DAY_TEMPLATES).map((template) => [template.name, DAY_TEMPLATE_HERO_IMAGE[template.key as DayTemplateKey]]),
+);
 
 /** Maps each onboarding split choice to an ordered set of day templates. Splits without a close
  * match (named programs like 5/3/1, GZCLP, Westside) fall back to the closest generic shape. */

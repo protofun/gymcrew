@@ -93,6 +93,20 @@ export function intensityToColor(intensity: number): string {
   return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
 }
 
+// Crew-level muscle balance reads as low (green, needs work) → high (red, well trained),
+// distinct from the single-person heatmap's yellow scale — a crew view is inherently
+// comparative across muscle groups, so it borrows the familiar traffic-light convention.
+const RED_GREEN_STOPS = ["#22C55E", "#EAB308", "#F97316", "#EF4444"].map(hexToRgb);
+
+export function intensityToRedGreenColor(intensity: number): string {
+  const t = Math.max(0, Math.min(10, intensity)) / 10;
+  const segments = RED_GREEN_STOPS.length - 1;
+  const scaled = t * segments;
+  const index = Math.min(segments - 1, Math.floor(scaled));
+  const { r, g, b } = mixRgb(RED_GREEN_STOPS[index], RED_GREEN_STOPS[index + 1], scaled - index);
+  return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+}
+
 export function formatMuscleLabel(group: MuscleGroup): string {
   return group.charAt(0).toUpperCase() + group.slice(1);
 }

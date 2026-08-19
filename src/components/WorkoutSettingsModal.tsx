@@ -1,9 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Modal, Pressable, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, Switch, Text, TextInput, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 import type { WeightUnit } from "@/store/active-workout-store";
 import { colors } from "@/theme";
+
+const REST_DURATION_PRESETS = [0, 30, 60, 90, 120, 180];
+
+function formatRestDuration(seconds: number): string {
+  if (seconds === 0) return "Off";
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
+}
 
 type WorkoutSettingsModalProps = {
   visible: boolean;
@@ -12,6 +22,10 @@ type WorkoutSettingsModalProps = {
   onChangeName: (name: string) => void;
   unit: WeightUnit;
   onChangeUnit: (unit: WeightUnit) => void;
+  restDurationSeconds: number;
+  onChangeRestDurationSeconds: (seconds: number) => void;
+  autoFillPreviousSet: boolean;
+  onChangeAutoFillPreviousSet: (enabled: boolean) => void;
   onDiscard: () => void;
 };
 
@@ -22,6 +36,10 @@ export function WorkoutSettingsModal({
   onChangeName,
   unit,
   onChangeUnit,
+  restDurationSeconds,
+  onChangeRestDurationSeconds,
+  autoFillPreviousSet,
+  onChangeAutoFillPreviousSet,
   onDiscard,
 }: WorkoutSettingsModalProps) {
   return (
@@ -77,6 +95,41 @@ export function WorkoutSettingsModal({
                 );
               })}
             </View>
+          </View>
+
+          <View className="gap-1.5">
+            <Text className="body-sm text-text-secondary">Rest Timer</Text>
+            <View className="flex-row flex-wrap gap-2">
+              {REST_DURATION_PRESETS.map((seconds) => {
+                const selected = restDurationSeconds === seconds;
+                return (
+                  <Pressable
+                    key={seconds}
+                    onPress={() => onChangeRestDurationSeconds(seconds)}
+                    className={`items-center rounded-full border px-4 py-2.5 ${
+                      selected ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-background"
+                    }`}
+                  >
+                    <Text className={`body-sm font-body-semibold ${selected ? "text-brand-iron" : "text-text-secondary"}`}>
+                      {formatRestDuration(seconds)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View className="flex-row items-center justify-between rounded-xl bg-background px-4 py-3.5">
+            <View className="flex-1 pr-3">
+              <Text className="body-md text-text-primary">Auto-fill Sets</Text>
+              <Text className="body-sm text-text-secondary">New sets start with the weight & reps from the set above</Text>
+            </View>
+            <Switch
+              value={autoFillPreviousSet}
+              onValueChange={onChangeAutoFillPreviousSet}
+              trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
+              thumbColor={colors.brand.white}
+            />
           </View>
 
           <View className="h-px bg-divider" />

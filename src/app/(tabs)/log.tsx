@@ -53,6 +53,7 @@ export default function LogScreen() {
         <WorkoutWeekStrip
           workouts={workouts}
           onPressWorkout={(workout) => router.push({ pathname: "/workout/summary", params: { id: workout.id } })}
+          onSeeAll={() => router.push("/workout/history")}
         />
       )}
     </ScrollView>

@@ -101,7 +101,8 @@ function jitterIntensity(intensity: number, hash: number): number {
   return Math.max(1, Math.min(10, intensity + jitter));
 }
 
-function generateMockSessions(monthsBack: number): Record<string, WorkoutSession> {
+/** `seed` lets callers generate a distinct-but-deterministic history per person (e.g. per crew member id). */
+function generateMockSessions(monthsBack: number, seed = ""): Record<string, WorkoutSession> {
   const sessions: Record<string, WorkoutSession> = {};
   const end = new Date();
   const cursor = new Date();
@@ -112,7 +113,7 @@ function generateMockSessions(monthsBack: number): Record<string, WorkoutSession
     const split = SPLIT_BY_WEEKDAY[cursor.getDay()];
     if (split) {
       const dateKey = toDateKey(cursor);
-      const hash = hashString(dateKey);
+      const hash = hashString(seed + dateKey);
       const muscleIntensity: MuscleIntensity = {};
       for (const [group, intensity] of Object.entries(split.muscleIntensity) as [MuscleGroup, number][]) {
         muscleIntensity[group] = jitterIntensity(intensity, hash);
@@ -138,3 +139,8 @@ function generateMockSessions(monthsBack: number): Record<string, WorkoutSession
 }
 
 export const MOCK_WORKOUT_SESSIONS = generateMockSessions(3);
+
+/** A crew member's mock training history for their profile — same shape as MOCK_WORKOUT_SESSIONS, seeded per member so each looks distinct. */
+export function generateMemberWorkoutSessions(memberId: string, monthsBack = 2): Record<string, WorkoutSession> {
+  return generateMockSessions(monthsBack, memberId);
+}

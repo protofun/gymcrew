@@ -19,7 +19,7 @@ export function computeMuscleIntensity(exercises: LoggedExercise[]): Partial<Rec
   for (const exercise of exercises) {
     const group = toMuscleGroup(exercise.primaryMuscle);
     if (!group) continue;
-    const completedSets = exercise.sets.filter((set) => set.completed).length;
+    const completedSets = exercise.sets.filter((set) => set.completed && !set.isWarmup).length;
     if (completedSets === 0) continue;
     setsByGroup[group] = (setsByGroup[group] ?? 0) + completedSets;
   }
@@ -34,13 +34,16 @@ export function computeMuscleIntensity(exercises: LoggedExercise[]): Partial<Rec
 export function computeVolumeKg(exercises: LoggedExercise[]): number {
   return exercises.reduce(
     (sum, exercise) =>
-      sum + exercise.sets.filter((set) => set.completed).reduce((setSum, set) => setSum + (set.weightKg ?? 0) * (set.reps ?? 0), 0),
+      sum +
+      exercise.sets
+        .filter((set) => set.completed && !set.isWarmup)
+        .reduce((setSum, set) => setSum + (set.weightKg ?? 0) * (set.reps ?? 0), 0),
     0,
   );
 }
 
 export function computeCompletedSets(exercises: LoggedExercise[]): number {
-  return exercises.reduce((sum, exercise) => sum + exercise.sets.filter((set) => set.completed).length, 0);
+  return exercises.reduce((sum, exercise) => sum + exercise.sets.filter((set) => set.completed && !set.isWarmup).length, 0);
 }
 
 /**
@@ -53,7 +56,7 @@ export function checkPersonalRecords(exercises: LoggedExercise[]): WorkoutPr[] {
 
   for (const exercise of exercises) {
     const heaviestCompleted = exercise.sets
-      .filter((set) => set.completed && set.weightKg !== null)
+      .filter((set) => set.completed && !set.isWarmup && set.weightKg !== null)
       .reduce<{ weightKg: number; reps: number } | null>((best, set) => {
         const weightKg = set.weightKg as number;
         return !best || weightKg > best.weightKg ? { weightKg, reps: set.reps ?? 0 } : best;

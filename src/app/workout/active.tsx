@@ -6,13 +6,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
+import { RestTimerBanner } from "@/components/RestTimerBanner";
 import { WorkoutLogger } from "@/components/WorkoutLogger";
 import { WorkoutSettingsModal } from "@/components/WorkoutSettingsModal";
 import { formatElapsed, useElapsedTimer } from "@/hooks/use-elapsed-timer";
+import { recordChallengeContributions } from "@/lib/challenge-progress";
 import { checkPersonalRecords, computeCompletedSets, computeMuscleIntensity, computeVolumeKg } from "@/lib/workout-finish";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
+import { usePersonalRecordsStore } from "@/store/personal-records-store";
+import { useProfileLevelStore } from "@/store/profile-level-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors } from "@/theme";
+
+const WORKOUT_XP_REWARD = 40;
+const PR_XP_BONUS = 20;
 
 export default function ActiveWorkoutScreen() {
   const insets = useSafeAreaInsets();
@@ -30,8 +37,15 @@ export default function ActiveWorkoutScreen() {
   const name = useActiveWorkoutStore((state) => state.name);
   const unit = useActiveWorkoutStore((state) => state.unit);
   const exercises = useActiveWorkoutStore((state) => state.exercises);
+  const restEndTime = useActiveWorkoutStore((state) => state.restEndTime);
+  const restDurationSeconds = useActiveWorkoutStore((state) => state.restDurationSeconds);
+  const autoFillPreviousSet = useActiveWorkoutStore((state) => state.autoFillPreviousSet);
   const setName = useActiveWorkoutStore((state) => state.setName);
   const setUnit = useActiveWorkoutStore((state) => state.setUnit);
+  const setRestDurationSeconds = useActiveWorkoutStore((state) => state.setRestDurationSeconds);
+  const setAutoFillPreviousSet = useActiveWorkoutStore((state) => state.setAutoFillPreviousSet);
+  const stopRest = useActiveWorkoutStore((state) => state.stopRest);
+  const addRestSeconds = useActiveWorkoutStore((state) => state.addRestSeconds);
   const addExercise = useActiveWorkoutStore((state) => state.addExercise);
   const removeExercise = useActiveWorkoutStore((state) => state.removeExercise);
   const replaceExercise = useActiveWorkoutStore((state) => state.replaceExercise);
@@ -48,9 +62,13 @@ export default function ActiveWorkoutScreen() {
 
   function handleFinish() {
     const id = `workout-${Date.now()}`;
+    // Snapshot records before they're updated below — capping a challenge contribution against a
+    // PR set in this same workout would let a fabricated set validate itself.
+    const recordsBeforeThisWorkout = usePersonalRecordsStore.getState().records;
     const prs = checkPersonalRecords(exercises);
     const volumeKg = computeVolumeKg(exercises);
     const completedSets = computeCompletedSets(exercises);
+    recordChallengeContributions(exercises, recordsBeforeThisWorkout);
 
     useWorkoutHistoryStore.getState().addWorkout({
       id,
@@ -75,6 +93,8 @@ export default function ActiveWorkoutScreen() {
       pr_count: prs.length,
       unit,
     });
+
+    useProfileLevelStore.getState().addXp(WORKOUT_XP_REWARD + prs.length * PR_XP_BONUS);
 
     finishWorkout();
     router.replace({ pathname: "/workout/complete", params: { id } });
@@ -146,7 +166,7 @@ export default function ActiveWorkoutScreen() {
           as the TextInput textAlign crash: works on web, silently drops or conflicts on native). */}
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ gap: 20, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 110 }}
+        contentContainerStyle={{ gap: 20, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 170 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -177,6 +197,13 @@ export default function ActiveWorkoutScreen() {
       </ScrollView>
 
       <View style={{ position: "absolute", left: 16, right: 16, bottom: insets.bottom + 12 }}>
+        <RestTimerBanner
+          restEndTime={restEndTime}
+          restDurationSeconds={restDurationSeconds}
+          onAddSeconds={addRestSeconds}
+          onStop={stopRest}
+        />
+
         <Pressable
           onPress={() => setPickerVisible(true)}
           className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4"
@@ -220,6 +247,10 @@ export default function ActiveWorkoutScreen() {
         onChangeName={setName}
         unit={unit}
         onChangeUnit={setUnit}
+        restDurationSeconds={restDurationSeconds}
+        onChangeRestDurationSeconds={setRestDurationSeconds}
+        autoFillPreviousSet={autoFillPreviousSet}
+        onChangeAutoFillPreviousSet={setAutoFillPreviousSet}
         onDiscard={handleDiscardFromSettings}
       />
     </View>

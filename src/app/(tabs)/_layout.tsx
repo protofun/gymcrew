@@ -8,22 +8,27 @@ import { TopBar } from "@/components/TopBar";
 import { XpProgressModal } from "@/components/XpProgressModal";
 import { images } from "@/constants/images";
 import { NOTIFICATIONS } from "@/data/notifications";
+import { xpRequiredFor } from "@/lib/division";
 import { getPostAuthRedirect } from "@/lib/onboarding-gate";
+import { computeCurrentStreak, computeTrainedDaysThisWeek } from "@/lib/streak";
+import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
+import { useProfileLevelStore } from "@/store/profile-level-store";
+import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors } from "@/theme";
-
-const XP = 340;
-const XP_TO_NEXT_LEVEL = 500;
-const STREAK_DAYS = 4;
-const CREW_POINTS = 3200;
-const CREW_POINTS_GOAL = 5000;
-const TRAINED_DAYS_THIS_WEEK = [true, true, false, true, false, false, false];
 
 export default function TabsLayout() {
   const { isLoaded, isSignedIn } = useAuth();
   const hasCompletedOnboarding = useOnboardingStore((state) => state.hasCompletedOnboarding);
   const hasCompletedCrewSelection = useOnboardingStore((state) => state.hasCompletedCrewSelection);
   const [progressModalVisible, setProgressModalVisible] = useState(false);
+  const workouts = useWorkoutHistoryStore((state) => state.workouts);
+  const streakDays = computeCurrentStreak(workouts);
+  const trainedDaysThisWeek = computeTrainedDaysThisWeek(workouts);
+  const profileXp = useProfileLevelStore((state) => state.xp);
+  const profileDivision = useProfileLevelStore((state) => state.division);
+  const crewXp = useCrewStore((state) => state.xp);
+  const crewDivision = useCrewStore((state) => state.division);
 
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect href="/onboarding" />;
@@ -33,7 +38,7 @@ export default function TabsLayout() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <TopBar avatarSource={images.iconGorilla} streakDays={STREAK_DAYS} notifications={NOTIFICATIONS} />
+      <TopBar avatarSource={images.iconGorilla} streakDays={streakDays} notifications={NOTIFICATIONS} />
 
       <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
         <Tabs.Screen name="home" options={{ title: "Home" }} />
@@ -46,12 +51,12 @@ export default function TabsLayout() {
       <XpProgressModal
         visible={progressModalVisible}
         onClose={() => setProgressModalVisible(false)}
-        streakDays={STREAK_DAYS}
-        xp={XP}
-        xpToNextLevel={XP_TO_NEXT_LEVEL}
-        crewPoints={CREW_POINTS}
-        crewPointsGoal={CREW_POINTS_GOAL}
-        trainedDays={TRAINED_DAYS_THIS_WEEK}
+        streakDays={streakDays}
+        xp={profileXp}
+        xpToNextLevel={xpRequiredFor(profileDivision)}
+        crewPoints={crewXp}
+        crewPointsGoal={xpRequiredFor(crewDivision)}
+        trainedDays={trainedDaysThisWeek}
       />
     </View>
   );

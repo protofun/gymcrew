@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { DayWorkoutsSheet } from "@/components/DayWorkoutsSheet";
-import { toDateKey } from "@/lib/date";
+import { getCurrentWeekDates, toDateKey } from "@/lib/date";
 import type { CompletedWorkout } from "@/store/workout-history-store";
 import { colors } from "@/theme";
 
@@ -11,23 +11,13 @@ const WEEKDAY_LETTERS = ["M", "T", "W", "T", "F", "S", "S"];
 const DAY_SIZE = 44;
 const BADGE_SIZE = 18;
 
-function getCurrentWeekDates(referenceDate: Date): Date[] {
-  const mondayOffset = (referenceDate.getDay() + 6) % 7; // Monday = 0
-  const monday = new Date(referenceDate);
-  monday.setDate(referenceDate.getDate() - mondayOffset);
-  return Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(monday);
-    date.setDate(monday.getDate() + i);
-    return date;
-  });
-}
-
 type WorkoutWeekStripProps = {
   workouts: CompletedWorkout[];
   onPressWorkout: (workout: CompletedWorkout) => void;
+  onSeeAll?: () => void;
 };
 
-export function WorkoutWeekStrip({ workouts, onPressWorkout }: WorkoutWeekStripProps) {
+export function WorkoutWeekStrip({ workouts, onPressWorkout, onSeeAll }: WorkoutWeekStripProps) {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const today = new Date();
   const weekDates = getCurrentWeekDates(today);
@@ -52,7 +42,14 @@ export function WorkoutWeekStrip({ workouts, onPressWorkout }: WorkoutWeekStripP
     <View className="gap-4">
       <View className="flex-row items-baseline justify-between">
         <Text className="body-md font-body-semibold text-text-primary">This Week</Text>
-        <Text className="caption text-text-secondary">{trainedCount} workout{trainedCount === 1 ? "" : "s"}</Text>
+        <View className="flex-row items-center gap-3">
+          <Text className="caption text-text-secondary">{trainedCount} workout{trainedCount === 1 ? "" : "s"}</Text>
+          {onSeeAll && (
+            <Pressable onPress={onSeeAll} hitSlop={8}>
+              <Text className="caption font-body-semibold text-brand-yellow">See All</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <View className="flex-row justify-between">

@@ -83,7 +83,7 @@ export default function NotificationsScreen() {
           />
         </Animated.ScrollView>
 
-        <OnboardingFooter label="Continue" activeIndex={3} onPress={handleContinue} />
+        <OnboardingFooter label="Continue" activeIndex={4} dotCount={5} onPress={handleContinue} />
       </View>
     </SafeAreaView>
   );

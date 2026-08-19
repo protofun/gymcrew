@@ -7,6 +7,7 @@ import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated"
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
+import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
@@ -99,11 +100,14 @@ function generateInviteCode(crewName: string) {
 export default function CrewReadyScreen() {
   const { crewName } = useLocalSearchParams<{ crewName?: string }>();
   const completeCrewSelection = useOnboardingStore((state) => state.completeCrewSelection);
+  const onboardingFullName = useOnboardingStore((state) => state.onboarding.fullName);
+  const rejoin = useCrewStore((state) => state.rejoin);
   const [inviteCode] = useState(() => generateInviteCode(crewName ?? ""));
   const [showAllTargets, setShowAllTargets] = useState(false);
   const [copied, setCopied] = useState(false);
 
   function handleContinue() {
+    rejoin(crewName ?? "", onboardingFullName ?? "You");
     completeCrewSelection();
     router.replace("/home");
   }

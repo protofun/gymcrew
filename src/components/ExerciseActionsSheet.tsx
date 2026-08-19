@@ -9,9 +9,11 @@ type ExerciseActionsSheetProps = {
   visible: boolean;
   exerciseName: string;
   hasNote: boolean;
+  hasInstructions: boolean;
   onClose: () => void;
   onReplace: () => void;
   onEditNote: () => void;
+  onViewInstructions: () => void;
   onRemove: () => void;
 };
 
@@ -42,9 +44,11 @@ export function ExerciseActionsSheet({
   visible,
   exerciseName,
   hasNote,
+  hasInstructions,
   onClose,
   onReplace,
   onEditNote,
+  onViewInstructions,
   onRemove,
 }: ExerciseActionsSheetProps) {
   const insets = useSafeAreaInsets();
@@ -67,6 +71,12 @@ export function ExerciseActionsSheet({
             <ActionRow icon="swap-horizontal-outline" label="Replace Exercise" onPress={onReplace} />
             <View className="h-px bg-divider" />
             <ActionRow icon="create-outline" label={hasNote ? "Edit Note" : "Add Note"} onPress={onEditNote} />
+            {hasInstructions && (
+              <>
+                <View className="h-px bg-divider" />
+                <ActionRow icon="book-outline" label="View Instructions" onPress={onViewInstructions} />
+              </>
+            )}
             <View className="h-px bg-divider" />
             <ActionRow icon="trash-outline" label="Remove Exercise" destructive onPress={onRemove} />
           </Pressable>

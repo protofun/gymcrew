@@ -28,7 +28,7 @@ export default function WorkoutPreferencesScreen() {
       workoutDuration: duration,
       restTimerEnabled: restTimer,
     });
-    router.push("/onboarding/notifications");
+    router.push("/onboarding/training-schedule");
   }
 
   return (
@@ -91,7 +91,7 @@ export default function WorkoutPreferencesScreen() {
           </View>
         </Animated.ScrollView>
 
-        <OnboardingFooter label="Continue" activeIndex={2} onPress={handleContinue} />
+        <OnboardingFooter label="Continue" activeIndex={2} dotCount={5} onPress={handleContinue} />
       </View>
     </SafeAreaView>
   );

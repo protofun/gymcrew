@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import { Image, Pressable, Text, TextInput, View } from "react-native";
 
 import { ExerciseActionsSheet } from "@/components/ExerciseActionsSheet";
+import { ExerciseInstructionsModal } from "@/components/ExerciseInstructionsModal";
 import { ExerciseSetRow } from "@/components/ExerciseSetRow";
-import { formatMuscleName } from "@/data/exercises";
+import { EXERCISE_BY_ID, formatMuscleName } from "@/data/exercises";
 import { getLastPerformance } from "@/lib/exercise-history";
 import type { LoggedExercise, LoggedSet, WeightUnit } from "@/store/active-workout-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
@@ -38,6 +39,9 @@ export function WorkoutLogger({
   const [menuVisible, setMenuVisible] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
   const [noteDraft, setNoteDraft] = useState(exercise.note);
+  const [instructionsVisible, setInstructionsVisible] = useState(false);
+
+  const instructions = EXERCISE_BY_ID[exercise.exerciseId]?.instructions ?? [];
 
   useEffect(() => {
     setNoteDraft(exercise.note);
@@ -150,6 +154,10 @@ export function WorkoutLogger({
               ))}
             </View>
 
+            <Text className="caption -mt-1 px-2.5 text-text-secondary">
+              Tap a set number to mark it as warm-up · tap ⊗ to remove a set
+            </Text>
+
             <Pressable
               onPress={onAddSet}
               className="flex-row items-center justify-center gap-1.5 rounded-xl border border-dashed border-divider py-3"
@@ -166,6 +174,7 @@ export function WorkoutLogger({
         visible={menuVisible}
         exerciseName={exercise.name}
         hasNote={!!exercise.note}
+        hasInstructions={instructions.length > 0}
         onClose={() => setMenuVisible(false)}
         onReplace={() => {
           setMenuVisible(false);
@@ -178,10 +187,22 @@ export function WorkoutLogger({
           // right after the TextInput grabs it, which fires onBlur and immediately closes the editor.
           setTimeout(() => setEditingNote(true), 300);
         }}
+        onViewInstructions={() => {
+          setMenuVisible(false);
+          setInstructionsVisible(true);
+        }}
         onRemove={() => {
           setMenuVisible(false);
           onRemoveExercise();
         }}
+      />
+
+      <ExerciseInstructionsModal
+        visible={instructionsVisible}
+        exerciseName={exercise.name}
+        imageUrl={exercise.imageUrl}
+        instructions={instructions}
+        onClose={() => setInstructionsVisible(false)}
       />
     </View>
   );

@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { PostHogProvider, usePostHog } from "posthog-react-native";
 
+import { DivisionCelebrationWatcher } from "@/components/DivisionCelebrationWatcher";
 import { useAppFonts } from "@/hooks/use-app-fonts";
 import { posthog } from "@/config/posthog";
 import { colors } from "@/theme";
@@ -91,6 +92,7 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: colors.neutral.background },
           }}
         />
+        <DivisionCelebrationWatcher />
       </PostHogProvider>
     </ClerkProvider>
   );

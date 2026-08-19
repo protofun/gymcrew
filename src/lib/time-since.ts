@@ -14,3 +14,11 @@ export function formatTimeSince(fromMs: number, toMs: number): string {
   if (weekPart && dayPart) return `${weekPart} and ${dayPart}`;
   return weekPart || dayPart;
 }
+
+/** "3d ago", "2w ago", "today" — a compact form for list rows (achievements, activity feeds). */
+export function formatShortAgo(fromMs: number, toMs: number = Date.now()): string {
+  const totalDays = Math.max(0, Math.floor((toMs - fromMs) / DAY_MS));
+  if (totalDays === 0) return "today";
+  if (totalDays < 7) return `${totalDays}d ago`;
+  return `${Math.floor(totalDays / 7)}w ago`;
+}

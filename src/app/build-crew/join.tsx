@@ -6,17 +6,21 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { OnboardingDots } from "@/components/OnboardingDots";
 import { EXISTING_CREWS } from "@/data/crews";
+import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
 export default function JoinCrewScreen() {
   const setCrewData = useOnboardingStore((state) => state.setCrewData);
   const completeCrewSelection = useOnboardingStore((state) => state.completeCrewSelection);
+  const onboardingFullName = useOnboardingStore((state) => state.onboarding.fullName);
+  const rejoin = useCrewStore((state) => state.rejoin);
   const [inviteCode, setInviteCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
 
   function handleJoin(crewName: string) {
     setCrewData({ choice: "join", crewName });
+    rejoin(crewName, onboardingFullName ?? "You");
     completeCrewSelection();
     router.replace("/home");
   }

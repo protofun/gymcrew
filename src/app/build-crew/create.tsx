@@ -1,38 +1,17 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { type ImageSourcePropType, Image, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
 
+import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { SearchableSelectField } from "@/components/SearchableSelectField";
 import { images } from "@/constants/images";
+import { CREW_ICONS } from "@/data/crew-icons";
 import { CREW_TRAINING_TYPES } from "@/data/crew-training-types";
 import { EXISTING_CREWS } from "@/data/crews";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
-
-type CrewIcon =
-  | { key: string; type: "image"; source: ImageSourcePropType }
-  | { key: string; type: "icon"; name: keyof typeof MaterialCommunityIcons.glyphMap };
-
-// The animal icons are cropped from the app's own commissioned mascot art,
-// so they match the brand style exactly. The "cat-*" icons come from
-// robohash.org's set4 (a free, no-key avatar generator) for extra variety —
-// they're a different, cartoonier art style than the mascots since we don't
-// have a generator that produces custom art in the app's own style.
-const CREW_ICONS: CrewIcon[] = [
-  { key: "gorilla", type: "image", source: images.iconGorilla },
-  { key: "tiger", type: "image", source: images.iconTiger },
-  { key: "elephant", type: "image", source: images.iconElephant },
-  { key: "dumbbell", type: "icon", name: "dumbbell" },
-  { key: "cat-yellow", type: "image", source: images.iconGenCatYellow },
-  { key: "cat-pink", type: "image", source: images.iconGenCatPink },
-  { key: "cat-green", type: "image", source: images.iconGenCatGreen },
-  { key: "cat-red", type: "image", source: images.iconGenCatRed },
-  { key: "cat-brown", type: "image", source: images.iconGenCatBrown },
-  { key: "cat-coral", type: "image", source: images.iconGenCatCoral },
-];
 
 export default function CreateCrewScreen() {
   const setCrewData = useOnboardingStore((state) => state.setCrewData);
@@ -120,19 +99,11 @@ export default function CreateCrewScreen() {
                   <Pressable
                     key={item.key}
                     onPress={() => setIcon(item.key)}
-                    className={`h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 bg-surface ${
+                    className={`h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 ${
                       active ? "border-brand-yellow" : "border-divider"
                     }`}
                   >
-                    {item.type === "image" ? (
-                      <Image source={item.source} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                    ) : (
-                      <MaterialCommunityIcons
-                        name={item.name}
-                        size={26}
-                        color={active ? colors.brand.yellow : colors.neutral.textPrimary}
-                      />
-                    )}
+                    <CrewIconBadge iconKey={item.key} size={60} tint={active ? colors.brand.yellow : colors.neutral.textPrimary} />
                   </Pressable>
                 );
               })}

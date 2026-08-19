@@ -29,18 +29,21 @@ function formatWeight(weightKg: number | null, unit: WeightUnit): string {
 }
 
 export function ExerciseSetRow({ index, set, unit, previousSet, onUpdate, onRemove }: ExerciseSetRowProps) {
-  // Local draft, resynced from the canonical kg value only when the unit toggles — not on every
-  // keystroke — so typing a multi-digit weight doesn't visibly drift from repeated kg<->lbs rounding.
+  // Local draft, resynced from the canonical kg value whenever the unit toggles OR the underlying
+  // set itself changes (e.g. auto-filled from the set above when this row is first added) — not on
+  // every keystroke, so typing a multi-digit weight doesn't visibly drift from repeated kg<->lbs
+  // rounding.
   const [weightText, setWeightText] = useState(() => formatWeight(set.weightKg, unit));
 
-  const weightPlaceholder =
-    previousSet?.weightKg != null ? formatWeight(previousSet.weightKg, unit) : "0";
-  const repsPlaceholder = previousSet?.reps != null ? previousSet.reps.toString() : "0";
+  // "–" rather than "0" when there's nothing to show — a placeholder "0" reads too easily as a real
+  // (if unimpressive) entered value instead of "no data yet".
+  const weightPlaceholder = previousSet?.weightKg != null ? formatWeight(previousSet.weightKg, unit) : "–";
+  const repsPlaceholder = previousSet?.reps != null ? previousSet.reps.toString() : "–";
 
   useEffect(() => {
     setWeightText(formatWeight(set.weightKg, unit));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unit]);
+  }, [unit, set.id]);
 
   function handleWeightChange(text: string) {
     setWeightText(text);
@@ -51,12 +54,21 @@ export function ExerciseSetRow({ index, set, unit, previousSet, onUpdate, onRemo
 
   return (
     <View
-      className={`flex-row items-center gap-3 rounded-xl px-2.5 py-2.5 ${set.completed ? "bg-success/25" : ""}`}
+      className={`flex-row items-center gap-2.5 rounded-xl px-2.5 py-2.5 ${set.completed ? "bg-success/25" : ""}`}
     >
-      <Pressable onLongPress={onRemove} hitSlop={6}>
-        <View className={`h-8 w-8 items-center justify-center rounded-full ${set.completed ? "bg-success" : "bg-background"}`}>
-          <Text className={`body-md font-body-semibold ${set.completed ? "text-brand-iron" : "text-text-secondary"}`}>
-            {index}
+      {/* Tap toggles warm-up, long-press removes the set — same badge doubles as both controls. */}
+      <Pressable onPress={() => onUpdate({ isWarmup: !set.isWarmup })} onLongPress={onRemove} hitSlop={6}>
+        <View
+          className={`h-8 w-8 items-center justify-center rounded-full ${
+            set.completed ? "bg-success" : set.isWarmup ? "bg-transparent" : "bg-background"
+          }`}
+          style={set.isWarmup && !set.completed ? { borderWidth: 1.5, borderColor: colors.semantic.warning } : undefined}
+        >
+          <Text
+            className={`body-md font-body-semibold ${set.completed ? "text-brand-iron" : !set.isWarmup ? "text-text-secondary" : ""}`}
+            style={set.isWarmup && !set.completed ? { color: colors.semantic.warning } : undefined}
+          >
+            {set.isWarmup ? "W" : index}
           </Text>
         </View>
       </Pressable>
@@ -95,6 +107,10 @@ export function ExerciseSetRow({ index, set, unit, previousSet, onUpdate, onRemo
         }`}
       >
         <Ionicons name="checkmark" size={18} color={set.completed ? colors.brand.iron : colors.neutral.textSecondary} />
+      </Pressable>
+
+      <Pressable onPress={onRemove} hitSlop={6} className="h-9 w-9 items-center justify-center">
+        <Ionicons name="close-circle-outline" size={20} color={colors.neutral.textSecondary} />
       </Pressable>
     </View>
   );

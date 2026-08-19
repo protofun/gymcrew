@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import type { Weekday } from "@/data/weekdays";
+
 export type Gender = "male" | "female";
 export type CrewChoice = "join" | "create" | "later";
 
@@ -23,6 +25,8 @@ type OnboardingData = {
   workoutsPerWeek: number;
   workoutDuration: string;
   restTimerEnabled: boolean;
+  /** Weekday → workout name (e.g. "Push Day", or a custom name when trainingSplit is "Other / Custom"). Missing day = rest day. */
+  weeklySchedule: Partial<Record<Weekday, string>>;
   workoutReminders: boolean;
   crewChallengeAlerts: boolean;
   progressUpdates: boolean;
@@ -50,12 +54,16 @@ type OnboardingStore = {
   completeOnboarding: () => void;
   setCrewData: (data: Partial<CrewData>) => void;
   completeCrewSelection: () => void;
+  /** Sends the user back through the crew choose/create/join flow — e.g. after leaving their crew. */
+  resetCrewSelection: () => void;
 };
 
 export const useOnboardingStore = create<OnboardingStore>()(
   persist(
     (set) => ({
-      onboarding: {},
+      // Just enough of a starter profile for rank calculations (e.g. the member profile's muscle
+      // rank heatmap) to work before onboarding — real onboarding overwrites this permanently.
+      onboarding: { gender: "male", weightKg: 85 },
       crew: {},
       hasCompletedOnboarding: false,
       hasCompletedCrewSelection: false,
@@ -64,6 +72,7 @@ export const useOnboardingStore = create<OnboardingStore>()(
       completeOnboarding: () => set({ hasCompletedOnboarding: true }),
       setCrewData: (data) => set((state) => ({ crew: { ...state.crew, ...data } })),
       completeCrewSelection: () => set({ hasCompletedCrewSelection: true }),
+      resetCrewSelection: () => set({ hasCompletedCrewSelection: false }),
     }),
     {
       name: "gymcrew-onboarding",

@@ -1,3 +1,4 @@
+import type { MuscleGroup } from "@/data/workout-log";
 import type { Gender } from "@/store/onboarding-store";
 
 export const RANK_TIERS = [
@@ -24,6 +25,26 @@ export function formatRankTier(tier: RankTier): string {
   return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
+/** A distinct color per tier (reuses the same values as the crew/player division ladder's palette
+ * for every name the two ladders share, so the app's color language for "rank" stays consistent). */
+export const RANK_TIER_COLOR: Record<RankTier, string> = {
+  rookie: "#B0A183",
+  novice: "#6FCF3D",
+  bronze: "#CD7F32",
+  silver: "#9FB4C7",
+  gold: "#FFD700",
+  platinum: "#4FD1C5",
+  diamond: "#4FC3F7",
+  elite: "#9B6DFF",
+  master: "#FF5252",
+  grandmaster: "#A855F7",
+  champion: "#FF7043",
+  titan: "#8E8E99",
+  mythic: "#C084FC",
+  immortal: "#FFD54F",
+  legend: "#FFB300",
+};
+
 /** The four "major lifts" fair ranking applies to — exercise ids from the library (data/exercises.ts). */
 export const MAJOR_LIFT_EXERCISE_IDS = {
   benchPress: "Barbell_Bench_Press_-_Medium_Grip",
@@ -40,6 +61,61 @@ const EXERCISE_ID_TO_LIFT: Record<string, MajorLift> = Object.fromEntries(
 
 export function majorLiftForExerciseId(exerciseId: string): MajorLift | null {
   return EXERCISE_ID_TO_LIFT[exerciseId] ?? null;
+}
+
+// Mock sessions only record a primary-exercise NAME (see data/workout-log.ts's WORKOUT_SPLITS —
+// there's no exercise-library id attached), so this maps the four possible names back to the
+// major-lift exercise ids `calculateLiftRank` needs.
+export const MOCK_MAJOR_LIFT_NAME_TO_ID: Record<string, string> = {
+  "Bench Press": MAJOR_LIFT_EXERCISE_IDS.benchPress,
+  Squat: MAJOR_LIFT_EXERCISE_IDS.squat,
+  Deadlift: MAJOR_LIFT_EXERCISE_IDS.deadlift,
+  "Overhead Press": MAJOR_LIFT_EXERCISE_IDS.overheadPress,
+};
+
+const MAJOR_LIFT_MOCK_NAME: Record<MajorLift, string> = {
+  benchPress: "Bench Press",
+  squat: "Squat",
+  deadlift: "Deadlift",
+  overheadPress: "Overhead Press",
+};
+
+export function mockNameForMajorLift(lift: MajorLift): string {
+  return MAJOR_LIFT_MOCK_NAME[lift];
+}
+
+/**
+ * Each muscle group's fair rank is proxied by the major lift that trains it hardest — there's no
+ * per-muscle strength standard, so this is an approximation, documented rather than precise.
+ * Forearms fold into "biceps" (see muscle-groups.ts's library-name mapping), so there's no separate
+ * entry for them here. Abs key off the deadlift (a heavy pull is a core lift, not a leg lift) — only
+ * the four true leg groups key off the squat, so a lifter who skips leg day shows it consistently
+ * across the lower body without dragging the whole core down with it.
+ */
+export const MUSCLE_GROUP_MAJOR_LIFT: Record<MuscleGroup, MajorLift> = {
+  chest: "benchPress",
+  triceps: "benchPress",
+  shoulders: "overheadPress",
+  back: "deadlift",
+  biceps: "deadlift",
+  abs: "deadlift",
+  quads: "squat",
+  hamstrings: "squat",
+  calves: "squat",
+  glutes: "squat",
+};
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  return hash;
+}
+
+/** Mock members have no stored gender/bodyweight — a stable one is derived from their id, the same
+ * seeded-mock approach used elsewhere (e.g. member-mock-profile.ts's memberXp). */
+export function mockProfileFor(memberId: string): RankProfile {
+  const hash = hashString(memberId);
+  return { gender: hash % 2 === 0 ? "male" : "female", bodyWeightKg: 62 + (hash % 45) };
 }
 
 /**

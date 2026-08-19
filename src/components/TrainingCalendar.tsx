@@ -4,35 +4,10 @@ import { Pressable, Text, View } from "react-native";
 
 import { WorkoutSummaryModal } from "@/components/WorkoutSummaryModal";
 import type { WorkoutSession } from "@/data/workout-log";
-import { toDateKey } from "@/lib/date";
+import { getMonthGrid, isSameMonth, startOfMonth, toDateKey } from "@/lib/date";
 import { colors } from "@/theme";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-function startOfMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function isSameMonth(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
-}
-
-function getMonthGrid(monthDate: Date): (Date | null)[][] {
-  const year = monthDate.getFullYear();
-  const month = monthDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const leadingBlanks = (new Date(year, month, 1).getDay() + 6) % 7; // week starts Monday
-
-  const cells: (Date | null)[] = [
-    ...Array<null>(leadingBlanks).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
-  ];
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  const weeks: (Date | null)[][] = [];
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
-  return weeks;
-}
 
 function DayCell({
   date,
