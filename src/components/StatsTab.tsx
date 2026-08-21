@@ -5,8 +5,8 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { ContributorsList } from "@/components/ContributorsList";
 import { DivisionBadge } from "@/components/DivisionBadge";
+import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { HorizontalBarChart } from "@/components/HorizontalBarChart";
-import { SearchableSelectField } from "@/components/SearchableSelectField";
 import { SegmentedProportionBar } from "@/components/SegmentedProportionBar";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
 import { generateMemberWorkoutSessions } from "@/data/workout-log";
@@ -58,7 +58,8 @@ const TOTAL_STATS: { key: keyof ReturnType<typeof crewTotals>; label: string; ic
 
 export function StatsTab() {
   const [range, setRange] = useState<StatsRange>("week");
-  const [selectedExerciseId, setSelectedExerciseId] = useState(TRACKABLE_EXERCISES[0].exerciseId);
+  const [selectedExercise, setSelectedExercise] = useState({ exerciseId: TRACKABLE_EXERCISES[0].exerciseId, exerciseName: TRACKABLE_EXERCISES[0].exerciseName });
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const members = useCrewStore((state) => state.members);
   const crewPower = useCrewStore((state) => state.crewPower);
@@ -75,7 +76,6 @@ export function StatsTab() {
     volume: crewExerciseVolume(lift.exerciseId, lift.exerciseName, members, myWorkouts, startKey, endKey),
   })).sort((a, b) => b.volume - a.volume);
 
-  const selectedExercise = TRACKABLE_EXERCISES.find((exercise) => exercise.exerciseId === selectedExerciseId) ?? TRACKABLE_EXERCISES[0];
   const selectedTrend = crewExerciseVolumeTrend(
     selectedExercise.exerciseId,
     selectedExercise.exerciseName,
@@ -229,17 +229,27 @@ export function StatsTab() {
         <Text style={{ fontFamily: fontFamily.heading, fontSize: 18 }} className="text-text-primary">
           EXPLORE ANY LIFT
         </Text>
-        <SearchableSelectField
-          label="Exercise"
-          value={selectedExercise.exerciseName}
-          options={TRACKABLE_EXERCISES.map((exercise) => exercise.exerciseName)}
-          onChange={(name) => {
-            const match = TRACKABLE_EXERCISES.find((exercise) => exercise.exerciseName === name);
-            if (match) setSelectedExerciseId(match.exerciseId);
-          }}
-        />
+        <Pressable
+          onPress={() => setPickerOpen(true)}
+          className="flex-row items-center justify-between rounded-xl border border-divider bg-background px-4 py-4"
+        >
+          <Text className="body-md text-text-primary">{selectedExercise.exerciseName}</Text>
+          <Ionicons name="chevron-down" size={18} color={colors.neutral.textSecondary} />
+        </Pressable>
         <StrengthProgressChart exerciseName={selectedExercise.exerciseName} points={selectedTrend} title="Crew Volume" unit="kg" />
       </Animated.View>
+
+      <ExercisePickerModal
+        visible={pickerOpen}
+        title="Explore Any Lift"
+        subtitle="Pick any exercise to see the crew's combined volume on it."
+        onClose={() => setPickerOpen(false)}
+        onSelect={(exercise) => {
+          setSelectedExercise({ exerciseId: exercise.id, exerciseName: exercise.name });
+          setPickerOpen(false);
+        }}
+        hideCreateRow
+      />
 
       <Animated.View
         entering={FadeInUp.delay(500).springify().damping(16).mass(0.6)}

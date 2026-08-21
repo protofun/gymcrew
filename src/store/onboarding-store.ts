@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import type { Weekday } from "@/data/weekdays";
+import type { WeightUnit } from "@/store/active-workout-store";
 
 export type Gender = "male" | "female";
 export type CrewChoice = "join" | "create" | "later";
@@ -15,6 +16,9 @@ type OnboardingData = {
   gender: Gender;
   heightCm: number;
   weightKg: number;
+  /** Free-text home gym — no gym directory yet, just a label shown around the app (e.g. Ranks'
+   * "My Gym" scope). */
+  gymName: string;
   goal: string;
   experienceLevel: string;
   benchPress1RM: number;
@@ -50,12 +54,16 @@ type OnboardingStore = {
   crew: Partial<CrewData>;
   hasCompletedOnboarding: boolean;
   hasCompletedCrewSelection: boolean;
+  /** A standalone app preference, not part of the onboarding wizard's own data — kept here since
+   * this store already persists globally and every screen already reads profile info from it. */
+  weightUnit: WeightUnit;
   setOnboardingData: (data: Partial<OnboardingData>) => void;
   completeOnboarding: () => void;
   setCrewData: (data: Partial<CrewData>) => void;
   completeCrewSelection: () => void;
   /** Sends the user back through the crew choose/create/join flow — e.g. after leaving their crew. */
   resetCrewSelection: () => void;
+  setWeightUnit: (unit: WeightUnit) => void;
 };
 
 export const useOnboardingStore = create<OnboardingStore>()(
@@ -67,12 +75,14 @@ export const useOnboardingStore = create<OnboardingStore>()(
       crew: {},
       hasCompletedOnboarding: false,
       hasCompletedCrewSelection: false,
+      weightUnit: "kg",
       setOnboardingData: (data) =>
         set((state) => ({ onboarding: { ...state.onboarding, ...data } })),
       completeOnboarding: () => set({ hasCompletedOnboarding: true }),
       setCrewData: (data) => set((state) => ({ crew: { ...state.crew, ...data } })),
       completeCrewSelection: () => set({ hasCompletedCrewSelection: true }),
       resetCrewSelection: () => set({ hasCompletedCrewSelection: false }),
+      setWeightUnit: (weightUnit) => set({ weightUnit }),
     }),
     {
       name: "gymcrew-onboarding",

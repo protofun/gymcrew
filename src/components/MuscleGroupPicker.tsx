@@ -34,7 +34,7 @@ function BodyView({
   height: number;
   primaryMuscle: MuscleGroup | null;
   secondaryMuscles: MuscleGroup[];
-  onTapMuscle: (group: MuscleGroup) => void;
+  onTapMuscle?: (group: MuscleGroup) => void;
 }) {
   return (
     <View className="items-center gap-1.5">
@@ -48,7 +48,7 @@ function BodyView({
               fill={colorForGroup(group, primaryMuscle, secondaryMuscles)}
               stroke={colors.neutral.background}
               strokeWidth={0.15}
-              onPress={group ? () => onTapMuscle(group) : undefined}
+              onPress={group && onTapMuscle ? () => onTapMuscle(group) : undefined}
             />
           );
         })}
@@ -61,15 +61,17 @@ function BodyView({
 type MuscleGroupPickerProps = {
   primaryMuscle: MuscleGroup | null;
   secondaryMuscles: MuscleGroup[];
-  onTapMuscle: (group: MuscleGroup) => void;
+  /** Omit for a read-only diagram (e.g. showing an exercise's muscles rather than picking them). */
+  onTapMuscle?: (group: MuscleGroup) => void;
   height?: number;
 };
 
 /**
- * Tappable body diagram for picking a custom exercise's primary + secondary
- * muscles. Tapping a region sets it as primary if none is set yet; tapping
- * again toggles it between secondary and unselected. Parent owns the
- * selection logic (see `handleTapMuscle` in CreateExerciseForm).
+ * Body diagram highlighting primary (yellow) vs secondary (green) muscles. When `onTapMuscle` is
+ * given it's also an editable picker for a custom exercise's muscles — tapping a region sets it as
+ * primary if none is set yet, tapping again toggles it between secondary and unselected, and the
+ * parent owns the selection logic (see `handleTapMuscle` in CreateExerciseForm). Without
+ * `onTapMuscle` it's a plain read-only highlight (e.g. ExerciseInstructionsModal).
  */
 export function MuscleGroupPicker({ primaryMuscle, secondaryMuscles, onTapMuscle, height = 340 }: MuscleGroupPickerProps) {
   const width = Math.round(height * BODY_ASPECT_RATIO);
@@ -77,9 +79,11 @@ export function MuscleGroupPicker({ primaryMuscle, secondaryMuscles, onTapMuscle
   return (
     <View className="gap-3">
       <Text className="body-sm text-text-secondary">
-        {primaryMuscle
-          ? "Tap more muscles to add as secondary, or tap the primary again to clear it."
-          : "Tap a muscle on the body to set it as primary."}
+        {onTapMuscle
+          ? primaryMuscle
+            ? "Tap more muscles to add as secondary, or tap the primary again to clear it."
+            : "Tap a muscle on the body to set it as primary."
+          : "Primary muscle in yellow, secondary muscles in green."}
       </Text>
 
       <View className="flex-row items-start justify-center gap-8 rounded-2xl border border-divider bg-surface py-4">

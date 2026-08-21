@@ -1,4 +1,4 @@
-import type { MuscleGroup } from "@/data/workout-log";
+import { ALL_MUSCLE_GROUPS, type MuscleGroup } from "@/data/workout-log";
 import { colors } from "@/theme";
 
 /** Maps our simplified workout-log muscle groups onto the body-muscles
@@ -111,6 +111,22 @@ export function formatMuscleLabel(group: MuscleGroup): string {
   return group.charAt(0).toUpperCase() + group.slice(1);
 }
 
+/** A fixed, distinct color per muscle group — unlike the crew Stats muscle-split chart's
+ * rank-position palette (MUSCLE_SPLIT_PALETTE in crew-stats.ts), this stays the same color for the
+ * same muscle everywhere it appears (e.g. the training calendar), so it's learnable at a glance. */
+export const MUSCLE_GROUP_COLOR: Record<MuscleGroup, string> = {
+  chest: "#FF3B30",
+  back: "#7C4DFF",
+  shoulders: "#FFB800",
+  biceps: "#00E676",
+  triceps: "#FF6D00",
+  abs: "#00E5FF",
+  quads: "#2979FF",
+  hamstrings: "#E040FB",
+  calves: "#FFD600",
+  glutes: "#FF4081",
+};
+
 /**
  * Maps free-exercise-db's muscle names (used by the exercise library) onto our simplified
  * `MuscleGroup` taxonomy, for feeding logged workouts into the heatmap. A few smaller muscles
@@ -139,4 +155,17 @@ const MUSCLE_GROUP_BY_LIBRARY_NAME: Record<string, MuscleGroup> = {
 
 export function toMuscleGroup(libraryMuscleName: string): MuscleGroup | null {
   return MUSCLE_GROUP_BY_LIBRARY_NAME[libraryMuscleName.toLowerCase()] ?? null;
+}
+
+const MUSCLE_GROUP_SET = new Set<string>(ALL_MUSCLE_GROUPS);
+
+/**
+ * Resolves either a free-exercise-db muscle name (e.g. "quadriceps") or an already-valid
+ * `MuscleGroup` to a `MuscleGroup`, or `null` if neither matches. Custom exercises
+ * (custom-exercises-store.ts) store `primaryMuscles`/`secondaryMuscles` as our own `MuscleGroup`
+ * values directly rather than free-exercise-db names, so `toMuscleGroup` alone would miss a few of
+ * them (e.g. "abs", "quads" — real names in our taxonomy, but not library muscle names).
+ */
+export function resolveMuscleGroup(name: string): MuscleGroup | null {
+  return toMuscleGroup(name) ?? (MUSCLE_GROUP_SET.has(name) ? (name as MuscleGroup) : null);
 }

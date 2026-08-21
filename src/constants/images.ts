@@ -1,5 +1,6 @@
 import type { ImageSourcePropType } from "react-native";
 
+import type { MuscleGroup } from "@/data/workout-log";
 import type { Division } from "@/lib/division";
 
 import mascotArmsCrossed from "@/assets/images/mascot/gorilla_logo_1_arms_crossed_cutout.png";
@@ -83,6 +84,16 @@ import exerciseSkullCrusher from "@/assets/images/exercises/skull-crusher.png";
 import exerciseSquat from "@/assets/images/exercises/squat.png";
 import exerciseTricepDips from "@/assets/images/exercises/tricep-dips.png";
 import exerciseTricepPushdown from "@/assets/images/exercises/tricep-pushdown.png";
+import muscleAbs from "@/assets/images/musclegroup/muscle-abs.png";
+import muscleBack from "@/assets/images/musclegroup/muscle-back.png";
+import muscleBiceps from "@/assets/images/musclegroup/muscle-biceps.png";
+import muscleCalves from "@/assets/images/musclegroup/muscle-calves.png";
+import muscleChest from "@/assets/images/musclegroup/muscle-chest.png";
+import muscleGlutes from "@/assets/images/musclegroup/muscle-glutes.png";
+import muscleHamstrings from "@/assets/images/musclegroup/muscle-hamstrings.png";
+import muscleQuads from "@/assets/images/musclegroup/muscle-quads.png";
+import muscleShoulders from "@/assets/images/musclegroup/muscle-shoulders.png";
+import muscleTriceps from "@/assets/images/musclegroup/muscle-triceps.png";
 
 export const images = {
   mascotArmsCrossed,
@@ -193,4 +204,19 @@ export const exerciseImages = {
   squat: exerciseSquat,
   tricepDips: exerciseTricepDips,
   tricepPushdown: exerciseTricepPushdown,
+};
+
+/** Cropped from assets/images/musclegroup/all-muscles-groups.png — silhouette + highlighted region
+ * only, no title or rank text (those are cropped out; the sheet is reference-only, not shipped). */
+export const muscleGroupImages: Record<MuscleGroup, ImageSourcePropType> = {
+  chest: muscleChest,
+  back: muscleBack,
+  shoulders: muscleShoulders,
+  biceps: muscleBiceps,
+  triceps: muscleTriceps,
+  abs: muscleAbs,
+  quads: muscleQuads,
+  hamstrings: muscleHamstrings,
+  calves: muscleCalves,
+  glutes: muscleGlutes,
 };

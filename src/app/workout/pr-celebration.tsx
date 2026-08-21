@@ -1,26 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { useEffect, useRef, useState } from "react";
-import { Image, Platform, Pressable, Share, Text, View } from "react-native";
-import Animated, {
-  Easing,
-  FadeIn,
-  FadeInDown,
-  FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
-  withTiming,
-  ZoomIn,
-} from "react-native-reanimated";
-import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
+import { useRef, useState } from "react";
+import { Platform, Pressable, Share, Text, View } from "react-native";
+import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { captureRef } from "react-native-view-shot";
 
-import { rankTierImages } from "@/constants/images";
+import { BadgeRevealFx } from "@/components/BadgeRevealFx";
+import { useDecimalCountUp } from "@/hooks/use-decimal-count-up";
 import { calculateLiftRank, formatRankTier, majorLiftForExerciseId } from "@/lib/rank";
 import { formatTimeSince } from "@/lib/time-since";
 import { useOnboardingStore } from "@/store/onboarding-store";
@@ -28,9 +16,6 @@ import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
 
 const MEDAL_WIDTH = 180;
-const MEDAL_ASPECT_RATIO = 199 / 241;
-const GLOW_SIZE = MEDAL_WIDTH * 1.9;
-const RING_SIZE = MEDAL_WIDTH * 1.15;
 
 // Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native
 // when combined with a sibling className — see theme/typography.ts.
@@ -41,117 +26,6 @@ const wordmarkStyle = {
   fontStyle: "italic" as const,
   transform: [{ skewX: "-10deg" }],
 };
-
-/** A slow, continuous pulsing radial glow behind the medal so it feels alive, not static. */
-function MedalGlow() {
-  const pulse = useSharedValue(0.92);
-
-  useEffect(() => {
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(1.15, { duration: 1400, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.92, { duration: 1400, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      false,
-    );
-  }, [pulse]);
-
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
-
-  return (
-    <Animated.View pointerEvents="none" style={[{ position: "absolute" }, style]}>
-      <Svg width={GLOW_SIZE} height={GLOW_SIZE}>
-        <Defs>
-          <RadialGradient id="glow" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={colors.brand.yellow} stopOpacity={0.45} />
-            <Stop offset="60%" stopColor={colors.brand.yellow} stopOpacity={0.12} />
-            <Stop offset="100%" stopColor={colors.brand.yellow} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Circle cx={GLOW_SIZE / 2} cy={GLOW_SIZE / 2} r={GLOW_SIZE / 2} fill="url(#glow)" />
-      </Svg>
-    </Animated.View>
-  );
-}
-
-/** A one-shot expanding, fading ring — the "impact" beat as the medal lands. Re-fires whenever
- * `triggerKey` changes (a new PR in the carousel). */
-function ShockwaveRing({ triggerKey }: { triggerKey: string }) {
-  const scale = useSharedValue(0.5);
-  const opacity = useSharedValue(0);
-
-  useEffect(() => {
-    scale.value = 0.5;
-    opacity.value = 0.8;
-    scale.value = withDelay(380, withTiming(1.7, { duration: 650, easing: Easing.out(Easing.cubic) }));
-    opacity.value = withDelay(380, withTiming(0, { duration: 650, easing: Easing.out(Easing.cubic) }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [triggerKey]);
-
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }], opacity: opacity.value }));
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        {
-          position: "absolute",
-          width: RING_SIZE,
-          height: RING_SIZE,
-          borderRadius: RING_SIZE / 2,
-          borderWidth: 2,
-          borderColor: colors.brand.yellow,
-        },
-        style,
-      ]}
-    />
-  );
-}
-
-const SPARKLE_SPOTS: { style: object; delay: number }[] = [
-  { style: { top: -6, left: -18 }, delay: 560 },
-  { style: { top: 4, right: -22 }, delay: 630 },
-  { style: { bottom: 6, left: -8 }, delay: 700 },
-  { style: { bottom: -4, right: 4 }, delay: 660 },
-];
-
-function Sparkles() {
-  return (
-    <>
-      {SPARKLE_SPOTS.map((spot, i) => (
-        <Animated.View
-          key={i}
-          entering={ZoomIn.delay(spot.delay).duration(280).springify().damping(9)}
-          style={[{ position: "absolute" }, spot.style]}
-        >
-          <Ionicons name="sparkles" size={16} color={colors.brand.yellow} />
-        </Animated.View>
-      ))}
-    </>
-  );
-}
-
-/** Counts up preserving one decimal place (plate-weight PRs are often e.g. 92.5kg — the shared
- * `useCountUp` hook rounds to a whole number, which would land on the wrong final value here). */
-function useDecimalCountUp(target: number, durationMs = 700): number {
-  const [value, setValue] = useState(0);
-
-  useEffect(() => {
-    let frame: number;
-    const start = Date.now();
-    function tick() {
-      const progress = Math.min((Date.now() - start) / durationMs, 1);
-      const eased = 1 - (1 - progress) ** 3;
-      setValue(Math.round(target * eased * 10) / 10);
-      if (progress < 1) frame = requestAnimationFrame(tick);
-    }
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [target, durationMs]);
-
-  return value;
-}
 
 export default function PrCelebrationScreen() {
   const insets = useSafeAreaInsets();
@@ -178,7 +52,6 @@ export default function PrCelebrationScreen() {
           age: onboarding.age,
         })
       : "gold";
-  const medalImage = rankTierImages[rankTier];
 
   // Hooks must run unconditionally on every render, so this runs even while `pr` is briefly null
   // (before the redirect below takes effect) — 0 is a harmless placeholder in that case.
@@ -272,18 +145,7 @@ export default function PrCelebrationScreen() {
             )}
           </Animated.View>
 
-          <View className="items-center justify-center" style={{ width: MEDAL_WIDTH, height: MEDAL_WIDTH / MEDAL_ASPECT_RATIO }}>
-            <MedalGlow key={`glow-${pr.exerciseId}`} />
-            <ShockwaveRing triggerKey={pr.exerciseId} />
-            <Animated.View key={`medal-${pr.exerciseId}`} entering={ZoomIn.springify().damping(9).mass(0.8).delay(250)}>
-              <Image
-                source={medalImage}
-                resizeMode="contain"
-                style={{ width: MEDAL_WIDTH, height: MEDAL_WIDTH / MEDAL_ASPECT_RATIO }}
-              />
-            </Animated.View>
-            <Sparkles key={`sparkles-${pr.exerciseId}`} />
-          </View>
+          <BadgeRevealFx tier={rankTier} triggerKey={pr.exerciseId} size={MEDAL_WIDTH} />
 
           <Animated.View
             key={`details-${pr.exerciseId}`}

@@ -12,14 +12,6 @@ const FRONT_VIEW_BOX = "0 0 35 93";
 const BACK_VIEW_BOX = "37 0 35 93";
 const BODY_ASPECT_RATIO = 35 / 93;
 
-// `undefined` (no entry — muscle group has no data at all) is distinct from a real `0` value (e.g.
-// rank tier index 0, "rookie" — still a meaningful rank, not "untrained"), so this can't collapse
-// to a plain `?? 0` the way a training-load scale could.
-function intensityForMuscleId(id: string, muscleIntensity: Partial<Record<MuscleGroup, number>>): number | undefined {
-  const group = MUSCLE_GROUP_BY_REGION_ID.get(id);
-  return group ? muscleIntensity[group] : undefined;
-}
-
 function BodyView({
   label,
   muscles,
@@ -28,6 +20,8 @@ function BodyView({
   height,
   muscleIntensity,
   colorForIntensity,
+  onPressGroup,
+  showLabel,
 }: {
   label: string;
   muscles: { id: string; path: string }[];
@@ -36,12 +30,18 @@ function BodyView({
   height: number;
   muscleIntensity: Partial<Record<MuscleGroup, number>>;
   colorForIntensity: (intensity: number) => string;
+  onPressGroup?: (group: MuscleGroup) => void;
+  showLabel: boolean;
 }) {
   return (
     <View className="items-center gap-1.5">
       <Svg width={width} height={height} viewBox={viewBox}>
         {muscles.map((muscle) => {
-          const intensity = intensityForMuscleId(muscle.id, muscleIntensity);
+          const group = MUSCLE_GROUP_BY_REGION_ID.get(muscle.id);
+          const intensity = group ? muscleIntensity[group] : undefined;
+          // `undefined` (no entry — muscle group has no data at all) is distinct from a real `0`
+          // value (e.g. rank tier index 0, "rookie" — still a meaningful rank, not "untrained"), so
+          // this can't collapse to a plain `?? 0` the way a training-load scale could.
           return (
             <Path
               key={muscle.id}
@@ -49,11 +49,12 @@ function BodyView({
               fill={intensity !== undefined ? colorForIntensity(intensity) : colors.neutral.divider}
               stroke={colors.neutral.background}
               strokeWidth={0.15}
+              onPress={group && onPressGroup ? () => onPressGroup(group) : undefined}
             />
           );
         })}
       </Svg>
-      <Text className="body-sm font-body-semibold text-text-secondary">{label}</Text>
+      {showLabel && <Text className="body-sm font-body-semibold text-text-secondary">{label}</Text>}
     </View>
   );
 }
@@ -69,6 +70,14 @@ type MuscleHeatmapProps = {
   legendLabel?: (group: MuscleGroup, value: number) => string;
   /** An optional small icon shown before the legend chip's text (e.g. a rank badge). */
   legendIcon?: (group: MuscleGroup, value: number) => ImageSourcePropType | undefined;
+  /** Called with the tapped muscle group — e.g. to open a details sheet for it. */
+  onPressGroup?: (group: MuscleGroup) => void;
+  /** "front" renders just the front silhouette, half the width — for tight spaces like a calendar
+   * day cell where a full front+back pair would never fit. Defaults to "both". */
+  view?: "both" | "front";
+  /** Hides the "Front"/"Back" caption under each silhouette — off by default for the same
+   * tight-space cases `view="front"` is for. */
+  showViewLabel?: boolean;
 };
 
 export function MuscleHeatmap({
@@ -78,6 +87,9 @@ export function MuscleHeatmap({
   colorForIntensity = intensityToColor,
   legendLabel,
   legendIcon,
+  onPressGroup,
+  view = "both",
+  showViewLabel = true,
 }: MuscleHeatmapProps) {
   const width = Math.round(height * BODY_ASPECT_RATIO);
   const trainedGroups = (Object.entries(muscleIntensity) as [MuscleGroup, number][]).sort(
@@ -95,16 +107,22 @@ export function MuscleHeatmap({
           height={height}
           muscleIntensity={muscleIntensity}
           colorForIntensity={colorForIntensity}
+          onPressGroup={onPressGroup}
+          showLabel={showViewLabel}
         />
-        <BodyView
-          label="Back"
-          muscles={BACK_MUSCLES}
-          viewBox={BACK_VIEW_BOX}
-          width={width}
-          height={height}
-          muscleIntensity={muscleIntensity}
-          colorForIntensity={colorForIntensity}
-        />
+        {view === "both" && (
+          <BodyView
+            label="Back"
+            muscles={BACK_MUSCLES}
+            viewBox={BACK_VIEW_BOX}
+            width={width}
+            height={height}
+            muscleIntensity={muscleIntensity}
+            colorForIntensity={colorForIntensity}
+            onPressGroup={onPressGroup}
+            showLabel={showViewLabel}
+          />
+        )}
       </View>
 
       {showLegend && (

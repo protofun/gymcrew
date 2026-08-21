@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { PanResponder, Text, View } from "react-native";
-import Svg, { Rect, Text as SvgText } from "react-native-svg";
+import Svg, { Line, Rect, Text as SvgText } from "react-native-svg";
 
 import type { CompletedWorkout } from "@/store/workout-history-store";
 import { colors } from "@/theme";
@@ -9,6 +9,11 @@ const CHART_HEIGHT = 120;
 const CHART_WIDTH = 340;
 const BAR_RADIUS = 4;
 const MAX_BARS = 8;
+// Reserved on the left for the Y-axis value labels — bars only occupy the remaining
+// (CHART_WIDTH - Y_AXIS_WIDTH) columns.
+const Y_AXIS_WIDTH = 34;
+const PLOT_WIDTH = CHART_WIDTH - Y_AXIS_WIDTH;
+const Y_TICK_COUNT = 3;
 
 type VolumeTrendChartProps = {
   /** All workouts, newest first (as stored) — this chart shows up to the last 8, oldest to newest. */
@@ -34,7 +39,8 @@ export function VolumeTrendChart({ workouts, currentWorkoutId }: VolumeTrendChar
     const width = renderedWidthRef.current;
     const count = barCountRef.current;
     if (width <= 0 || count < 1) return;
-    const ratio = Math.min(1, Math.max(0, locationX / width));
+    const yAxisFraction = Y_AXIS_WIDTH / CHART_WIDTH;
+    const ratio = Math.min(1, Math.max(0, (locationX / width - yAxisFraction) / (1 - yAxisFraction)));
     const index = Math.min(count - 1, Math.floor(ratio * count));
     setActiveIndex(index);
   }
@@ -61,13 +67,18 @@ export function VolumeTrendChart({ workouts, currentWorkoutId }: VolumeTrendChar
 
   const barCount = recent.length;
   const gap = 10;
-  const chartWidth = CHART_WIDTH;
-  const barWidth = (chartWidth - gap * (barCount - 1)) / barCount;
+  const barWidth = (PLOT_WIDTH - gap * (barCount - 1)) / barCount;
+
+  // Evenly spaced volume gridlines, highest first — e.g. [4000, 2000, 0].
+  const yTicks = Array.from({ length: Y_TICK_COUNT }, (_, i) => {
+    const value = Math.round((maxVolume * (Y_TICK_COUNT - 1 - i)) / (Y_TICK_COUNT - 1));
+    return { value, y: CHART_HEIGHT - (value / maxVolume) * CHART_HEIGHT };
+  });
 
   const active = activeIndex !== null ? recent[activeIndex] : null;
-  const pxPerUnit = renderedWidth / chartWidth;
+  const pxPerUnit = renderedWidth / CHART_WIDTH;
   const tooltipWidth = 96;
-  const activeCenterX = activeIndex !== null ? activeIndex * (barWidth + gap) + barWidth / 2 : 0;
+  const activeCenterX = activeIndex !== null ? Y_AXIS_WIDTH + activeIndex * (barWidth + gap) + barWidth / 2 : 0;
   const tooltipLeft = active ? Math.max(0, Math.min(renderedWidth - tooltipWidth, activeCenterX * pxPerUnit - tooltipWidth / 2)) : 0;
 
   return (
@@ -78,12 +89,29 @@ export function VolumeTrendChart({ workouts, currentWorkoutId }: VolumeTrendChar
         style={{ position: "relative" }}
         {...panResponder.panHandlers}
       >
-        <Svg width="100%" height={CHART_HEIGHT + 24} viewBox={`0 0 ${chartWidth} ${CHART_HEIGHT + 24}`}>
+        <Svg width="100%" height={CHART_HEIGHT + 24} viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT + 24}`}>
+          {yTicks.map((tick, index) => (
+            <Fragment key={index}>
+              <Line
+                x1={Y_AXIS_WIDTH}
+                y1={tick.y}
+                x2={CHART_WIDTH}
+                y2={tick.y}
+                stroke={colors.neutral.divider}
+                strokeWidth={1}
+                strokeDasharray="2,4"
+              />
+              <SvgText x={Y_AXIS_WIDTH - 6} y={Math.max(9, tick.y - 2)} fontSize={9} fill={colors.neutral.textSecondary} textAnchor="end">
+                {tick.value}
+              </SvgText>
+            </Fragment>
+          ))}
+
           {recent.map((workout, index) => {
             const isCurrent = workout.id === currentWorkoutId;
             const isActive = index === activeIndex;
             const barHeight = Math.max(4, (workout.volumeKg / maxVolume) * CHART_HEIGHT);
-            const x = index * (barWidth + gap);
+            const x = Y_AXIS_WIDTH + index * (barWidth + gap);
             const y = CHART_HEIGHT - barHeight;
 
             return (
@@ -106,7 +134,7 @@ export function VolumeTrendChart({ workouts, currentWorkoutId }: VolumeTrendChar
           {recent.map((workout, index) => {
             if (workout.id !== currentWorkoutId) return null;
             const barHeight = Math.max(4, (workout.volumeKg / maxVolume) * CHART_HEIGHT);
-            const x = index * (barWidth + gap) + barWidth / 2;
+            const x = Y_AXIS_WIDTH + index * (barWidth + gap) + barWidth / 2;
             const y = CHART_HEIGHT - barHeight - 8;
             return (
               <SvgText key={workout.id} x={x} y={y} fontSize={11} fontWeight="700" fill={colors.neutral.textPrimary} textAnchor="middle">
@@ -116,7 +144,7 @@ export function VolumeTrendChart({ workouts, currentWorkoutId }: VolumeTrendChar
           })}
 
           {recent.map((workout, index) => {
-            const x = index * (barWidth + gap) + barWidth / 2;
+            const x = Y_AXIS_WIDTH + index * (barWidth + gap) + barWidth / 2;
             const isCurrent = workout.id === currentWorkoutId;
             return (
               <SvgText

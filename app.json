@@ -35,7 +35,14 @@
         }
       ],
       "@clerk/expo",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "GymCrew needs access to your photos so you can set a profile picture.",
+          "cameraPermission": "GymCrew needs access to your camera so you can take a profile picture."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

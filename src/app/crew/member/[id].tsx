@@ -1,22 +1,26 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AchievementRow } from "@/components/AchievementRow";
-import { DivisionBadge } from "@/components/DivisionBadge";
+import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { ProgressBar } from "@/components/ProgressBar";
-import { SearchableSelectField } from "@/components/SearchableSelectField";
+import { RankBadge } from "@/components/RankBadge";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
+import { EXERCISE_BY_ID, type Exercise } from "@/data/exercises";
 import { generateMemberWorkoutSessions, type MuscleGroup } from "@/data/workout-log";
+import { memberLiftCards } from "@/lib/crew-lift-compare";
 import { fromDateKey, getMonthGrid, isSameMonth, startOfMonth, toDateKey } from "@/lib/date";
-import { DIVISION_COLOR, DIVISIONS } from "@/lib/division";
+import { buildLiftRankCards } from "@/lib/lift-rank-cards";
 import { memberAchievements, memberStats, memberStrengthProgress, memberXp } from "@/lib/member-mock-profile";
 import { realMemberAchievements, realMemberStats, realStrengthProgress } from "@/lib/member-real-profile";
-import { muscleGroupDivisions, type MuscleDivisionRank } from "@/lib/muscle-rank";
+import { computeMuscleGroupRanks, type MuscleGroupRank } from "@/lib/muscle-group-rank";
+import { formatRankTier, MAJOR_LIFT_EXERCISE_IDS, RANK_TIER_COLOR, RANK_TIERS, type RankProfile } from "@/lib/rank";
 import { CURRENT_MEMBER_ID, useCrewStore, type CrewMember, type CrewRole } from "@/store/crew-store";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors } from "@/theme";
@@ -229,64 +233,78 @@ function WorkoutsTab({ entries }: { entries: SimpleWorkoutEntry[] }) {
 }
 
 function StatsTab({
-  muscleDivisions,
-  exerciseNames,
-  selectedExercise,
-  onSelectExercise,
+  memberId,
+  muscleRanks,
+  selectedExerciseName,
+  onOpenExercisePicker,
   strengthPoints,
 }: {
-  muscleDivisions: ReturnType<typeof muscleGroupDivisions>;
-  exerciseNames: string[];
-  selectedExercise: string;
-  onSelectExercise: (name: string) => void;
+  memberId: string;
+  muscleRanks: Partial<Record<MuscleGroup, MuscleGroupRank>>;
+  selectedExerciseName: string;
+  onOpenExercisePicker: () => void;
   strengthPoints: { date: string; value: number }[];
 }) {
-  const muscleDivisionIndex: Partial<Record<MuscleGroup, number>> = Object.fromEntries(
-    (Object.entries(muscleDivisions) as [MuscleGroup, MuscleDivisionRank][]).map(([group, rank]) => [
-      group,
-      rank.divisionIndex,
-    ]),
+  const rankedEntries = (Object.entries(muscleRanks) as [MuscleGroup, MuscleGroupRank][]).filter(
+    (entry): entry is [MuscleGroup, Extract<MuscleGroupRank, { status: "ranked" }>] => entry[1]?.status === "ranked",
   );
-  // One badge per division actually reached, not one per muscle — several muscles can share the
-  // same division, so repeating it per muscle was just noise.
-  const distinctDivisions = [...new Set(Object.values(muscleDivisions).map((rank) => rank.division))].sort(
-    (a, b) => DIVISIONS.indexOf(b) - DIVISIONS.indexOf(a),
+  const muscleTierIndex: Partial<Record<MuscleGroup, number>> = Object.fromEntries(
+    rankedEntries.map(([group, rank]) => [group, rank.tierIndex]),
+  );
+  // One badge per tier actually reached, not one per muscle — several muscles can share the same
+  // tier, so repeating it per muscle was just noise.
+  const distinctTiers = [...new Set(rankedEntries.map(([, rank]) => rank.tier))].sort(
+    (a, b) => RANK_TIERS.indexOf(b) - RANK_TIERS.indexOf(a),
   );
 
   return (
     <View className="gap-6 p-4">
       <View className="gap-3">
         <Text className="body-md font-body-semibold text-text-primary">Muscle Rank</Text>
-        {Object.keys(muscleDivisions).length === 0 ? (
+        {distinctTiers.length === 0 ? (
           <Text className="body-sm text-text-secondary">Log a bench, squat, deadlift, or overhead press to see ranks here.</Text>
         ) : (
           <>
             <MuscleHeatmap
-              muscleIntensity={muscleDivisionIndex}
+              muscleIntensity={muscleTierIndex}
               height={220}
               showLegend={false}
-              colorForIntensity={(divisionIndex) => DIVISION_COLOR[DIVISIONS[divisionIndex]]}
+              colorForIntensity={(tierIndex) => RANK_TIER_COLOR[RANK_TIERS[tierIndex]]}
             />
             <View className="flex-row flex-wrap justify-center gap-4">
-              {distinctDivisions.map((division) => (
-                <View key={division} className="items-center gap-1">
-                  <DivisionBadge division={division} size={48} />
-                  <Text className="body-sm font-body-bold" style={{ color: DIVISION_COLOR[division] }}>
-                    {division}
+              {distinctTiers.map((tier) => (
+                <View key={tier} className="items-center gap-1">
+                  <RankBadge tier={tier} size={48} />
+                  <Text className="body-sm font-body-bold" style={{ color: RANK_TIER_COLOR[tier] }}>
+                    {formatRankTier(tier)}
                   </Text>
                 </View>
               ))}
             </View>
           </>
         )}
+
+        <Pressable
+          onPress={() => router.push(`/ranks/body-graph?memberId=${memberId}`)}
+          style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+          className="flex-row items-center justify-center gap-2 rounded-full border border-divider py-3"
+        >
+          <Ionicons name="body-outline" size={15} color={colors.brand.yellow} />
+          <Text className="body-sm font-body-semibold text-brand-yellow">View Full Muscle Rank</Text>
+        </Pressable>
       </View>
 
-      {exerciseNames.length > 0 && (
-        <View className="gap-3">
-          <SearchableSelectField label="Exercise" value={selectedExercise} options={exerciseNames} onChange={onSelectExercise} />
-          <StrengthProgressChart exerciseName={selectedExercise} points={strengthPoints} />
-        </View>
-      )}
+      <View className="gap-3">
+        <Text className="body-md font-body-semibold text-text-primary">Exercise Progress</Text>
+        <Pressable
+          onPress={onOpenExercisePicker}
+          className="flex-row items-center justify-between rounded-xl border border-divider bg-surface px-4 py-4"
+        >
+          <Text className="body-md text-text-primary">{selectedExerciseName}</Text>
+          <Ionicons name="chevron-down" size={18} color={colors.neutral.textSecondary} />
+        </Pressable>
+        <StrengthProgressChart exerciseName={selectedExerciseName} points={strengthPoints} />
+      </View>
     </View>
   );
 }
@@ -317,20 +335,25 @@ export default function MemberProfileScreen() {
 
   const realWorkouts = useWorkoutHistoryStore((state) => state.workouts);
   const realRecords = usePersonalRecordsStore((state) => state.records);
+  const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
+  const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
+  const age = useOnboardingStore((state) => state.onboarding.age);
 
   const mockSessions = useMemo(() => generateMemberWorkoutSessions(member?.id ?? id ?? "member"), [member?.id, id]);
 
   const stats = isMe ? realMemberStats(realWorkouts) : memberStats(mockSessions);
   const achievements = isMe ? realMemberAchievements(realRecords) : memberAchievements(mockSessions);
   const strengthByExercise = isMe ? realStrengthProgress(realWorkouts) : memberStrengthProgress(mockSessions);
-  const muscleDivisions = member ? muscleGroupDivisions(member) : {};
-  const exerciseNames = Object.keys(strengthByExercise).sort();
 
-  const [selectedExercise, setSelectedExercise] = useState(exerciseNames[0] ?? "");
-  useEffect(() => {
-    if (!exerciseNames.includes(selectedExercise)) setSelectedExercise(exerciseNames[0] ?? "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exerciseNames.join("|")]);
+  const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
+  const myCards = useMemo(() => buildLiftRankCards(realRecords, profile, "gym"), [realRecords, profile]);
+  const muscleRanks = useMemo(() => {
+    if (!member) return {};
+    return computeMuscleGroupRanks(isMe ? myCards : memberLiftCards(member.id, myCards));
+  }, [member, isMe, myCards]);
+
+  const [selectedExercise, setSelectedExercise] = useState<Exercise>(() => EXERCISE_BY_ID[MAJOR_LIFT_EXERCISE_IDS.benchPress]);
+  const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
 
   const workoutEntries: SimpleWorkoutEntry[] = isMe
     ? realWorkouts.map((workout) => ({
@@ -379,15 +402,27 @@ export default function MemberProfileScreen() {
         {tab === "Workouts" && <WorkoutsTab entries={workoutEntries} />}
         {tab === "Stats" && (
           <StatsTab
-            muscleDivisions={muscleDivisions}
-            exerciseNames={exerciseNames}
-            selectedExercise={selectedExercise}
-            onSelectExercise={setSelectedExercise}
-            strengthPoints={strengthByExercise[selectedExercise] ?? []}
+            memberId={member?.id ?? id ?? ""}
+            muscleRanks={muscleRanks}
+            selectedExerciseName={selectedExercise.name}
+            onOpenExercisePicker={() => setExercisePickerOpen(true)}
+            strengthPoints={strengthByExercise[selectedExercise.name] ?? []}
           />
         )}
         {tab === "Achievements" && <AchievementsTab achievements={achievements} />}
       </ScrollView>
+
+      <ExercisePickerModal
+        visible={exercisePickerOpen}
+        title="Exercise Progress"
+        subtitle="Pick any exercise to see its strength progress."
+        onClose={() => setExercisePickerOpen(false)}
+        onSelect={(exercise) => {
+          setSelectedExercise(exercise);
+          setExercisePickerOpen(false);
+        }}
+        hideCreateRow
+      />
     </View>
   );
 }

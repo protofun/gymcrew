@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import type { Exercise } from "@/data/exercises";
+import { useOnboardingStore } from "@/store/onboarding-store";
 
 export type WeightUnit = "kg" | "lbs";
 
@@ -88,7 +89,8 @@ export const useActiveWorkoutStore = create<ActiveWorkoutStore>()(
       restDurationSeconds: 90,
       autoFillPreviousSet: true,
 
-      startWorkout: () => set({ ...initialState(), startedAt: Date.now() }),
+      // Defaults to the user's Profile > Units preference rather than always "kg".
+      startWorkout: () => set({ ...initialState(), unit: useOnboardingStore.getState().weightUnit, startedAt: Date.now() }),
       discardWorkout: () => set(initialState()),
       finishWorkout: () => set(initialState()),
       setName: (name) => set({ name }),

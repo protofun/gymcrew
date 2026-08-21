@@ -5,7 +5,7 @@ import { Image, Pressable, Text, TextInput, View } from "react-native";
 import { ExerciseActionsSheet } from "@/components/ExerciseActionsSheet";
 import { ExerciseInstructionsModal } from "@/components/ExerciseInstructionsModal";
 import { ExerciseSetRow } from "@/components/ExerciseSetRow";
-import { EXERCISE_BY_ID, formatMuscleName } from "@/data/exercises";
+import { EXERCISE_BY_ID, formatMuscleName, type Exercise } from "@/data/exercises";
 import { getLastPerformance } from "@/lib/exercise-history";
 import type { LoggedExercise, LoggedSet, WeightUnit } from "@/store/active-workout-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
@@ -41,7 +41,22 @@ export function WorkoutLogger({
   const [noteDraft, setNoteDraft] = useState(exercise.note);
   const [instructionsVisible, setInstructionsVisible] = useState(false);
 
-  const instructions = EXERCISE_BY_ID[exercise.exerciseId]?.instructions ?? [];
+  const libraryExercise = EXERCISE_BY_ID[exercise.exerciseId];
+  const instructions = libraryExercise?.instructions ?? [];
+  // Custom exercises (not in the library) still get a modal — just with the logged exercise's own
+  // name/photo and no muscle/instruction data to show.
+  const instructionsExercise: Exercise =
+    libraryExercise ?? {
+      id: exercise.exerciseId,
+      name: exercise.name,
+      category: "strength",
+      level: "intermediate",
+      equipment: null,
+      primaryMuscles: [],
+      secondaryMuscles: [],
+      instructions: [],
+      imageUrl: exercise.imageUrl,
+    };
 
   useEffect(() => {
     setNoteDraft(exercise.note);
@@ -198,10 +213,7 @@ export function WorkoutLogger({
       />
 
       <ExerciseInstructionsModal
-        visible={instructionsVisible}
-        exerciseName={exercise.name}
-        imageUrl={exercise.imageUrl}
-        instructions={instructions}
+        exercise={instructionsVisible ? instructionsExercise : null}
         onClose={() => setInstructionsVisible(false)}
       />
     </View>

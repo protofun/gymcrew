@@ -32,6 +32,12 @@ export type CrewNotificationPrefs = {
 
 /** Stands in for the signed-in user's own membership row until real auth-linked membership exists. */
 export const CURRENT_MEMBER_ID = "m1";
+/** The curated "boss" crew member (see lib/crew-lift-compare.ts) — exported so the persist `merge`
+ * below can backfill it into crews that were saved before he existed. */
+export const LEE_PRIEST_MEMBER_ID = "m6";
+/** A curated "glutes only" meme member (see lib/crew-lift-compare.ts) — same backfill reasoning as
+ * Lee Priest above. */
+export const BRO_MEMBER_ID = "m7";
 
 export type DivisionHistoryEntry = { division: Division; reachedAt: number };
 export type DivisionCelebration = { from: Division; to: Division };
@@ -115,7 +121,7 @@ const DEFAULT_CREW: CrewState = {
   xp: 4250,
   crewPower: 28540,
   crewPowerChangePercent: 5.6,
-  maxMembers: 6,
+  maxMembers: 7,
   members: [
     {
       id: "m1",
@@ -163,6 +169,26 @@ const DEFAULT_CREW: CrewState = {
       username: "kaypush",
       avatarUrl: "https://picsum.photos/seed/iron-squad-5/128",
       level: 18,
+      role: "member",
+      isAdmin: false,
+      isOnline: true,
+    },
+    {
+      id: LEE_PRIEST_MEMBER_ID,
+      name: "Lee Priest",
+      username: "leepriest",
+      avatarUrl: "https://picsum.photos/seed/iron-squad-6/128",
+      level: 30,
+      role: "member",
+      isAdmin: false,
+      isOnline: true,
+    },
+    {
+      id: BRO_MEMBER_ID,
+      name: "Bro",
+      username: "leggoblin",
+      avatarUrl: "https://picsum.photos/seed/iron-squad-7/128",
+      level: 16,
       role: "member",
       isAdmin: false,
       isOnline: true,
@@ -243,6 +269,25 @@ export const useCrewStore = create<CrewState & CrewActions>()(
     {
       name: "gymcrew-crew",
       storage: createJSONStorage(() => AsyncStorage),
+      // A plain shallow merge would let an already-persisted `members` array (saved before Lee
+      // Priest or Bro existed) replace the whole array and silently drop them — same issue and same
+      // fix as personal-records-store.ts's DEFAULT_RECORDS merge. Backfill whichever curated member
+      // is missing, leave everything else untouched.
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState as Partial<CrewState & CrewActions> | undefined) ?? {};
+        const members = persisted.members ?? currentState.members;
+        const missingCurated = DEFAULT_CREW.members.filter(
+          (defaultMember) =>
+            (defaultMember.id === LEE_PRIEST_MEMBER_ID || defaultMember.id === BRO_MEMBER_ID) &&
+            !members.some((member) => member.id === defaultMember.id),
+        );
+
+        return {
+          ...currentState,
+          ...persisted,
+          members: missingCurated.length === 0 ? members : [...members, ...missingCurated],
+        };
+      },
     },
   ),
 );

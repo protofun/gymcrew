@@ -131,19 +131,41 @@ const STRENGTH_STANDARDS: Record<MajorLift, Record<Gender, number[]>> = {
   overheadPress: { male: [0.35, 0.5, 0.7, 0.9, 1.1], female: [0.2, 0.3, 0.45, 0.6, 0.8] },
 };
 
-/** Each of the 5 strength-standard bands splits into 3 of our 15 rank tiers. */
-function tierIndexForRatio(ratio: number, bandThresholds: number[]): number {
-  const bounds = [0, ...bandThresholds, bandThresholds[4] * 1.5];
+export type TierPosition = {
+  index: number;
+  /** How far through the *current* tier (not the whole band) the ratio sits, 0-1 — e.g. the rank
+   * page's progress-bar-to-next-tier and percentile-within-tier are both this same number. */
+  progressToNextTier: number;
+  /** The bodyweight ratio that starts the next tier, or `null` at the top tier (Legend). */
+  ratioForNextTier: number | null;
+};
+
+/**
+ * Each of the 5 strength-standard bands (Beginner/Novice/Intermediate/Advanced/Elite) splits into 3
+ * of our 15 rank tiers. The top band deliberately runs from "Advanced" all the way to 1.5× the
+ * "Elite" standard, not just up to "Elite" itself — clearing the raw Elite standard lands solidly in
+ * the upper-middle of that band (Mythic-ish), not automatically at the ceiling. Without that
+ * headroom, any ratio at or above Elite collapsed straight to Legend (the very top tier) with no
+ * further gradient, making Legend far too easy to reach and Immortal effectively unreachable.
+ *
+ * Exported so other "ratio against a 5-band threshold ladder" rankings (e.g. reps-based accessory
+ * lifts in generic-lift-rank.ts) can reuse the same tier math instead of re-implementing it.
+ */
+export function tierPositionForRatio(ratio: number, bandThresholds: number[]): TierPosition {
+  const bounds = [0, bandThresholds[0], bandThresholds[1], bandThresholds[2], bandThresholds[3], bandThresholds[4] * 1.5];
   for (let band = 0; band < 5; band++) {
     const lo = bounds[band];
     const hi = bounds[band + 1];
     if (ratio < hi || band === 4) {
       const frac = Math.max(0, Math.min(1, (ratio - lo) / (hi - lo)));
       const subTier = Math.min(2, Math.floor(frac * 3));
-      return band * 3 + subTier;
+      const progressToNextTier = Math.max(0, Math.min(1, frac * 3 - subTier));
+      const index = band * 3 + subTier;
+      const ratioForNextTier = index >= RANK_TIERS.length - 1 ? null : lo + ((subTier + 1) / 3) * (hi - lo);
+      return { index, progressToNextTier, ratioForNextTier };
     }
   }
-  return RANK_TIERS.length - 1;
+  return { index: RANK_TIERS.length - 1, progressToNextTier: 1, ratioForNextTier: null };
 }
 
 export type RankProfile = {
@@ -153,6 +175,14 @@ export type RankProfile = {
   age?: number;
 };
 
+export type LiftRankDetail = {
+  tier: RankTier;
+  /** Progress through the current tier toward the next one, 0-1 (see `TierPosition`). */
+  progressToNextTier: number;
+  /** Extra kg (on top of `liftWeightKg`) needed to reach the next tier, or `null` at the top tier. */
+  kgToNextTier: number | null;
+};
+
 /**
  * Ranks a lift fairly by normalizing for bodyweight and gender (the two factors real strength
  * standards are built on), plus a modest age adjustment for masters lifters past 40 — a common
@@ -160,14 +190,45 @@ export type RankProfile = {
  * relative strength. Height isn't a standard input to strength ratios, so it isn't factored in
  * here; bodyweight already captures most of what height would otherwise proxy for.
  */
-export function calculateLiftRank(lift: MajorLift, liftWeightKg: number, profile: RankProfile): RankTier {
+export function calculateLiftRankDetail(lift: MajorLift, liftWeightKg: number, profile: RankProfile): LiftRankDetail {
   const thresholds = STRENGTH_STANDARDS[lift][profile.gender];
-  let ratio = liftWeightKg / profile.bodyWeightKg;
+  const ageMultiplier = profile.age && profile.age > 40 ? 1 + Math.min(profile.age - 40, 30) * 0.006 : 1; // ~0.6%/year, capped around +18% at age 70
+  const ratio = (liftWeightKg / profile.bodyWeightKg) * ageMultiplier;
 
-  if (profile.age && profile.age > 40) {
-    const yearsOver = Math.min(profile.age - 40, 30);
-    ratio *= 1 + yearsOver * 0.006; // ~0.6%/year, capped around +18% at age 70
-  }
+  const { index, progressToNextTier, ratioForNextTier } = tierPositionForRatio(ratio, thresholds);
+  // Reverses the age adjustment so the kg figure is real weight the user would need to lift, not an
+  // age-inflated ratio.
+  const kgToNextTier =
+    ratioForNextTier === null ? null : Math.max(0, Math.round((ratioForNextTier / ageMultiplier) * profile.bodyWeightKg - liftWeightKg));
 
-  return RANK_TIERS[tierIndexForRatio(ratio, thresholds)];
+  return { tier: RANK_TIERS[index], progressToNextTier, kgToNextTier };
+}
+
+export function calculateLiftRank(lift: MajorLift, liftWeightKg: number, profile: RankProfile): RankTier {
+  return calculateLiftRankDetail(lift, liftWeightKg, profile).tier;
+}
+
+export type EstimatedTierPosition = { tierIndex: number; progressToNextTier: number };
+
+/**
+ * Estimates how a tier position (index + progress within it) shifts for a given weight change,
+ * using the kg gap to the next tier as a local step size — a generic fallback for lifts with no real
+ * strength-standard formula (see data/rank-lifts.ts's seeded lift cards). Less precise than
+ * `calculateLiftRankDetail`, but works for any lift since it only needs that lift's current tier
+ * position, not a bodyweight-ratio table.
+ */
+export function estimateTierPositionForWeight(
+  currentTierIndex: number,
+  currentProgress: number,
+  currentWeightKg: number,
+  kgToNextTierFromCurrent: number,
+  targetWeightKg: number,
+): EstimatedTierPosition {
+  const remainingFraction = Math.max(0.05, 1 - currentProgress);
+  const kgPerTier = kgToNextTierFromCurrent > 0 ? kgToNextTierFromCurrent / remainingFraction : Math.max(1, currentWeightKg * 0.06);
+  const continuousPosition = currentTierIndex + currentProgress + (targetWeightKg - currentWeightKg) / kgPerTier;
+  const clamped = Math.max(0, Math.min(RANK_TIERS.length - 1 + 0.999, continuousPosition));
+  const tierIndex = Math.min(RANK_TIERS.length - 1, Math.floor(clamped));
+  const progressToNextTier = tierIndex === RANK_TIERS.length - 1 ? 1 : clamped - tierIndex;
+  return { tierIndex, progressToNextTier };
 }
