@@ -24,7 +24,9 @@ export function useTodayWorkout(): TodayWorkout {
   }
 
   const scheduled = todaysScheduledWorkout(weeklySchedule);
-  if (scheduled) return { workoutName: scheduled, isRestDay: false, isOverridden: false };
+  if (scheduled !== null) {
+    return { workoutName: scheduled === "" ? "Rest Day" : scheduled, isRestDay: scheduled === "", isOverridden: false };
+  }
 
   return { workoutName: fallback, isRestDay: false, isOverridden: false };
 }

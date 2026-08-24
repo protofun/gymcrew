@@ -1,15 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
+import { RankBadge } from "@/components/RankBadge";
 import type { Exercise } from "@/data/exercises";
+import { tierForExercise } from "@/lib/generic-lift-rank";
+import { buildLiftRankCards } from "@/lib/lift-rank-cards";
+import type { RankProfile } from "@/lib/rank";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { CURRENT_MEMBER_ID, useCrewStore } from "@/store/crew-store";
 import { useLedWorkoutStore } from "@/store/led-workout-store";
+import { useOnboardingStore } from "@/store/onboarding-store";
+import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { colors } from "@/theme";
 
 function DraftExerciseRow({ exercise, onRemove }: { exercise: Exercise; onRemove: () => void }) {
@@ -43,6 +49,13 @@ export default function LeadWorkoutScreen() {
   const startWorkout = useActiveWorkoutStore((state) => state.startWorkout);
   const setWorkoutName = useActiveWorkoutStore((state) => state.setName);
   const addExercise = useActiveWorkoutStore((state) => state.addExercise);
+
+  const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
+  const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
+  const age = useOnboardingStore((state) => state.onboarding.age);
+  const records = usePersonalRecordsStore((state) => state.records);
+  const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
+  const cards = useMemo(() => buildLiftRankCards(records, profile, "gym"), [records, profile]);
 
   const canStart = name.trim().length > 0 && exercises.length > 0;
 
@@ -132,6 +145,7 @@ export default function LeadWorkoutScreen() {
           setExercises((prev) => [...prev, exercise]);
           setPickerVisible(false);
         }}
+        renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, cards, records, profile)} size={34} />}
       />
     </View>
   );

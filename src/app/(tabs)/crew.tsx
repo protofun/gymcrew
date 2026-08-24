@@ -16,6 +16,7 @@ import { AvatarStack } from "@/components/AvatarStack";
 import { ChallengesTab } from "@/components/ChallengesTab";
 import { CrewActivitySheet } from "@/components/CrewActivitySheet";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
+import { CrewLeagueTab } from "@/components/CrewLeagueTab";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { GoalRing } from "@/components/GoalRing";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
@@ -40,7 +41,7 @@ import { useTodayTrainingStore } from "@/store/today-training-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
 
-const TABS = ["Overview", "Challenges", "Stats", "Settings"] as const;
+const TABS = ["Overview", "League", "Challenges", "Stats", "Settings"] as const;
 type CrewTab = (typeof TABS)[number];
 
 const PRESSED_STYLE = ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.7 : 1 });
@@ -478,6 +479,8 @@ export default function CrewScreen() {
           <RecentAchievementCard />
           <MuscleBalanceCard />
         </>
+      ) : activeTab === "League" ? (
+        <CrewLeagueTab />
       ) : activeTab === "Challenges" ? (
         <ChallengesTab />
       ) : activeTab === "Stats" ? (

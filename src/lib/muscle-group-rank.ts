@@ -40,14 +40,15 @@ const MUSCLE_GROUP_WEIGHTS: Partial<Record<MuscleGroup, WeightedLift[]>> = {
     { liftId: "deadlift", weight: 0.3 },
     { liftId: "lunge", weight: 0.35 },
   ],
+  biceps: [{ liftId: "barbellCurl", weight: 1 }],
+  abs: [{ liftId: "cableCrunch", weight: 1 }],
+  calves: [{ liftId: "calfRaise", weight: 1 }],
 };
 
-/** For a muscle group with no tracked exercise yet — what to suggest logging instead of guessing. */
-export const MUSCLE_GROUP_SUGGESTED_EXERCISES: Partial<Record<MuscleGroup, string[]>> = {
-  biceps: ["Barbell Curl", "Hammer Curl"],
-  abs: ["Sit-Up", "Hanging Leg Raise", "Plank"],
-  calves: ["Calf Raise"],
-};
+/** For a muscle group with no tracked exercise yet — what to suggest logging instead of guessing.
+ * Every group now has at least one tracked lift (see MUSCLE_GROUP_WEIGHTS above), so this is unused
+ * today but kept as the fallback path for any future group that doesn't. */
+export const MUSCLE_GROUP_SUGGESTED_EXERCISES: Partial<Record<MuscleGroup, string[]>> = {};
 
 /** Illustrative — this app doesn't track per-exercise session counts yet, so this is a fixed hint
  * rather than a number computed from real logging history. */

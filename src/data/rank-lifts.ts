@@ -3,7 +3,19 @@ import type { ImageSourcePropType } from "react-native";
 import { exerciseImages } from "@/constants/images";
 import { MAJOR_LIFT_EXERCISE_IDS, type MajorLift, type RankTier } from "@/lib/rank";
 
-export type LiftCardId = "benchPress" | "squat" | "deadlift" | "overheadPress" | "pullUp" | "seatedRow" | "inclinePress" | "legPress" | "lunge";
+export type LiftCardId =
+  | "benchPress"
+  | "squat"
+  | "deadlift"
+  | "overheadPress"
+  | "pullUp"
+  | "seatedRow"
+  | "inclinePress"
+  | "legPress"
+  | "lunge"
+  | "barbellCurl"
+  | "cableCrunch"
+  | "calfRaise";
 
 type MajorLiftDefinition = {
   id: LiftCardId;
@@ -133,5 +145,46 @@ export const SEEDED_LIFT_CARDS: SeededLiftDefinition[] = [
     bestWeightKg: 24,
     bestReps: 10,
     kgToNextTier: 6,
+  },
+  // Biceps/abs/calves each need at least one tracked lift so their muscle-group rank isn't
+  // permanently stuck at "insufficient data" — see MUSCLE_GROUP_WEIGHTS in lib/muscle-group-rank.ts.
+  {
+    id: "barbellCurl",
+    name: "Barbell Curl",
+    image: exerciseImages.barbellCurl,
+    exerciseId: "Barbell_Curl",
+    tier: "gold",
+    score: 4200,
+    progressToNextTier: 0.5,
+    prDeltaKg: 2.5,
+    bestWeightKg: 40,
+    bestReps: 8,
+    kgToNextTier: 8,
+  },
+  {
+    id: "cableCrunch",
+    name: "Cable Crunch",
+    image: exerciseImages.absCrunch,
+    exerciseId: "Cable_Crunch",
+    tier: "gold",
+    score: 3800,
+    progressToNextTier: 0.45,
+    prDeltaKg: 2.5,
+    bestWeightKg: 30,
+    bestReps: 12,
+    kgToNextTier: 8,
+  },
+  {
+    id: "calfRaise",
+    name: "Calf Raise",
+    image: exerciseImages.calfRaise,
+    exerciseId: "Standing_Calf_Raises",
+    tier: "platinum",
+    score: 4600,
+    progressToNextTier: 0.5,
+    prDeltaKg: 5,
+    bestWeightKg: 70,
+    bestReps: 12,
+    kgToNextTier: 12,
   },
 ];

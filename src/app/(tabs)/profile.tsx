@@ -3,18 +3,25 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View, type ImageSourcePropType } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
+import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { ProgressBar } from "@/components/ProgressBar";
-import { images } from "@/constants/images";
+import { SnapshotBanner } from "@/components/SnapshotBanner";
+import { StatTile } from "@/components/StatTile";
+import { images, navIcons } from "@/constants/images";
+import { FLEX_TAGS } from "@/data/flex-tags";
 import { DIVISION_COLOR, xpRequiredFor } from "@/lib/division";
 import { realMemberStats } from "@/lib/member-real-profile";
+import { computeProfileSnapshot } from "@/lib/profile-snapshot";
+import { useCosmeticsStore } from "@/store/cosmetics-store";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
+import { useProfileSnapshotStore } from "@/store/profile-snapshot-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
 
@@ -51,9 +58,11 @@ type SettingsRoute =
   | "/profile/body-log"
   | "/profile/rank-history"
   | "/profile/all-stats"
+  | "/profile/workout-split"
+  | "/profile/rewards"
   | "/crew/settings";
 
-type ProgressCard = { icon: keyof typeof Ionicons.glyphMap; label: string; caption: string; route: SettingsRoute | "/(tabs)/ranks" };
+type ProgressCard = { icon: ImageSourcePropType; label: string; caption: string; route: SettingsRoute | "/(tabs)/ranks" };
 
 function SettingsRow({
   icon,
@@ -88,23 +97,10 @@ function SettingsRow({
   );
 }
 
-function QuickStat({ icon, label, value, accent }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; accent: string }) {
-  return (
-    <View className="flex-1 flex-row items-stretch overflow-hidden rounded-2xl border border-divider bg-surface">
-      <View style={{ width: 3, backgroundColor: accent }} />
-      <View className="flex-1 items-center gap-1 py-3">
-        <Ionicons name={icon} size={14} color={accent} />
-        <Text className="heading-4 text-text-primary">{value}</Text>
-        <Text className="caption text-text-secondary">{label}</Text>
-      </View>
-    </View>
-  );
-}
-
 function ProgressCardTile({ card, caption, onPress }: { card: ProgressCard; caption: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={PRESSED_STYLE} className="flex-1 gap-2 rounded-2xl border border-divider bg-surface p-4">
-      <Ionicons name={card.icon} size={18} color={colors.brand.yellow} />
+      <Image source={card.icon} resizeMode="contain" style={{ width: 30, height: 30 }} />
       <Text className="body-md font-body-semibold text-text-primary">{card.label}</Text>
       <Text className="caption text-text-secondary" numberOfLines={2}>
         {caption}
@@ -134,12 +130,12 @@ function ProgressCardsGrid({ cards, captionFor, onPressCard }: { cards: Progress
 }
 
 const PROGRESS_CARDS: ProgressCard[] = [
-  { icon: "trophy", label: "My Ranks", caption: "Every tracked lift, gym & worldwide", route: "/(tabs)/ranks" },
-  { icon: "trending-up", label: "Rank Over Time", caption: "Division timeline & rank-up history", route: "/profile/rank-history" },
-  { icon: "ribbon", label: "Achievements", caption: "Your PR history", route: "/profile/achievements" },
-  { icon: "calendar", label: "Training History", caption: "Calendar, streaks & charts", route: "/profile/history" },
-  { icon: "scale", label: "Body Log", caption: "Weight & body fat over time", route: "/profile/body-log" },
-  { icon: "list", label: "All Stats", caption: "Every number, one place", route: "/profile/all-stats" },
+  { icon: navIcons.rank, label: "My Ranks", caption: "Every tracked lift, gym & worldwide", route: "/(tabs)/ranks" },
+  { icon: navIcons.rankOverTime, label: "Rank Over Time", caption: "Division timeline & rank-up history", route: "/profile/rank-history" },
+  { icon: navIcons.achievements, label: "Achievements", caption: "Your PR history", route: "/profile/achievements" },
+  { icon: navIcons.trainingHistory, label: "Training History", caption: "Calendar, streaks & charts", route: "/profile/history" },
+  { icon: navIcons.bodyLog, label: "Body Log", caption: "Weight & body fat over time", route: "/profile/body-log" },
+  { icon: navIcons.allStats, label: "All Stats", caption: "Every number, one place", route: "/profile/all-stats" },
 ];
 
 export default function ProfileScreen() {
@@ -150,16 +146,31 @@ export default function ProfileScreen() {
   const weightUnit = useOnboardingStore((state) => state.weightUnit);
   const xp = useProfileLevelStore((state) => state.xp);
   const division = useProfileLevelStore((state) => state.division);
+  const divisionHistory = useProfileLevelStore((state) => state.divisionHistory);
   const crewName = useCrewStore((state) => state.name);
   const workouts = useWorkoutHistoryStore((state) => state.workouts);
   const records = usePersonalRecordsStore((state) => state.records);
+  const equippedTagId = useCosmeticsStore((state) => state.equippedTagId);
+  const snapshotAsOfMs = useProfileSnapshotStore((state) => state.asOfMs);
+  const snapshotWeightKg = useProfileSnapshotStore((state) => state.weightKg);
+  const clearSnapshot = useProfileSnapshotStore((state) => state.clearSnapshot);
 
   const stats = useMemo(() => realMemberStats(workouts), [workouts]);
   const xpToNextLevel = xpRequiredFor(division);
   const prCount = Object.keys(records).length;
 
+  const snapshot = useMemo(
+    () => (snapshotAsOfMs != null ? computeProfileSnapshot(snapshotAsOfMs, workouts, divisionHistory) : null),
+    [snapshotAsOfMs, workouts, divisionHistory],
+  );
+  const displayDivision = snapshot?.division ?? division;
+  const displayWorkoutsCount = snapshot?.workoutsCount ?? stats.workoutsCount;
+  const displayPrCount = snapshot?.prCount ?? prCount;
+  const displayVolumeKg = snapshot?.volumeKg ?? stats.volumeKg;
+
   const displayName = onboarding.fullName?.trim() || user?.fullName || "Your Profile";
   const email = user?.primaryEmailAddress?.emailAddress;
+  const equippedTag = FLEX_TAGS.find((tag) => tag.id === equippedTagId);
 
   function goTo(path: SettingsRoute) {
     router.push(path);
@@ -187,16 +198,14 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-10" showsVerticalScrollIndicator={false}>
+    <View className="flex-1 bg-background">
+      {snapshotAsOfMs != null && snapshotWeightKg != null && (
+        <SnapshotBanner asOfMs={snapshotAsOfMs} weightKg={snapshotWeightKg} weightUnit={weightUnit} onExit={clearSnapshot} />
+      )}
+      <ScrollView className="flex-1" contentContainerClassName="pb-10" showsVerticalScrollIndicator={false}>
       <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="items-center gap-3 px-4 pt-6">
         <Pressable onPress={handleChangePhoto} disabled={uploadingPhoto} style={PRESSED_STYLE}>
-          <View className="overflow-hidden rounded-full border-2 border-brand-yellow" style={{ width: 88, height: 88 }}>
-            {user?.imageUrl ? (
-              <Image source={{ uri: user.imageUrl }} style={{ width: "100%", height: "100%" }} />
-            ) : (
-              <Image source={images.iconGorilla} resizeMode="cover" style={{ width: "100%", height: "100%" }} />
-            )}
-          </View>
+          <DivisionAvatarFrame source={user?.imageUrl ? { uri: user.imageUrl } : images.iconGorilla} division={displayDivision} size={88} />
           <View
             className="absolute bottom-0 right-0 items-center justify-center rounded-full border-2 border-background bg-brand-yellow"
             style={{ width: 28, height: 28 }}
@@ -205,7 +214,10 @@ export default function ProfileScreen() {
           </View>
         </Pressable>
         <View className="items-center gap-0.5">
-          <Text className="heading-4 text-text-primary">{displayName}</Text>
+          <View className="flex-row items-center gap-1.5">
+            <Text className="heading-4 text-text-primary">{displayName}</Text>
+            {equippedTag && <Text style={{ fontSize: 16 }}>{equippedTag.emoji}</Text>}
+          </View>
           {email && <Text className="body-sm text-text-secondary">{email}</Text>}
         </View>
 
@@ -221,41 +233,49 @@ export default function ProfileScreen() {
 
       <Animated.View entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)} className="mx-4 mt-6">
         <View className="flex-row items-stretch overflow-hidden rounded-2xl border border-divider bg-surface">
-          <View style={{ width: 4, backgroundColor: DIVISION_COLOR[division] }} />
+          <View style={{ width: 4, backgroundColor: DIVISION_COLOR[displayDivision] }} />
           <View className="flex-1 gap-2.5 p-4">
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-2.5">
-                <DivisionBadge division={division} size={36} />
+                <DivisionBadge division={displayDivision} size={36} />
                 <Text style={cardTitleStyle} className="text-text-primary">
-                  {division.toUpperCase()}
+                  {displayDivision.toUpperCase()}
                 </Text>
               </View>
-              <Text className="body-sm font-body-bold" style={{ color: DIVISION_COLOR[division] }}>
-                {Math.min(100, Math.round((xp / xpToNextLevel) * 100))}%
-              </Text>
-            </View>
-
-            <ProgressBar ratio={xp / xpToNextLevel} color={DIVISION_COLOR[division]} height={7} />
-
-            <View className="flex-row items-center justify-between">
-              <Text className="caption font-body-semibold text-text-secondary">
-                {xp.toLocaleString("en-US")} / {xpToNextLevel.toLocaleString("en-US")} XP
-              </Text>
-              <View className="flex-row items-center gap-1">
-                <Ionicons name="flash" size={11} color={colors.brand.yellow} />
-                <Text className="caption font-body-semibold text-brand-yellow">
-                  {Math.max(0, xpToNextLevel - xp).toLocaleString("en-US")} XP to next
+              {snapshot == null && (
+                <Text className="body-sm font-body-bold" style={{ color: DIVISION_COLOR[displayDivision] }}>
+                  {Math.min(100, Math.round((xp / xpToNextLevel) * 100))}%
                 </Text>
-              </View>
+              )}
             </View>
+
+            {snapshot == null ? (
+              <>
+                <ProgressBar ratio={xp / xpToNextLevel} color={DIVISION_COLOR[displayDivision]} height={7} />
+
+                <View className="flex-row items-center justify-between">
+                  <Text className="caption font-body-semibold text-text-secondary">
+                    {xp.toLocaleString("en-US")} / {xpToNextLevel.toLocaleString("en-US")} XP
+                  </Text>
+                  <View className="flex-row items-center gap-1">
+                    <Ionicons name="flash" size={11} color={colors.brand.yellow} />
+                    <Text className="caption font-body-semibold text-brand-yellow">
+                      {Math.max(0, xpToNextLevel - xp).toLocaleString("en-US")} XP to next
+                    </Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <Text className="caption font-body-semibold text-text-secondary">Division reached as of this date</Text>
+            )}
           </View>
         </View>
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)} className="mx-4 mt-3 flex-row gap-3">
-        <QuickStat icon="barbell" label="Workouts" value={String(stats.workoutsCount)} accent={colors.brand.yellow} />
-        <QuickStat icon="ribbon" label="PRs" value={String(prCount)} accent={colors.semantic.success} />
-        <QuickStat icon="trending-up" label="Volume" value={`${(stats.volumeKg / 1000).toFixed(1)}t`} accent={colors.semantic.info} />
+        <StatTile icon="barbell" label="Workouts" value={String(displayWorkoutsCount)} />
+        <StatTile icon="ribbon" label="PRs" value={String(displayPrCount)} />
+        <StatTile icon="trending-up" label="Volume" value={`${(displayVolumeKg / 1000).toFixed(1)}t`} />
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(160).springify().damping(16).mass(0.6)} className="mx-4 mt-6 gap-3">
@@ -264,7 +284,7 @@ export default function ProfileScreen() {
         </Text>
         <ProgressCardsGrid
           cards={PROGRESS_CARDS}
-          captionFor={(card) => (card.label === "Achievements" ? `${prCount} PRs logged` : card.caption)}
+          captionFor={(card) => (card.label === "Achievements" ? `${displayPrCount} PRs logged` : card.caption)}
           onPressCard={(card) => router.push(card.route)}
         />
       </Animated.View>
@@ -275,6 +295,7 @@ export default function ProfileScreen() {
         </Text>
         <View className="overflow-hidden rounded-2xl border border-divider bg-surface">
           <SettingsRow icon="person-outline" label="Edit Profile" onPress={() => goTo("/profile/edit")} />
+          <SettingsRow icon="calendar-outline" label="Workout Split" onPress={() => goTo("/profile/workout-split")} />
           <SettingsRow icon="swap-vertical-outline" label="Units" value={weightUnit === "kg" ? "Kilograms" : "Pounds"} onPress={() => goTo("/profile/units")} />
           <SettingsRow icon="notifications-outline" label="Notifications" onPress={() => goTo("/profile/notifications")} />
           <SettingsRow icon="people-outline" label="My Crew" value={crewName} onPress={() => goTo("/crew/settings")} />
@@ -282,6 +303,7 @@ export default function ProfileScreen() {
           <SettingsRow icon="settings-outline" label="Account" isLast onPress={() => goTo("/profile/account")} />
         </View>
       </Animated.View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }

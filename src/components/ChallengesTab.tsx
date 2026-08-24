@@ -7,16 +7,26 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 import { ChallengeCard } from "@/components/ChallengeCard";
 import { CreateChallengeModal } from "@/components/CreateChallengeModal";
 import { activeWeeklyChallenges, CHALLENGE_XP_REWARD, upcomingWeeklyChallenges, type ChallengeTemplate } from "@/data/challenges";
+import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
 import { generateMemberWorkoutSessions } from "@/data/workout-log";
-import { crewChallengeProgress, weekKeyRange } from "@/lib/challenge-progress";
+import { crewChallengeProgress, simulatedOpponentProgress, weekKeyRange } from "@/lib/challenge-progress";
+import { sameDivisionRivals, type RivalCrewInput } from "@/lib/crew-league";
 import { currentWeekKey, fromDateKey, toDateKey } from "@/lib/date";
+import { divisionIndex } from "@/lib/division";
 import { useChallengeStore } from "@/store/challenge-store";
 import { useCrewStore } from "@/store/crew-store";
+import { TOKENS_PER_BATTLE_WIN, TOKENS_PER_CHALLENGE_COMPLETE, useCurrencyStore } from "@/store/currency-store";
+import { useProfileLevelStore } from "@/store/profile-level-store";
 import { colors, fontFamily } from "@/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SCOPES = ["Active", "Upcoming", "Completed"] as const;
 type Scope = (typeof SCOPES)[number];
+
+/** Prestige gate (personal-leveling reward): only crews led by a Silver+ member can issue a Battle. */
+const BATTLE_LEADER_MIN_DIVISION = "Silver";
+/** Bonus crew XP on top of the normal completion reward, only when the crew actually beat its Battle opponent. */
+const BATTLE_WIN_XP_BONUS = 200;
 
 // Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native when
 // combined with a sibling className (see TopBar's wordmarkStyle for the same constraint).
@@ -47,12 +57,20 @@ export function ChallengesTab() {
 
   const members = useCrewStore((state) => state.members);
   const crewName = useCrewStore((state) => state.name);
+  const crewDivision = useCrewStore((state) => state.division);
   const addXp = useCrewStore((state) => state.addXp);
+  const personalDivision = useProfileLevelStore((state) => state.division);
   const progress = useChallengeStore((state) => state.progress);
   const awardedIds = useChallengeStore((state) => state.awardedIds);
+  const battleWinAwardedIds = useChallengeStore((state) => state.battleWinAwardedIds);
   const customChallenges = useChallengeStore((state) => state.customChallenges);
   const markAwarded = useChallengeStore((state) => state.markAwarded);
+  const markBattleWinAwarded = useChallengeStore((state) => state.markBattleWinAwarded);
   const createCustomChallenge = useChallengeStore((state) => state.createCustomChallenge);
+  const grantTokens = useCurrencyStore((state) => state.grantTokens);
+
+  const rivalCrews: RivalCrewInput[] = sameDivisionRivals(OTHER_CREWS_POWER, crewDivision);
+  const canIssueBattle = divisionIndex(personalDivision) >= divisionIndex(BATTLE_LEADER_MIN_DIVISION);
 
   const weekKey = currentWeekKey();
   const { startKey, endKey } = weekKeyRange(weekKey);
@@ -83,6 +101,7 @@ export function ChallengesTab() {
     const endKeyC = toDateKey(new Date(challenge.endsAt));
     const total = crewChallengeProgress(challenge.metric, members, myContribution, startKeyC, endKeyC, generateMemberWorkoutSessions);
     const isComplete = total >= challenge.target || Date.now() > challenge.endsAt;
+    const opponentProgress = simulatedOpponentProgress(challenge.id, challenge.target, challenge.startedAt, challenge.endsAt);
     return {
       key: challenge.id,
       metric: challenge.metric,
@@ -93,6 +112,7 @@ export function ChallengesTab() {
       isComplete,
       xpReward: CHALLENGE_XP_REWARD,
       timeLabel: formatTimeLeft(challenge.endsAt, isComplete),
+      isWinning: total >= opponentProgress,
     };
   });
 
@@ -111,12 +131,22 @@ export function ChallengesTab() {
     }));
   });
 
-  // Every challenge (weekly or crew-vs-crew) awards crew XP once, the first time it's detected complete.
+  // Every challenge (weekly or crew battle) awards crew XP + personal tokens once, the first time it's detected complete.
   useEffect(() => {
     for (const challenge of [...weekly, ...custom]) {
       if (challenge.isComplete && !awardedIds.includes(challenge.key)) {
         addXp(CHALLENGE_XP_REWARD);
+        grantTokens(TOKENS_PER_CHALLENGE_COMPLETE);
         markAwarded(challenge.key);
+      }
+    }
+    // A crew battle that's complete AND actually won gets a bonus on top — bonus crew XP plus tokens
+    // (the earnable-currency leveling reward), only once per battle.
+    for (const challenge of custom) {
+      if (challenge.isComplete && challenge.isWinning && !battleWinAwardedIds.includes(challenge.key)) {
+        addXp(BATTLE_WIN_XP_BONUS);
+        grantTokens(TOKENS_PER_BATTLE_WIN);
+        markBattleWinAwarded(challenge.key);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,11 +154,12 @@ export function ChallengesTab() {
 
   const visible = scope === "Active" ? [...weekly, ...custom].filter((c) => !c.isComplete) : scope === "Upcoming" ? upcoming : [...weekly, ...custom].filter((c) => c.isComplete);
 
-  function handleCreate(template: ChallengeTemplate, opponentCrewName: string, durationDays: number) {
+  function handleCreate(template: ChallengeTemplate, opponent: RivalCrewInput, durationDays: number) {
     createCustomChallenge({
-      opponentCrewName,
+      opponentCrewName: opponent.name,
+      opponentCrewPower: opponent.power,
       name: template.name,
-      description: `${crewName} vs ${opponentCrewName} — ${template.description}`,
+      description: `${crewName} vs ${opponent.name} — ${template.description}`,
       metric: template.metric,
       unit: template.unit,
       target: template.perMemberTarget * members.length,
@@ -172,11 +203,21 @@ export function ChallengesTab() {
 
       <Animated.View entering={FadeInUp.delay(140).springify().damping(16).mass(0.6)}>
         <Pressable
-          onPress={() => setCreateOpen(true)}
-          className="flex-row items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-yellow py-3.5"
+          onPress={() => canIssueBattle && setCreateOpen(true)}
+          className={`flex-row items-center justify-center gap-2 rounded-2xl border border-dashed py-3.5 ${
+            canIssueBattle ? "border-brand-yellow" : "border-divider"
+          }`}
         >
-          <Ionicons name="flag" size={16} color={colors.brand.yellow} />
-          <Text className="body-sm font-body-semibold text-brand-yellow">Challenge Another Crew</Text>
+          <Ionicons
+            name={canIssueBattle ? "flag" : "lock-closed"}
+            size={16}
+            color={canIssueBattle ? colors.brand.yellow : colors.neutral.textSecondary}
+          />
+          <Text className={`body-sm font-body-semibold ${canIssueBattle ? "text-brand-yellow" : "text-text-secondary"}`}>
+            {canIssueBattle
+              ? "Challenge Another Crew"
+              : `Reach ${BATTLE_LEADER_MIN_DIVISION} personally to challenge crews (you're ${personalDivision})`}
+          </Text>
         </Pressable>
       </Animated.View>
 
@@ -205,6 +246,7 @@ export function ChallengesTab() {
                 timeLabel={challenge.timeLabel}
                 isComplete={challenge.isComplete}
                 xpReward={challenge.xpReward}
+                battleStatus={"isWinning" in challenge ? (challenge.isWinning ? "winning" : "losing") : undefined}
                 onPress={() => router.push(`/crew/challenge/${challenge.key}`)}
               />
             </Animated.View>
@@ -212,7 +254,7 @@ export function ChallengesTab() {
         </View>
       )}
 
-      <CreateChallengeModal visible={createOpen} onClose={() => setCreateOpen(false)} onCreate={handleCreate} />
+      <CreateChallengeModal visible={createOpen} rivalCrews={rivalCrews} onClose={() => setCreateOpen(false)} onCreate={handleCreate} />
     </View>
   );
 }

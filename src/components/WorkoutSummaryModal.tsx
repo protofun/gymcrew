@@ -7,6 +7,7 @@ import { formatMuscleLabel, intensityToColor, MuscleHeatmap } from "@/components
 import type { MuscleGroup, WorkoutSession } from "@/data/workout-log";
 import { useCountUp } from "@/hooks/use-count-up";
 import { toDateKey } from "@/lib/date";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutNotesStore } from "@/store/workout-notes-store";
 import { colors } from "@/theme";
 
@@ -41,6 +42,7 @@ type WorkoutSummaryModalProps = {
 };
 
 export function WorkoutSummaryModal({ visible, onClose, date, session }: WorkoutSummaryModalProps) {
+  const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const dateKey = date ? toDateKey(date) : null;
   const savedNote = useWorkoutNotesStore((state) => (dateKey ? (state.notesByDate[dateKey] ?? "") : ""));
   const setNote = useWorkoutNotesStore((state) => state.setNote);
@@ -106,7 +108,7 @@ export function WorkoutSummaryModal({ visible, onClose, date, session }: Workout
           <View className="gap-3">
             <Text className="body-md font-body-semibold text-text-primary">Muscles Trained</Text>
             <View className="flex-row items-center gap-4">
-              <MuscleHeatmap muscleIntensity={session.muscleIntensity} height={170} showLegend={false} />
+              <MuscleHeatmap muscleIntensity={session.muscleIntensity} height={170} showLegend={false} gender={gender} />
               <View className="flex-1 gap-3">
                 {trainedGroups.map(([group, intensity]) => (
                   <View key={group} className="flex-row items-center gap-2">

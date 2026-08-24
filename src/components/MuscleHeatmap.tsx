@@ -1,16 +1,14 @@
-import { BACK_MUSCLES, FRONT_MUSCLES } from "body-muscles";
 import { Image, Text, View, type ImageSourcePropType } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
+import { BACK_MUSCLES_BY_GENDER, BACK_VIEW_BOX, BODY_ASPECT_RATIO, FRONT_MUSCLES_BY_GENDER, FRONT_VIEW_BOX } from "@/data/body-muscle-paths";
 import type { MuscleGroup } from "@/data/workout-log";
 import { formatMuscleLabel, intensityToColor, MUSCLE_GROUP_BY_REGION_ID } from "@/lib/muscle-groups";
+import type { Gender } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
 export { formatMuscleLabel, intensityToColor };
-
-const FRONT_VIEW_BOX = "0 0 35 93";
-const BACK_VIEW_BOX = "37 0 35 93";
-const BODY_ASPECT_RATIO = 35 / 93;
+export { BODY_ASPECT_RATIO };
 
 function BodyView({
   label,
@@ -78,6 +76,10 @@ type MuscleHeatmapProps = {
   /** Hides the "Front"/"Back" caption under each silhouette — off by default for the same
    * tight-space cases `view="front"` is for. */
   showViewLabel?: boolean;
+  /** Which silhouette artwork to draw — defaults to "male" for contexts with no specific person in
+   * mind (e.g. a crew-wide aggregate). Pass the real onboarding gender when the heatmap represents
+   * one specific person's body. */
+  gender?: Gender;
 };
 
 export function MuscleHeatmap({
@@ -90,6 +92,7 @@ export function MuscleHeatmap({
   onPressGroup,
   view = "both",
   showViewLabel = true,
+  gender = "male",
 }: MuscleHeatmapProps) {
   const width = Math.round(height * BODY_ASPECT_RATIO);
   const trainedGroups = (Object.entries(muscleIntensity) as [MuscleGroup, number][]).sort(
@@ -101,7 +104,7 @@ export function MuscleHeatmap({
       <View className="flex-row items-start justify-center gap-6">
         <BodyView
           label="Front"
-          muscles={FRONT_MUSCLES}
+          muscles={FRONT_MUSCLES_BY_GENDER[gender]}
           viewBox={FRONT_VIEW_BOX}
           width={width}
           height={height}
@@ -113,7 +116,7 @@ export function MuscleHeatmap({
         {view === "both" && (
           <BodyView
             label="Back"
-            muscles={BACK_MUSCLES}
+            muscles={BACK_MUSCLES_BY_GENDER[gender]}
             viewBox={BACK_VIEW_BOX}
             width={width}
             height={height}

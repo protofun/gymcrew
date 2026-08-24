@@ -184,14 +184,50 @@ export default function ChallengeDetailScreen() {
           </View>
 
           {opponent && (
-            <View className="gap-2 rounded-2xl border border-divider bg-surface p-4">
-              <Text className="body-sm font-body-bold text-text-primary" style={{ letterSpacing: 1 }}>
-                VS {opponent.name.toUpperCase()}
-              </Text>
-              <ProgressBar ratio={target > 0 ? opponent.progress / target : 0} color={colors.neutral.textSecondary} height={8} />
-              <Text className="caption text-text-secondary">
-                {Math.min(opponent.progress, target).toLocaleString("en-US")} / {target.toLocaleString("en-US")} {unit}
-              </Text>
+            <View className="gap-3 rounded-2xl border border-divider bg-surface p-4">
+              <View className="flex-row items-center justify-between">
+                <Text className="body-sm font-body-bold text-text-primary" style={{ letterSpacing: 1 }}>
+                  VS {opponent.name.toUpperCase()}
+                </Text>
+                {(() => {
+                  const winning = progress >= opponent.progress;
+                  return (
+                    <View className="flex-row items-center gap-1">
+                      <Ionicons
+                        name={winning ? "trending-up" : "trending-down"}
+                        size={13}
+                        color={winning ? colors.semantic.success : colors.semantic.error}
+                      />
+                      <Text
+                        className="caption font-body-bold"
+                        style={{ color: winning ? colors.semantic.success : colors.semantic.error }}
+                      >
+                        {winning ? "Ahead" : "Behind"}
+                      </Text>
+                    </View>
+                  );
+                })()}
+              </View>
+
+              <View className="gap-1.5">
+                <View className="flex-row items-center justify-between">
+                  <Text className="caption text-text-secondary">Your Crew</Text>
+                  <Text className="caption font-body-semibold text-text-primary">
+                    {progress.toLocaleString("en-US")} {unit}
+                  </Text>
+                </View>
+                <ProgressBar ratio={target > 0 ? progress / target : 0} color={colors.brand.yellow} height={8} />
+              </View>
+
+              <View className="gap-1.5">
+                <View className="flex-row items-center justify-between">
+                  <Text className="caption text-text-secondary">{opponent.name}</Text>
+                  <Text className="caption font-body-semibold text-text-primary">
+                    {Math.min(opponent.progress, target).toLocaleString("en-US")} {unit}
+                  </Text>
+                </View>
+                <ProgressBar ratio={target > 0 ? opponent.progress / target : 0} color={colors.neutral.textSecondary} height={8} />
+              </View>
             </View>
           )}
 

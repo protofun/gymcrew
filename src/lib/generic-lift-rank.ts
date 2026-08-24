@@ -8,7 +8,9 @@ import {
   tierPositionForRatio,
   type LiftRankDetail,
   type RankProfile,
+  type RankTier,
 } from "@/lib/rank";
+import type { PersonalRecord } from "@/store/personal-records-store";
 
 /**
  * Isolation exercises train nowhere near as heavy as the compound lift they're proxied against (see
@@ -59,4 +61,26 @@ export function genericExerciseRankDetail(exercise: Exercise, weightKg: number, 
   const effectiveWeightKg = weightKg * perSideMultiplier * isolationMultiplier;
 
   return calculateLiftRankDetail(majorLift, effectiveWeightKg, profile);
+}
+
+/**
+ * The single tier for any exercise from the library — one of the 9 tracked lifts' precise card if
+ * it's among `cards`, otherwise the muscle-group-proxy estimate (see `genericExerciseRankDetail`)
+ * for the other 800+. Exported so every exercise-picker leading badge across the app (workout
+ * logging, rank pickers, member stats) can show the same medal instead of a duplicated per-screen
+ * lookup — an exercise with no PR on record naturally lands on Rookie (0 weight → 0 ratio), same as
+ * the rest of the app's "no data yet" convention. `cards` only needs `exerciseId`/`tier`, so any of
+ * the app's several lift-card shapes (LiftRankCard, DisplayLiftCard, ...) works as-is.
+ */
+export function tierForExercise(
+  exercise: Exercise,
+  cards: { exerciseId: string; tier: RankTier }[],
+  records: Record<string, PersonalRecord>,
+  profile: RankProfile,
+): RankTier {
+  const knownCard = cards.find((card) => card.exerciseId === exercise.id);
+  if (knownCard) return knownCard.tier;
+
+  const record = records[exercise.id];
+  return genericExerciseRankDetail(exercise, record?.bestWeightKg ?? 0, record?.bestReps ?? 0, profile).tier;
 }

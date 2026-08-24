@@ -6,16 +6,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ALL_MUSCLE_GROUPS } from "@/data/workout-log";
 import { DivisionBadge } from "@/components/DivisionBadge";
-import { ProgressBar } from "@/components/ProgressBar";
+import { MuscleHeatmap } from "@/components/MuscleHeatmap";
+import { RankBadge } from "@/components/RankBadge";
+import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { StatCard, StatRow, StatSectionHeader } from "@/components/StatRow";
 import { DIVISION_COLOR } from "@/lib/division";
 import { buildLiftRankCards, overallPowerScore, highestTier } from "@/lib/lift-rank-cards";
-import { formatMuscleLabel } from "@/lib/muscle-groups";
 import { computeMuscleGroupRanks } from "@/lib/muscle-group-rank";
-import { formatRankTier, RANK_TIER_COLOR } from "@/lib/rank";
+import { computeProfileSnapshot } from "@/lib/profile-snapshot";
+import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS } from "@/lib/rank";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
+import { useProfileSnapshotStore } from "@/store/profile-snapshot-store";
+import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors } from "@/theme";
 
 const PRESSED_STYLE = ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.75 : 1 });
@@ -26,24 +30,49 @@ export default function RankHistoryScreen() {
   const xp = useProfileLevelStore((state) => state.xp);
   const divisionHistory = useProfileLevelStore((state) => state.divisionHistory);
   const onboarding = useOnboardingStore((state) => state.onboarding);
-  const records = usePersonalRecordsStore((state) => state.records);
+  const weightUnit = useOnboardingStore((state) => state.weightUnit);
+  const liveRecords = usePersonalRecordsStore((state) => state.records);
+  const workouts = useWorkoutHistoryStore((state) => state.workouts);
+  const snapshotAsOfMs = useProfileSnapshotStore((state) => state.asOfMs);
+  const snapshotWeightKg = useProfileSnapshotStore((state) => state.weightKg);
+  const clearSnapshot = useProfileSnapshotStore((state) => state.clearSnapshot);
+
+  const snapshot = useMemo(
+    () => (snapshotAsOfMs != null ? computeProfileSnapshot(snapshotAsOfMs, workouts, divisionHistory) : null),
+    [snapshotAsOfMs, workouts, divisionHistory],
+  );
+  const displayDivision = snapshot?.division ?? division;
+  const records = snapshot?.records ?? liveRecords;
+  const timelineDivisionHistory = snapshotAsOfMs != null ? divisionHistory.filter((entry) => entry.reachedAt <= snapshotAsOfMs) : divisionHistory;
 
   const cards = useMemo(
-    () => buildLiftRankCards(records, { gender: onboarding.gender ?? "male", bodyWeightKg: onboarding.weightKg ?? 85, age: onboarding.age }, "gym"),
-    [records, onboarding.gender, onboarding.weightKg, onboarding.age],
+    () =>
+      buildLiftRankCards(
+        records,
+        { gender: onboarding.gender ?? "male", bodyWeightKg: snapshotAsOfMs != null && snapshotWeightKg != null ? snapshotWeightKg : (onboarding.weightKg ?? 85), age: onboarding.age },
+        "gym",
+      ),
+    [records, onboarding.gender, onboarding.weightKg, onboarding.age, snapshotAsOfMs, snapshotWeightKg],
   );
   const powerScore = overallPowerScore(cards);
   const topTier = highestTier(cards);
   const weakPoints = cards.filter((card) => card.isWeakPoint);
+
   const muscleRanks = useMemo(() => computeMuscleGroupRanks(cards), [cards]);
-  const rankedMuscleGroups = ALL_MUSCLE_GROUPS.flatMap((group) => {
+  const rankedEntries = ALL_MUSCLE_GROUPS.flatMap((group) => {
     const rank = muscleRanks[group];
     return rank?.status === "ranked" ? [{ group, rank }] : [];
   });
+  const muscleTierIndex = Object.fromEntries(rankedEntries.map(({ group, rank }) => [group, rank.tierIndex]));
+  // One badge per tier actually reached, not one per muscle — several muscles can share the same
+  // tier, so repeating it per muscle was just noise (same pattern as the crew member profile page).
+  const distinctTiers = [...new Set(rankedEntries.map(({ rank }) => rank.tier))].sort(
+    (a, b) => RANK_TIERS.indexOf(b) - RANK_TIERS.indexOf(a),
+  );
 
-  const timeline = divisionHistory.map((entry, index) => {
-    const next = divisionHistory[index + 1];
-    const endMs = next ? next.reachedAt : Date.now();
+  const timeline = timelineDivisionHistory.map((entry, index) => {
+    const next = timelineDivisionHistory[index + 1];
+    const endMs = next ? next.reachedAt : (snapshotAsOfMs ?? Date.now());
     const days = Math.max(0, Math.round((endMs - entry.reachedAt) / 86400000));
     return { ...entry, days, isCurrent: !next };
   });
@@ -57,18 +86,24 @@ export default function RankHistoryScreen() {
         <Text className="heading-4 text-text-primary">Rank Over Time</Text>
       </View>
 
+      {snapshotAsOfMs != null && snapshotWeightKg != null && (
+        <SnapshotBanner asOfMs={snapshotAsOfMs} weightKg={snapshotWeightKg} weightUnit={weightUnit} onExit={clearSnapshot} />
+      )}
+
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: insets.bottom + 32, gap: 20 }}
         showsVerticalScrollIndicator={false}
       >
         <View className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4">
-          <DivisionBadge division={division} size={56} />
+          <DivisionBadge division={displayDivision} size={56} />
           <View className="flex-1">
-            <Text className="body-lg font-body-bold" style={{ color: DIVISION_COLOR[division] }}>
-              {division}
+            <Text className="body-lg font-body-bold" style={{ color: DIVISION_COLOR[displayDivision] }}>
+              {displayDivision}
             </Text>
-            <Text className="caption text-text-secondary">{xp.toLocaleString("en-US")} total XP earned</Text>
+            <Text className="caption text-text-secondary">
+              {snapshot == null ? `${xp.toLocaleString("en-US")} total XP earned` : "Division reached as of this date"}
+            </Text>
           </View>
         </View>
 
@@ -106,61 +141,39 @@ export default function RankHistoryScreen() {
         <View className="gap-2">
           <StatSectionHeader label="Overview" />
           <StatCard>
-            <StatRow label="Power Score" value={powerScore.toLocaleString("en-US")} valueColor={colors.brand.yellow} />
-            <StatRow label="Highest Tier Reached" value={formatRankTier(topTier)} valueColor={RANK_TIER_COLOR[topTier]} />
-            <StatRow
-              label="Weak Points"
-              value={weakPoints.length > 0 ? weakPoints.map((card) => card.name).join(", ") : "None"}
-              valueColor={weakPoints.length > 0 ? colors.semantic.error : colors.semantic.success}
-              isLast
-            />
+            <StatRow label="Power Score" value={powerScore.toLocaleString("en-US")} />
+            <StatRow label="Highest Tier Reached" value={formatRankTier(topTier)} />
+            <StatRow label="Weak Points" value={weakPoints.length > 0 ? weakPoints.map((card) => card.name).join(", ") : "None"} isLast />
           </StatCard>
         </View>
 
         <View className="gap-2">
-          <StatSectionHeader label="Per-Lift Breakdown" />
-          <View className="gap-2.5">
-            {cards.map((card) => (
-              <View key={card.id} className="gap-2 rounded-2xl border border-divider bg-surface p-4">
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-row items-center gap-2">
-                    <Text className="body-md font-body-semibold text-text-primary">{card.name}</Text>
-                    {card.isWeakPoint && <Ionicons name="alert-circle" size={14} color={colors.semantic.error} />}
+          <StatSectionHeader label="Muscle Rank" />
+          {distinctTiers.length === 0 ? (
+            <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-10">
+              <Ionicons name="body-outline" size={22} color={colors.neutral.textSecondary} />
+              <Text className="body-sm text-center text-text-secondary">Log a bench, squat, deadlift, or overhead press to see ranks here.</Text>
+            </View>
+          ) : (
+            <View className="gap-4 rounded-2xl border border-divider bg-surface p-4">
+              <MuscleHeatmap
+                muscleIntensity={muscleTierIndex}
+                height={220}
+                showLegend={false}
+                colorForIntensity={(tierIndex) => RANK_TIER_COLOR[RANK_TIERS[tierIndex]]}
+                gender={onboarding.gender ?? "male"}
+              />
+              <View className="flex-row flex-wrap justify-center gap-4">
+                {distinctTiers.map((tier) => (
+                  <View key={tier} className="items-center gap-1">
+                    <RankBadge tier={tier} size={40} />
+                    <Text className="caption font-body-semibold text-text-secondary">{formatRankTier(tier)}</Text>
                   </View>
-                  <Text className="caption font-body-bold" style={{ color: RANK_TIER_COLOR[card.tier] }}>
-                    {formatRankTier(card.tier)}
-                  </Text>
-                </View>
-                <ProgressBar ratio={card.percentileInTier} color={RANK_TIER_COLOR[card.tier]} height={6} />
-                <View className="flex-row items-center justify-between">
-                  <Text className="caption text-text-secondary">
-                    {card.bestWeightKg > 0 ? `${card.bestWeightKg}kg × ${card.bestReps}` : "Not logged yet"}
-                  </Text>
-                  <Text className="caption text-text-secondary">
-                    {card.kgToNextTier != null ? `${card.kgToNextTier}kg to next tier` : "Top tier"}
-                  </Text>
-                </View>
+                ))}
               </View>
-            ))}
-          </View>
+            </View>
+          )}
         </View>
-
-        {rankedMuscleGroups.length > 0 && (
-          <View className="gap-2">
-            <StatSectionHeader label="Muscle Group Ranks" />
-            <StatCard>
-              {rankedMuscleGroups.map(({ group, rank }, index) => (
-                <StatRow
-                  key={group}
-                  label={formatMuscleLabel(group)}
-                  value={formatRankTier(rank.tier)}
-                  valueColor={RANK_TIER_COLOR[rank.tier]}
-                  isLast={index === rankedMuscleGroups.length - 1}
-                />
-              ))}
-            </StatCard>
-          </View>
-        )}
 
         <View className="gap-2.5">
           <Text className="body-md font-body-semibold text-text-primary">More</Text>

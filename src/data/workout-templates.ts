@@ -2,6 +2,9 @@ import type { Ionicons } from "@expo/vector-icons";
 import type { ImageSourcePropType } from "react-native";
 
 import { exerciseImages } from "@/constants/images";
+import { EXERCISE_BY_ID } from "@/data/exercises";
+import type { MuscleGroup } from "@/data/workout-log";
+import { resolveMuscleGroup } from "@/lib/muscle-groups";
 
 export type WorkoutTemplate = {
   key: string;
@@ -37,7 +40,9 @@ const DAY_TEMPLATES = {
     key: "legs",
     name: "Leg Day",
     icon: "walk-outline",
-    exerciseIds: ["Barbell_Squat", "Romanian_Deadlift", "Leg_Press", "Lying_Leg_Curls", "Standing_Calf_Raises"],
+    // Abs tag along on leg day, same as most real programs pair them — see the new standalone
+    // `abs` template below for people who want a dedicated core day instead.
+    exerciseIds: ["Barbell_Squat", "Romanian_Deadlift", "Leg_Press", "Lying_Leg_Curls", "Standing_Calf_Raises", "Crunches"],
   },
   upper: {
     key: "upper",
@@ -112,6 +117,12 @@ const DAY_TEMPLATES = {
     icon: "accessibility-outline",
     exerciseIds: ["Push-Up_Wide", "Pullups", "Bodyweight_Squat", "Plank", "Split_Squats"],
   },
+  abs: {
+    key: "abs",
+    name: "Abs Day",
+    icon: "ellipse-outline",
+    exerciseIds: ["Crunches", "Hanging_Leg_Raise", "Plank", "Cable_Crunch", "Russian_Twist"],
+  },
 } as const satisfies Record<string, WorkoutTemplate>;
 
 type DayTemplateKey = keyof typeof DAY_TEMPLATES;
@@ -131,6 +142,7 @@ const DAY_TEMPLATE_HERO_IMAGE: Record<DayTemplateKey, ImageSourcePropType> = {
   arms: exerciseImages.barbellCurl,
   glutes: exerciseImages.lunge,
   bodyweightFull: exerciseImages.plank,
+  abs: exerciseImages.absCrunch,
 };
 
 /** Day template display name (e.g. "Leg Day") → hero photo, for screens that only know the workout's name. */
@@ -172,4 +184,36 @@ export const ALL_TEMPLATES: WorkoutTemplate[] = Object.values(DAY_TEMPLATES);
 export function getTemplatesForSplit(split: string | undefined): WorkoutTemplate[] {
   const keys = (split && SPLIT_TEMPLATE_KEYS[split]) || DEFAULT_TEMPLATE_KEYS;
   return keys.map((key) => DAY_TEMPLATES[key]);
+}
+
+/** Which muscle groups a template trains, and how hard — primary muscles count more than
+ * secondary ones. Real exercise data, not a guess, so the mini body-graph badges the workout-split
+ * builder drags around actually reflect what each template trains. */
+function templateMuscleIntensity(template: WorkoutTemplate): Partial<Record<MuscleGroup, number>> {
+  const intensity: Partial<Record<MuscleGroup, number>> = {};
+  for (const exerciseId of template.exerciseIds) {
+    const exercise = EXERCISE_BY_ID[exerciseId];
+    if (!exercise) continue;
+    for (const muscleName of exercise.primaryMuscles) {
+      const group = resolveMuscleGroup(muscleName);
+      if (group) intensity[group] = Math.min(10, (intensity[group] ?? 0) + 3);
+    }
+    for (const muscleName of exercise.secondaryMuscles) {
+      const group = resolveMuscleGroup(muscleName);
+      if (group) intensity[group] = Math.min(10, (intensity[group] ?? 0) + 1);
+    }
+  }
+  return intensity;
+}
+
+/** Precomputed once — the template list is static, so there's no reason to recompute this per
+ * render everywhere it's used (the workout-split builder's tray + day slots). */
+export const TEMPLATE_MUSCLE_INTENSITY: Record<string, Partial<Record<MuscleGroup, number>>> = Object.fromEntries(
+  ALL_TEMPLATES.map((template) => [template.name, templateMuscleIntensity(template)]),
+);
+
+/** Muscle intensity for any workout name — a known template's precomputed map, or an empty map
+ * (renders as a plain gray silhouette) for a custom-typed name with no exercise data behind it. */
+export function intensityForWorkoutName(name: string): Partial<Record<MuscleGroup, number>> {
+  return TEMPLATE_MUSCLE_INTENSITY[name] ?? {};
 }

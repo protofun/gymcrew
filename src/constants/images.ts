@@ -55,6 +55,33 @@ import divisionSupreme from "@/assets/images/divisions/division-supreme.png";
 import divisionConqueror from "@/assets/images/divisions/division-conqueror.png";
 import divisionDominator from "@/assets/images/divisions/division-dominator.png";
 import divisionApex from "@/assets/images/divisions/division-apex.png";
+import navCrew from "@/assets/images/icons/crew.png";
+import navWorkouts from "@/assets/images/icons/workouts.png";
+import navLogWorkout from "@/assets/images/icons/log-workout.png";
+import navMuscles from "@/assets/images/icons/muscles.png";
+import navRank from "@/assets/images/icons/rank.png";
+import navGoals from "@/assets/images/icons/goals.png";
+import navSchedule from "@/assets/images/icons/schedule.png";
+import navNutrition from "@/assets/images/icons/nutrition.png";
+import navProgress from "@/assets/images/icons/progress.png";
+import navProfile from "@/assets/images/icons/profile.png";
+import navStreak from "@/assets/images/icons/streak.png";
+import navXp from "@/assets/images/icons/xp.png";
+import navChallenges from "@/assets/images/icons/challenges.png";
+import navFriends from "@/assets/images/icons/friends.png";
+import navSettings from "@/assets/images/icons/settings.png";
+import navRankOverTime from "@/assets/images/icons/rank-over-time.png";
+import navAchievements from "@/assets/images/icons/achievements.png";
+import navTrainingHistory from "@/assets/images/icons/training-history.png";
+import navBodyLog from "@/assets/images/icons/body-log.png";
+import navAllStats from "@/assets/images/icons/all-stats.png";
+import navPrs from "@/assets/images/icons/prs.png";
+import navVolume from "@/assets/images/icons/volume.png";
+import navWorkoutSplitCal from "@/assets/images/icons/workout-split-cal.png";
+import navUnits from "@/assets/images/icons/units.png";
+import navNotifications from "@/assets/images/icons/notifications.png";
+import navMyCrew from "@/assets/images/icons/my-crew.png";
+import navSubscriptions from "@/assets/images/icons/subscriptions.png";
 import exerciseAbsCrunch from "@/assets/images/exercises/abs-crunch.png";
 import exerciseBarbellCurl from "@/assets/images/exercises/barbell-curl.png";
 import exerciseBenchPress from "@/assets/images/exercises/bench-press.png";
@@ -219,4 +246,36 @@ export const muscleGroupImages: Record<MuscleGroup, ImageSourcePropType> = {
   hamstrings: muscleHamstrings,
   calves: muscleCalves,
   glutes: muscleGlutes,
+};
+
+/** Cropped from assets/images/icons/all-icons.png and more-all-icons.png — one badge-style
+ * illustrated icon per concept, used for reward tiles and progress/settings rows. */
+export const navIcons = {
+  crew: navCrew,
+  workouts: navWorkouts,
+  logWorkout: navLogWorkout,
+  muscles: navMuscles,
+  rank: navRank,
+  goals: navGoals,
+  schedule: navSchedule,
+  nutrition: navNutrition,
+  progress: navProgress,
+  profile: navProfile,
+  streak: navStreak,
+  xp: navXp,
+  challenges: navChallenges,
+  friends: navFriends,
+  settings: navSettings,
+  rankOverTime: navRankOverTime,
+  achievements: navAchievements,
+  trainingHistory: navTrainingHistory,
+  bodyLog: navBodyLog,
+  allStats: navAllStats,
+  prs: navPrs,
+  volume: navVolume,
+  workoutSplitCal: navWorkoutSplitCal,
+  units: navUnits,
+  notifications: navNotifications,
+  myCrew: navMyCrew,
+  subscriptions: navSubscriptions,
 };

@@ -5,16 +5,22 @@ import { Pressable, Text, View } from "react-native";
 
 import { toDateKey } from "@/lib/date";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
+import { BODY_ASPECT_RATIO } from "@/data/body-muscle-paths";
 import type { MuscleGroup } from "@/data/workout-log";
-import type { CompletedWorkout } from "@/store/workout-history-store";
+import type { Gender } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAYS_PER_PERIOD = 14;
 const CELL_HEIGHT = 62;
 
+/** Only what this calendar actually needs — a real `CompletedWorkout` satisfies this structurally,
+ * but so does a lighter adapter over another crew member's mock session data (which has no real
+ * workout id to navigate to, see `interactive` below). */
+export type CalendarWorkout = { id: string; completedAt: number; muscleIntensity: Partial<Record<MuscleGroup, number>> };
+
 type DayInfo = {
-  workouts: CompletedWorkout[];
+  workouts: CalendarWorkout[];
   muscleIntensity: Partial<Record<MuscleGroup, number>>;
 };
 
@@ -26,7 +32,7 @@ function mondayOf(date: Date): Date {
   return monday;
 }
 
-function mergeIntensity(workouts: CompletedWorkout[]): Partial<Record<MuscleGroup, number>> {
+function mergeIntensity(workouts: CalendarWorkout[]): Partial<Record<MuscleGroup, number>> {
   const merged: Partial<Record<MuscleGroup, number>> = {};
   for (const workout of workouts) {
     for (const [group, value] of Object.entries(workout.muscleIntensity) as [MuscleGroup, number][]) {
@@ -36,24 +42,41 @@ function mergeIntensity(workouts: CompletedWorkout[]): Partial<Record<MuscleGrou
   return merged;
 }
 
-function DayCell({ date, info, isToday, onPress }: { date: Date; info: DayInfo | undefined; isToday: boolean; onPress: () => void }) {
+function DayCell({
+  date,
+  info,
+  isToday,
+  interactive,
+  gender,
+  onPress,
+}: {
+  date: Date;
+  info: DayInfo | undefined;
+  isToday: boolean;
+  interactive: boolean;
+  gender: Gender;
+  onPress: () => void;
+}) {
   const trained = !!info && info.workouts.length > 0;
+  const cellSize = { width: Math.round(CELL_HEIGHT * BODY_ASPECT_RATIO) + (isToday ? 4 : 0), height: CELL_HEIGHT + (isToday ? 4 : 0) };
 
   return (
-    <Pressable className="flex-1 items-center gap-1" onPress={onPress} disabled={!trained} hitSlop={2}>
+    <Pressable className="flex-1 items-center gap-1" onPress={onPress} disabled={!trained || !interactive} hitSlop={2}>
       <Text className={`caption ${trained ? "font-body-bold text-text-primary" : isToday ? "font-body-bold text-brand-yellow" : "text-text-secondary"}`}>
         {date.getDate()}
       </Text>
-      {trained ? (
-        <MuscleHeatmap muscleIntensity={info.muscleIntensity} height={CELL_HEIGHT} view="front" showViewLabel={false} showLegend={false} />
-      ) : (
-        <View
-          className={`items-center justify-center rounded-lg ${isToday ? "border border-brand-yellow" : "border border-divider"}`}
-          style={{ width: Math.round(CELL_HEIGHT * (35 / 93)), height: CELL_HEIGHT }}
-        >
-          {isToday && <Ionicons name="ellipse" size={5} color={colors.brand.yellow} />}
-        </View>
-      )}
+      {/* Untrained days still render a (gray, unfilled) silhouette rather than an empty box — a
+          consistent figure every day reads better than blank rest days breaking up the row. */}
+      <View className={`items-center justify-center rounded-lg ${isToday ? "border border-brand-yellow" : ""}`} style={cellSize}>
+        <MuscleHeatmap
+          muscleIntensity={trained ? info.muscleIntensity : {}}
+          height={CELL_HEIGHT}
+          view="front"
+          showViewLabel={false}
+          showLegend={false}
+          gender={gender}
+        />
+      </View>
     </Pressable>
   );
 }
@@ -64,7 +87,17 @@ function DayCell({ date, info, isToday, onPress }: { date: Date; info: DayInfo |
  * every trained day cell renders a tiny front-body silhouette colored by exactly what was trained
  * that day — so scanning two weeks shows the actual training pattern, not just attendance.
  */
-export function VisualTrainingCalendar({ workouts }: { workouts: CompletedWorkout[] }) {
+export function VisualTrainingCalendar({
+  workouts,
+  interactive = true,
+  footerNote = "Each figure shows exactly what you trained that day",
+  gender = "male",
+}: {
+  workouts: CalendarWorkout[];
+  interactive?: boolean;
+  footerNote?: string;
+  gender?: Gender;
+}) {
   const today = new Date();
   // Deliberately computed once at mount, not on every re-render as `today` ticks over — the default
   // 2-week window shouldn't shift under the user mid-session just because the clock rolled past midnight.
@@ -101,6 +134,7 @@ export function VisualTrainingCalendar({ workouts }: { workouts: CompletedWorkou
   }
 
   function handleDayPress(date: Date) {
+    if (!interactive) return;
     const info = infoByDay.get(toDateKey(date));
     const workout = info?.workouts[0];
     if (workout) router.push(`/workout/summary?id=${workout.id}`);
@@ -146,6 +180,8 @@ export function VisualTrainingCalendar({ workouts }: { workouts: CompletedWorkou
                 date={date}
                 info={infoByDay.get(toDateKey(date))}
                 isToday={toDateKey(date) === toDateKey(today)}
+                interactive={interactive}
+                gender={gender}
                 onPress={() => handleDayPress(date)}
               />
             ))}
@@ -153,7 +189,7 @@ export function VisualTrainingCalendar({ workouts }: { workouts: CompletedWorkou
         ))}
       </View>
 
-      <Text className="caption text-center text-text-secondary">Each figure shows exactly what you trained that day</Text>
+      <Text className="caption text-center text-text-secondary">{footerNote}</Text>
     </View>
   );
 }

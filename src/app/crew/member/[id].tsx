@@ -1,27 +1,33 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AchievementRow } from "@/components/AchievementRow";
+import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { ProgressBar } from "@/components/ProgressBar";
 import { RankBadge } from "@/components/RankBadge";
+import { StatTile } from "@/components/StatTile";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
+import { VisualTrainingCalendar, type CalendarWorkout } from "@/components/VisualTrainingCalendar";
 import { EXERCISE_BY_ID, type Exercise } from "@/data/exercises";
 import { generateMemberWorkoutSessions, type MuscleGroup } from "@/data/workout-log";
-import { memberLiftCards } from "@/lib/crew-lift-compare";
-import { fromDateKey, getMonthGrid, isSameMonth, startOfMonth, toDateKey } from "@/lib/date";
+import { memberLiftCards, muscleGroupRanksForCrewMember, profileForCrewMember } from "@/lib/crew-lift-compare";
+import { fromDateKey, isSameMonth, startOfMonth } from "@/lib/date";
+import { divisionForMemberLevel, type Division } from "@/lib/division";
+import { tierForExercise } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
 import { memberAchievements, memberStats, memberStrengthProgress, memberXp } from "@/lib/member-mock-profile";
 import { realMemberAchievements, realMemberStats, realStrengthProgress } from "@/lib/member-real-profile";
 import { computeMuscleGroupRanks, type MuscleGroupRank } from "@/lib/muscle-group-rank";
 import { formatRankTier, MAJOR_LIFT_EXERCISE_IDS, RANK_TIER_COLOR, RANK_TIERS, type RankProfile } from "@/lib/rank";
 import { CURRENT_MEMBER_ID, useCrewStore, type CrewMember, type CrewRole } from "@/store/crew-store";
-import { useOnboardingStore } from "@/store/onboarding-store";
+import { useOnboardingStore, type Gender } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
+import { useProfileLevelStore } from "@/store/profile-level-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors } from "@/theme";
 
@@ -50,22 +56,15 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => voi
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
-  return (
-    <View className="flex-1 items-center gap-1">
-      <Text className="heading-4 text-text-primary">{value}</Text>
-      <Text className="caption text-text-secondary">{label}</Text>
-    </View>
-  );
-}
-
 function OverviewTab({
   member,
+  division,
   stats,
   achievements,
   onSeeAllAchievements,
 }: {
   member: CrewMember;
+  division: Division;
   stats: { workoutsCount: number; volumeKg: number; prsCount: number };
   achievements: ReturnType<typeof memberAchievements>;
   onSeeAllAchievements: () => void;
@@ -76,12 +75,7 @@ function OverviewTab({
   return (
     <View className="gap-5 p-4">
       <View className="items-center gap-2">
-        <View
-          className="overflow-hidden rounded-full border-2 border-brand-yellow"
-          style={{ width: 88, height: 88 }}
-        >
-          <Image source={{ uri: member.avatarUrl }} className="bg-divider" style={{ width: "100%", height: "100%" }} />
-        </View>
+        <DivisionAvatarFrame source={{ uri: member.avatarUrl }} division={division} size={88} />
         <Text className="heading-4 text-text-primary">{member.name}</Text>
         <Text className="body-sm text-text-secondary">@{member.username}</Text>
         {roleLabel && (
@@ -101,12 +95,10 @@ function OverviewTab({
         <ProgressBar ratio={xp / xpToNextLevel} color={colors.brand.yellow} height={8} />
       </View>
 
-      <View className="flex-row items-center rounded-2xl border border-divider bg-surface p-4">
-        <StatTile label="Workouts" value={String(stats.workoutsCount)} />
-        <View className="h-8 w-px bg-divider" />
-        <StatTile label="Volume" value={`${stats.volumeKg.toLocaleString("en-US")} kg`} />
-        <View className="h-8 w-px bg-divider" />
-        <StatTile label="PRs" value={String(stats.prsCount)} />
+      <View className="flex-row gap-3">
+        <StatTile icon="barbell" label="Workouts" value={String(stats.workoutsCount)} />
+        <StatTile icon="trending-up" label="Volume" value={`${stats.volumeKg.toLocaleString("en-US")} kg`} />
+        <StatTile icon="ribbon" label="PRs" value={String(stats.prsCount)} />
       </View>
 
       <View className="gap-3">
@@ -133,20 +125,20 @@ function OverviewTab({
   );
 }
 
-function WorkoutsTab({ entries }: { entries: SimpleWorkoutEntry[] }) {
+function WorkoutsTab({
+  entries,
+  calendarWorkouts,
+  interactive,
+  gender,
+}: {
+  entries: SimpleWorkoutEntry[];
+  calendarWorkouts: CalendarWorkout[];
+  interactive: boolean;
+  gender: Gender;
+}) {
   const today = useMemo(() => new Date(), []);
   const [visibleMonth, setVisibleMonth] = useState(startOfMonth(today));
-  const weeks = useMemo(() => getMonthGrid(visibleMonth), [visibleMonth]);
   const isCurrentMonth = isSameMonth(visibleMonth, today);
-
-  const entriesByDay = useMemo(() => {
-    const map = new Map<string, SimpleWorkoutEntry[]>();
-    for (const entry of entries) {
-      const key = toDateKey(entry.date);
-      map.set(key, [...(map.get(key) ?? []), entry]);
-    }
-    return map;
-  }, [entries]);
 
   const monthEntries = entries
     .filter((entry) => isSameMonth(entry.date, visibleMonth))
@@ -154,52 +146,27 @@ function WorkoutsTab({ entries }: { entries: SimpleWorkoutEntry[] }) {
 
   return (
     <View className="gap-4 p-4">
-      <View className="gap-3 rounded-3xl border border-divider bg-surface p-4">
-        <View className="flex-row items-center justify-between">
-          <Pressable onPress={() => setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} hitSlop={8}>
-            <Ionicons name="chevron-back" size={20} color={colors.neutral.textSecondary} />
-          </Pressable>
-          <Text className="body-md font-body-semibold text-text-primary">
-            {visibleMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-          </Text>
-          <Pressable
-            onPress={() => setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-            hitSlop={8}
-            disabled={isCurrentMonth}
-          >
-            <Ionicons name="chevron-forward" size={20} color={isCurrentMonth ? colors.neutral.divider : colors.neutral.textSecondary} />
-          </Pressable>
-        </View>
+      <VisualTrainingCalendar
+        workouts={calendarWorkouts}
+        interactive={interactive}
+        footerNote={interactive ? "Each figure shows exactly what you trained that day" : "Each figure shows exactly what they trained that day"}
+        gender={gender}
+      />
 
-        <View className="flex-row justify-between">
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
-            <Text key={label} className="caption flex-1 text-center text-text-secondary">
-              {label}
-            </Text>
-          ))}
-        </View>
-
-        <View className="gap-1">
-          {weeks.map((week, weekIndex) => (
-            <View key={weekIndex} className="flex-row">
-              {week.map((date, dayIndex) => {
-                if (!date) return <View key={dayIndex} className="flex-1" />;
-                const isTrained = entriesByDay.has(toDateKey(date));
-                return (
-                  <View key={dayIndex} className="flex-1 items-center py-1">
-                    <View
-                      className={`h-8 w-8 items-center justify-center rounded-full ${isTrained ? "bg-brand-yellow" : ""}`}
-                    >
-                      <Text className={`body-sm ${isTrained ? "font-body-semibold text-brand-iron" : "text-text-primary"}`}>
-                        {date.getDate()}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          ))}
-        </View>
+      <View className="flex-row items-center justify-between">
+        <Pressable onPress={() => setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} hitSlop={8}>
+          <Ionicons name="chevron-back" size={20} color={colors.neutral.textSecondary} />
+        </Pressable>
+        <Text className="body-md font-body-semibold text-text-primary">
+          {visibleMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+        </Text>
+        <Pressable
+          onPress={() => setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+          hitSlop={8}
+          disabled={isCurrentMonth}
+        >
+          <Ionicons name="chevron-forward" size={20} color={isCurrentMonth ? colors.neutral.divider : colors.neutral.textSecondary} />
+        </Pressable>
       </View>
 
       <View className="gap-2.5">
@@ -245,6 +212,8 @@ function StatsTab({
   onOpenExercisePicker: () => void;
   strengthPoints: { date: string; value: number }[];
 }) {
+  const myGender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
+  const gender: Gender = memberId === CURRENT_MEMBER_ID ? myGender : "male";
   const rankedEntries = (Object.entries(muscleRanks) as [MuscleGroup, MuscleGroupRank][]).filter(
     (entry): entry is [MuscleGroup, Extract<MuscleGroupRank, { status: "ranked" }>] => entry[1]?.status === "ranked",
   );
@@ -270,6 +239,7 @@ function StatsTab({
               height={220}
               showLegend={false}
               colorForIntensity={(tierIndex) => RANK_TIER_COLOR[RANK_TIERS[tierIndex]]}
+              gender={gender}
             />
             <View className="flex-row flex-wrap justify-center gap-4">
               {distinctTiers.map((tier) => (
@@ -332,12 +302,16 @@ export default function MemberProfileScreen() {
   const members = useCrewStore((state) => state.members);
   const member = members.find((candidate) => candidate.id === id);
   const isMe = id === CURRENT_MEMBER_ID;
+  const myDivision = useProfileLevelStore((state) => state.division);
+  const memberDivision = isMe ? myDivision : divisionForMemberLevel(member?.level ?? 1);
 
   const realWorkouts = useWorkoutHistoryStore((state) => state.workouts);
   const realRecords = usePersonalRecordsStore((state) => state.records);
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
   const age = useOnboardingStore((state) => state.onboarding.age);
+  // Crew members have no real tracked gender (only mock data) — only "me" gets my real silhouette.
+  const displayGender: Gender = isMe ? gender : "male";
 
   const mockSessions = useMemo(() => generateMemberWorkoutSessions(member?.id ?? id ?? "member"), [member?.id, id]);
 
@@ -349,8 +323,15 @@ export default function MemberProfileScreen() {
   const myCards = useMemo(() => buildLiftRankCards(realRecords, profile, "gym"), [realRecords, profile]);
   const muscleRanks = useMemo(() => {
     if (!member) return {};
-    return computeMuscleGroupRanks(isMe ? myCards : memberLiftCards(member.id, myCards));
+    return isMe ? computeMuscleGroupRanks(myCards) : muscleGroupRanksForCrewMember(member.id, myCards);
   }, [member, isMe, myCards]);
+
+  // The exercise-picker medal below is the pictured member's own rank, not always mine — for
+  // anyone else that means their curated/mock lift cards and profile, and no real PR records (they
+  // have none), so an untracked exercise falls back to Rookie same as everywhere else in the app.
+  const pickerCards = useMemo(() => (isMe ? myCards : memberLiftCards(member?.id ?? "", myCards)), [isMe, member, myCards]);
+  const pickerProfile = isMe ? profile : profileForCrewMember(member?.id ?? "");
+  const pickerRecords = isMe ? realRecords : {};
 
   const [selectedExercise, setSelectedExercise] = useState<Exercise>(() => EXERCISE_BY_ID[MAJOR_LIFT_EXERCISE_IDS.benchPress]);
   const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
@@ -369,6 +350,16 @@ export default function MemberProfileScreen() {
         date: fromDateKey(dateKey),
         subtitle: `${session.exercises} exercises · ${session.volumeKg.toLocaleString("en-US")} kg`,
         hasPr: achievements.some((achievement) => achievement.id.endsWith(dateKey)),
+      }));
+
+  // Mock sessions have no real workout id to open a summary screen for, so the calendar renders
+  // (and is worth showing — it's the whole point of the ask), but isn't tappable for anyone but "me".
+  const calendarWorkouts: CalendarWorkout[] = isMe
+    ? realWorkouts
+    : Object.entries(mockSessions).map(([dateKey, session]) => ({
+        id: dateKey,
+        completedAt: fromDateKey(dateKey).getTime(),
+        muscleIntensity: session.muscleIntensity,
       }));
 
   if (!member) {
@@ -397,9 +388,17 @@ export default function MemberProfileScreen() {
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
         {tab === "Overview" && (
-          <OverviewTab member={member} stats={stats} achievements={achievements} onSeeAllAchievements={() => setTab("Achievements")} />
+          <OverviewTab
+            member={member}
+            division={memberDivision}
+            stats={stats}
+            achievements={achievements}
+            onSeeAllAchievements={() => setTab("Achievements")}
+          />
         )}
-        {tab === "Workouts" && <WorkoutsTab entries={workoutEntries} />}
+        {tab === "Workouts" && (
+          <WorkoutsTab entries={workoutEntries} calendarWorkouts={calendarWorkouts} interactive={isMe} gender={displayGender} />
+        )}
         {tab === "Stats" && (
           <StatsTab
             memberId={member?.id ?? id ?? ""}
@@ -422,6 +421,7 @@ export default function MemberProfileScreen() {
           setExercisePickerOpen(false);
         }}
         hideCreateRow
+        renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, pickerCards, pickerRecords, pickerProfile)} size={34} />}
       />
     </View>
   );

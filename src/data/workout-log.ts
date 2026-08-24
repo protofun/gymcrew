@@ -32,6 +32,9 @@ export type PrimaryExercise = {
   name: string;
   reps: number;
   oneRepMaxKg: number;
+  /** Real exercise-library id when derived from a real logged workout — lets consumers look the
+   * exercise up directly instead of guessing from `name` (only mock-generated sessions lack this). */
+  exerciseId?: string;
 };
 
 export type WorkoutSession = {

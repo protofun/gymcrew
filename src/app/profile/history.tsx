@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { StatCard, StatRow, StatSectionHeader } from "@/components/StatRow";
+import { StatTile } from "@/components/StatTile";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
 import { VisualTrainingCalendar } from "@/components/VisualTrainingCalendar";
 import { fromDateKey, getCurrentWeekDates, toDateKey } from "@/lib/date";
@@ -14,8 +16,9 @@ import { kgToLbs } from "@/lib/units";
 import { bestWeek, CHART_METRICS, muscleTrainingBreakdown, weeklyMetricSeries, workoutTotals, type ChartMetric } from "@/lib/workout-charts";
 import type { WeightUnit } from "@/store/active-workout-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
+import { useProfileSnapshotStore } from "@/store/profile-snapshot-store";
 import { useWorkoutHistoryStore, type CompletedWorkout } from "@/store/workout-history-store";
-import { colors, fontFamily } from "@/theme";
+import { colors } from "@/theme";
 
 function formatWeight(kg: number, unit: WeightUnit): string {
   return unit === "kg" ? `${Math.round(kg).toLocaleString("en-US")} kg` : `${Math.round(kgToLbs(kg)).toLocaleString("en-US")} lbs`;
@@ -33,32 +36,32 @@ const RECENT_WORKOUTS_LIMIT = 5;
 const CHART_WEEKS = 10;
 const WEEKDAY_INITIALS = ["M", "T", "W", "T", "F", "S", "S"];
 
-function StatTile({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
-  return (
-    <View className="flex-1 items-center gap-1.5 rounded-2xl border border-divider bg-surface p-3">
-      <Ionicons name={icon} size={16} color={colors.semantic.streak} />
-      <Text style={{ fontFamily: fontFamily.heading, fontSize: 20, lineHeight: 22 }} className="text-text-primary">
-        {value}
-      </Text>
-      <Text className="caption text-text-secondary">{label}</Text>
-    </View>
-  );
-}
-
 export default function TrainingHistoryScreen() {
   const insets = useSafeAreaInsets();
-  const workouts = useWorkoutHistoryStore((state) => state.workouts);
+  const allWorkouts = useWorkoutHistoryStore((state) => state.workouts);
   const weightUnit = useOnboardingStore((state) => state.weightUnit);
+  const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
+  const snapshotAsOfMs = useProfileSnapshotStore((state) => state.asOfMs);
+  const snapshotWeightKg = useProfileSnapshotStore((state) => state.weightKg);
+  const clearSnapshot = useProfileSnapshotStore((state) => state.clearSnapshot);
   const [metric, setMetric] = useState<ChartMetric>("volume");
 
-  const currentStreak = computeCurrentStreak(workouts);
+  // In snapshot mode, everything below is scoped to workouts up to the viewed date — same "as of
+  // that moment" rule every other snapshot-aware screen follows.
+  const workouts = useMemo(
+    () => (snapshotAsOfMs != null ? allWorkouts.filter((workout) => workout.completedAt <= snapshotAsOfMs) : allWorkouts),
+    [allWorkouts, snapshotAsOfMs],
+  );
+  const referenceDate = useMemo(() => (snapshotAsOfMs != null ? new Date(snapshotAsOfMs) : new Date()), [snapshotAsOfMs]);
+
+  const currentStreak = computeCurrentStreak(workouts, referenceDate);
   const longestStreak = computeLongestStreak(workouts);
-  const trainedThisWeek = computeTrainedDaysThisWeek(workouts);
-  const today = toDateKey(new Date());
-  const weekDates = getCurrentWeekDates(new Date());
+  const trainedThisWeek = computeTrainedDaysThisWeek(workouts, referenceDate);
+  const today = toDateKey(referenceDate);
+  const weekDates = getCurrentWeekDates(referenceDate);
 
   const activeMetric = CHART_METRICS.find((option) => option.key === metric) ?? CHART_METRICS[0];
-  const series = useMemo(() => weeklyMetricSeries(workouts, metric, CHART_WEEKS), [workouts, metric]);
+  const series = useMemo(() => weeklyMetricSeries(workouts, metric, CHART_WEEKS, referenceDate), [workouts, metric, referenceDate]);
 
   const totals = useMemo(() => workoutTotals(workouts), [workouts]);
   const { most, least } = useMemo(() => muscleTrainingBreakdown(workouts), [workouts]);
@@ -77,6 +80,10 @@ export default function TrainingHistoryScreen() {
         </Pressable>
         <Text className="heading-4 text-text-primary">Training History</Text>
       </View>
+
+      {snapshotAsOfMs != null && snapshotWeightKg != null && (
+        <SnapshotBanner asOfMs={snapshotAsOfMs} weightKg={snapshotWeightKg} weightUnit={weightUnit} onExit={clearSnapshot} />
+      )}
 
       <ScrollView
         className="flex-1"
@@ -105,7 +112,7 @@ export default function TrainingHistoryScreen() {
           })}
         </View>
 
-        <VisualTrainingCalendar workouts={workouts} />
+        <VisualTrainingCalendar workouts={workouts} gender={gender} />
 
         <View className="gap-3">
           <Text className="heading-4 text-text-primary">Performance</Text>

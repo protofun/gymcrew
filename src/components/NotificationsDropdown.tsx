@@ -1,9 +1,8 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { router } from "expo-router";
+import { Image, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 import type { AppNotification } from "@/data/notifications";
-import { colors } from "@/theme";
 
 type NotificationsDropdownProps = {
   visible: boolean;
@@ -14,6 +13,13 @@ type NotificationsDropdownProps = {
 };
 
 export function NotificationsDropdown({ visible, onClose, notifications, topOffset }: NotificationsDropdownProps) {
+  function handlePress(notification: AppNotification) {
+    onClose();
+    if (notification.workoutId) {
+      router.push({ pathname: "/workout/summary", params: { id: notification.workoutId } });
+    }
+  }
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={{ flex: 1 }} onPress={onClose}>
@@ -31,15 +37,21 @@ export function NotificationsDropdown({ visible, onClose, notifications, topOffs
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View className="gap-4">
                   {notifications.map((notification) => (
-                    <View key={notification.id} className="flex-row items-start gap-3">
+                    <Pressable
+                      key={notification.id}
+                      onPress={() => handlePress(notification)}
+                      disabled={!notification.workoutId}
+                      style={({ pressed }) => ({ opacity: pressed && notification.workoutId ? 0.7 : 1 })}
+                      className="flex-row items-start gap-3"
+                    >
                       <View className="h-9 w-9 items-center justify-center rounded-full bg-background">
-                        <Ionicons name={notification.icon} size={16} color={colors.brand.yellow} />
+                        <Image source={notification.icon} resizeMode="contain" style={{ width: 26, height: 26 }} />
                       </View>
                       <View className="flex-1 gap-0.5 pt-1">
                         <Text className="body-md text-text-primary">{notification.title}</Text>
                         <Text className="caption text-text-secondary">{notification.time}</Text>
                       </View>
-                    </View>
+                    </Pressable>
                   ))}
                 </View>
               </ScrollView>

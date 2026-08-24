@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { useEffect } from "react";
-import { Platform, Pressable, Text, View, type LayoutChangeEvent } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -36,63 +35,13 @@ const FAB_SHADOW = Platform.select({
 
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const barWidth = useSharedValue(0);
-  const indicatorX = useSharedValue(0);
-  const indicatorOpacity = useSharedValue(1);
-  const itemCount = state.routes.length;
-
-  function positionFor(index: number, width: number) {
-    // `width` is the bar's full measured frame, which includes its own horizontal padding — the
-    // tab items themselves only occupy the space inside that padding, so the indicator's per-item
-    // math has to use the same narrower width or it drifts further off with every tab to the right.
-    const contentWidth = width - BAR_PADDING_X * 2;
-    const itemWidth = contentWidth / itemCount;
-    return index * itemWidth + (itemWidth - CIRCLE_SIZE) / 2;
-  }
-
-  function handleLayout(event: LayoutChangeEvent) {
-    const width = event.nativeEvent.layout.width;
-    barWidth.value = width;
-    indicatorX.value = positionFor(state.index, width);
-    indicatorOpacity.value = state.routes[state.index].name === LOG_ROUTE_NAME ? 0 : 1;
-  }
-
-  useEffect(() => {
-    if (barWidth.value === 0) return;
-    const focused = state.routes[state.index].name === LOG_ROUTE_NAME;
-    indicatorX.value = withSpring(positionFor(state.index, barWidth.value), SPRING_CONFIG);
-    indicatorOpacity.value = withSpring(focused ? 0 : 1, SPRING_CONFIG);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.index]);
-
-  const indicatorStyle = useAnimatedStyle(() => ({
-    opacity: indicatorOpacity.value,
-    transform: [{ translateX: indicatorX.value }],
-  }));
 
   return (
     <View style={{ paddingHorizontal: 16, paddingBottom: insets.bottom || 16 }}>
       <View
-        onLayout={handleLayout}
         style={{ paddingHorizontal: BAR_PADDING_X, paddingTop: BAR_PADDING_TOP, borderRadius: 32 }}
         className="flex-row border border-divider bg-surface"
       >
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            {
-              position: "absolute",
-              top: BAR_PADDING_TOP,
-              left: BAR_PADDING_X,
-              width: CIRCLE_SIZE,
-              height: CIRCLE_SIZE,
-              borderRadius: CIRCLE_SIZE / 2,
-              backgroundColor: colors.brand.yellow,
-            },
-            indicatorStyle,
-          ]}
-        />
-
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;
@@ -121,11 +70,11 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               <View style={{ height: CIRCLE_SIZE, width: CIRCLE_SIZE }} className="items-center justify-center">
                 <Ionicons
                   name={isFocused ? icons.active : icons.inactive}
-                  size={21}
-                  color={isFocused ? colors.brand.iron : colors.neutral.textSecondary}
+                  size={22}
+                  color={isFocused ? colors.brand.yellow : colors.neutral.textSecondary}
                 />
               </View>
-              <Text numberOfLines={1} className={`caption ${isFocused ? "opacity-0" : "text-text-secondary"}`}>
+              <Text numberOfLines={1} className={`caption ${isFocused ? "font-body-semibold text-brand-yellow" : "text-text-secondary"}`}>
                 {label}
               </Text>
             </Pressable>

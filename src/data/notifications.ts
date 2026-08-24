@@ -1,15 +1,12 @@
-import { Ionicons } from "@expo/vector-icons";
+import type { ImageSourcePropType } from "react-native";
 
 export type AppNotification = {
   id: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  /** A rank-tier medal for PRs, a streak icon for streak nudges — see lib/notifications.ts. */
+  icon: ImageSourcePropType;
   title: string;
   time: string;
+  timestamp: number;
+  /** Set only for PR notifications — tapping one opens that workout's summary. */
+  workoutId?: string;
 };
-
-export const NOTIFICATIONS: AppNotification[] = [
-  { id: "1", icon: "trophy", title: "New PR! Your bench press went up to 82.5kg.", time: "2 hours ago" },
-  { id: "2", icon: "people", title: "Sanne joined your crew.", time: "5 hours ago" },
-  { id: "3", icon: "flame", title: "You're on a 4-day streak. Keep it going!", time: "Yesterday" },
-  { id: "4", icon: "trending-up", title: "You got 6% stronger this month.", time: "2 days ago" },
-];

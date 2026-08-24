@@ -3,10 +3,12 @@ import type { CompletedWorkout } from "@/store/workout-history-store";
 
 /**
  * Consecutive trained days leading up to today. Today not having a workout yet doesn't break the
- * streak — the day isn't over — so counting only stops once a full day is skipped.
+ * streak — the day isn't over — so counting only stops once a full day is skipped. `frozenDateKeys`
+ * (spent Streak Freezes — see store/currency-store.ts) count as trained too, without a real workout.
  */
-export function computeCurrentStreak(workouts: CompletedWorkout[], now: Date = new Date()): number {
+export function computeCurrentStreak(workouts: CompletedWorkout[], now: Date = new Date(), frozenDateKeys: string[] = []): number {
   const trainedDays = new Set(workouts.map((workout) => toDateKey(new Date(workout.completedAt))));
+  for (const key of frozenDateKeys) trainedDays.add(key);
 
   const cursor = new Date(now);
   if (!trainedDays.has(toDateKey(cursor))) {

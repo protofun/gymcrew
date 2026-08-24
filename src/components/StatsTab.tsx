@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
@@ -7,7 +7,9 @@ import { ContributorsList } from "@/components/ContributorsList";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { HorizontalBarChart } from "@/components/HorizontalBarChart";
+import { RankBadge } from "@/components/RankBadge";
 import { SegmentedProportionBar } from "@/components/SegmentedProportionBar";
+import { StatTile } from "@/components/StatTile";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
 import { generateMemberWorkoutSessions } from "@/data/workout-log";
 import { perMemberContributions } from "@/lib/challenge-progress";
@@ -24,7 +26,12 @@ import {
   type StatsRange,
 } from "@/lib/crew-stats";
 import { DIVISION_COLOR } from "@/lib/division";
+import { tierForExercise } from "@/lib/generic-lift-rank";
+import { buildLiftRankCards } from "@/lib/lift-rank-cards";
+import type { RankProfile } from "@/lib/rank";
 import { useCrewStore } from "@/store/crew-store";
+import { useOnboardingStore } from "@/store/onboarding-store";
+import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
 
@@ -66,6 +73,13 @@ export function StatsTab() {
   const crewPowerChangePercent = useCrewStore((state) => state.crewPowerChangePercent);
   const divisionHistory = useCrewStore((state) => state.divisionHistory);
   const myWorkouts = useWorkoutHistoryStore((state) => state.workouts);
+
+  const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
+  const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
+  const age = useOnboardingStore((state) => state.onboarding.age);
+  const records = usePersonalRecordsStore((state) => state.records);
+  const rankProfile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
+  const rankCards = useMemo(() => buildLiftRankCards(records, rankProfile, "gym"), [records, rankProfile]);
 
   const { startKey, endKey } = rangeDateKeys(range);
   const powerTrend = crewPowerTrend(range, crewPower);
@@ -132,14 +146,7 @@ export function StatsTab() {
 
       <Animated.View entering={FadeInUp.delay(140).springify().damping(16).mass(0.6)} className="flex-row gap-3">
         {TOTAL_STATS.map(({ key, label, icon, suffix }) => (
-          <View key={key} className="flex-1 gap-2 rounded-2xl border border-divider bg-surface p-3">
-            <Ionicons name={icon} size={15} color={colors.brand.yellow} />
-            <Text style={{ fontFamily: fontFamily.heading, fontSize: 20, lineHeight: 22 }} className="text-text-primary">
-              {totals[key].toLocaleString("en-US")}
-              {suffix}
-            </Text>
-            <Text className="caption font-body-semibold text-text-secondary">{label}</Text>
-          </View>
+          <StatTile key={key} icon={icon} value={`${totals[key].toLocaleString("en-US")}${suffix}`} label={label} />
         ))}
       </Animated.View>
 
@@ -249,6 +256,7 @@ export function StatsTab() {
           setPickerOpen(false);
         }}
         hideCreateRow
+        renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, rankCards, records, rankProfile)} size={34} />}
       />
 
       <Animated.View

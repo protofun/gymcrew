@@ -108,3 +108,11 @@ textarea:focus {
   outline: none !important;
   box-shadow: none !important;
 }
+
+/* Web only: without this, iOS Safari's overscroll/rubber-band bounce briefly reveals the raw
+   white page background at the top/bottom edges. No effect on native. */
+html,
+body {
+  background-color: var(--color-background);
+  overscroll-behavior: none;
+}

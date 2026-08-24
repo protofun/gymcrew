@@ -1,68 +1,13 @@
+import { BACK_MUSCLES, FRONT_MUSCLES } from "@/data/body-muscle-paths";
 import { ALL_MUSCLE_GROUPS, type MuscleGroup } from "@/data/workout-log";
 import { colors } from "@/theme";
 
-/** Maps our simplified workout-log muscle groups onto the body-muscles
- * package's finer-grained anatomical region ids (front + back views). */
-export const MUSCLE_GROUP_IDS: Record<MuscleGroup, string[]> = {
-  chest: ["chest-upper-left", "chest-upper-right", "chest-lower-left", "chest-lower-right"],
-  shoulders: [
-    "shoulder-front-left",
-    "shoulder-front-right",
-    "shoulder-side-left",
-    "shoulder-side-right",
-    "deltoid-rear-left",
-    "deltoid-rear-right",
-  ],
-  back: [
-    "lats-upper-left",
-    "lats-mid-left",
-    "lats-lower-left",
-    "lats-upper-right",
-    "lats-mid-right",
-    "lats-lower-right",
-    "traps-upper-left",
-    "traps-mid-left",
-    "traps-lower-left",
-    "traps-upper-right",
-    "traps-mid-right",
-    "traps-lower-right",
-    "lower-back-erectors-left",
-    "lower-back-erectors-right",
-    "lower-back-ql-left",
-    "lower-back-ql-right",
-    "spine",
-  ],
-  biceps: ["biceps-left", "biceps-right"],
-  triceps: ["triceps-long-left", "triceps-lateral-left", "triceps-long-right", "triceps-lateral-right"],
-  abs: [
-    "abs-upper-left",
-    "abs-upper-right",
-    "abs-lower-left",
-    "abs-lower-right",
-    "obliques-left",
-    "obliques-right",
-    "serratus-anterior-left",
-    "serratus-anterior-right",
-  ],
-  quads: ["quads-left", "quads-right", "hip-flexor-left", "hip-flexor-right"],
-  hamstrings: ["hamstrings-medial-left", "hamstrings-lateral-left", "hamstrings-medial-right", "hamstrings-lateral-right"],
-  calves: [
-    "calves-gastroc-medial-left",
-    "calves-gastroc-lateral-left",
-    "calves-soleus-left",
-    "calves-gastroc-medial-right",
-    "calves-gastroc-lateral-right",
-    "calves-soleus-right",
-    "tibialis-anterior-left",
-    "tibialis-anterior-right",
-  ],
-  glutes: ["gluteus-medius-left", "gluteus-maximus-left", "gluteus-medius-right", "gluteus-maximus-right"],
-};
-
-/** Reverse lookup: an anatomical region id (e.g. "biceps-left") to its broad muscle group. */
+/** Reverse lookup: an anatomical region id (e.g. "front-biceps-left-0") to its broad muscle group —
+ * built straight from the body silhouette data (data/body-muscle-paths.ts), which already carries
+ * each region's group, rather than hand-maintaining a second, easily-out-of-sync list of ids. */
 export const MUSCLE_GROUP_BY_REGION_ID = new Map<string, MuscleGroup>();
-for (const [group, ids] of Object.entries(MUSCLE_GROUP_IDS) as [MuscleGroup, string[]][]) {
-  for (const id of ids) MUSCLE_GROUP_BY_REGION_ID.set(id, group);
+for (const region of [...FRONT_MUSCLES, ...BACK_MUSCLES]) {
+  MUSCLE_GROUP_BY_REGION_ID.set(region.id, region.group);
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {

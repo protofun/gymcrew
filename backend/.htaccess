@@ -1,0 +1,16 @@
+RewriteEngine On
+
+# Apache/PHP-CGI often strips the Authorization header by default — this puts it back so
+# getBearerToken() in auth.php can read it.
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+
+# Route every request through index.php, unless it's a real file/directory.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]
+
+# Never serve .env (or .env.example) directly, even if someone requests it by URL.
+<FilesMatch "^\.env">
+  Require all denied
+</FilesMatch>

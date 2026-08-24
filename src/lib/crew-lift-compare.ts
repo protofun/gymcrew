@@ -1,8 +1,9 @@
-import { generateMemberWorkoutSessions } from "@/data/workout-log";
+import { ALL_MUSCLE_GROUPS, generateMemberWorkoutSessions, type MuscleGroup } from "@/data/workout-log";
 import { MAJOR_LIFT_CARDS, SEEDED_LIFT_CARDS, type LiftCardId } from "@/data/rank-lifts";
 import { toDateKey } from "@/lib/date";
 import { gymStandingForCard, type LiftRankCard } from "@/lib/lift-rank-cards";
 import { memberStrengthProgress } from "@/lib/member-mock-profile";
+import { computeMuscleGroupRanks, type MuscleGroupRank } from "@/lib/muscle-group-rank";
 import {
   calculateLiftRankDetail,
   mockNameForMajorLift,
@@ -12,7 +13,7 @@ import {
   type RankProfile,
   type RankTier,
 } from "@/lib/rank";
-import { BRO_MEMBER_ID, CURRENT_MEMBER_ID, LEE_PRIEST_MEMBER_ID, type CrewMember } from "@/store/crew-store";
+import { BRO_MEMBER_ID, CURRENT_MEMBER_ID, GLUTE_ONLY_MEMBER_ID, LEE_PRIEST_MEMBER_ID, type CrewMember } from "@/store/crew-store";
 
 export type CrewLiftStanding = {
   id: string;
@@ -47,6 +48,9 @@ const LEE_PRIEST_LIFTS_KG: Record<LiftCardId, number> = {
   inclinePress: 160,
   legPress: 320,
   lunge: 90,
+  barbellCurl: 70,
+  cableCrunch: 55,
+  calfRaise: 130,
 };
 
 /**
@@ -69,6 +73,9 @@ const BRO_LIFTS_KG: Record<LiftCardId, number> = {
   inclinePress: 25,
   legPress: 50,
   lunge: 170,
+  barbellCurl: 12,
+  cableCrunch: 8,
+  calfRaise: 20,
 };
 
 /** Curated members (Lee Priest, Bro) get a real computed tier for the 5 seeded lifts too, instead of
@@ -81,9 +88,49 @@ const SEEDED_LIFT_PROXY_MAJOR_LIFT: Partial<Record<LiftCardId, MajorLift>> = {
   inclinePress: "benchPress",
   legPress: "squat",
   lunge: "squat",
+  barbellCurl: "deadlift",
+  cableCrunch: "squat",
+  calfRaise: "squat",
 };
 
-const CURATED_MEMBER_IDS = new Set([LEE_PRIEST_ID, BRO_ID]);
+/**
+ * "Peach" — a second, more extreme glutes-only meme member. Bro's quads/back inevitably ride along
+ * partway with glutes since they share squat/deadlift in the weighted-composite formula (see the
+ * comment on Bro above) — there's no way to give him a literal Rookie everywhere-but-glutes using
+ * that formula. Peach's underlying lift numbers follow the same "glute lifts maxed, everything else
+ * minimal" spirit for her individual lift cards (Ranks tab, lift standings), but her muscle-GROUP
+ * rank (the body-graph heatmap) is a hard override below rather than computed — the only way to get
+ * a genuinely isolated "glutes: top tier, everything else: Rookie" result.
+ */
+const PEACH_ID = GLUTE_ONLY_MEMBER_ID;
+const PEACH_PROFILE: RankProfile = { gender: "female", bodyWeightKg: 60, age: 26 };
+const PEACH_LIFTS_KG: Record<LiftCardId, number> = {
+  benchPress: 15,
+  squat: 165,
+  deadlift: 175,
+  overheadPress: 8,
+  pullUp: 2,
+  seatedRow: 12,
+  inclinePress: 10,
+  legPress: 45,
+  lunge: 110,
+  barbellCurl: 5,
+  cableCrunch: 5,
+  calfRaise: 15,
+};
+
+/** Every muscle group forced to Rookie except glutes, which is forced to the top tier — see the
+ * comment on Peach above for why this can't be the normal computed composite. */
+const PEACH_MUSCLE_OVERRIDE: Partial<Record<MuscleGroup, MuscleGroupRank>> = Object.fromEntries(
+  ALL_MUSCLE_GROUPS.map((group) => [
+    group,
+    group === "glutes"
+      ? { status: "ranked", tier: "immortal", tierIndex: RANK_TIERS.indexOf("immortal"), contributingLifts: [] }
+      : { status: "ranked", tier: "rookie", tierIndex: 0, contributingLifts: [] },
+  ]),
+);
+
+const CURATED_MEMBER_IDS = new Set([LEE_PRIEST_ID, BRO_ID, PEACH_ID]);
 
 function hashString(value: string): number {
   let hash = 0;
@@ -91,15 +138,17 @@ function hashString(value: string): number {
   return hash;
 }
 
-function profileForCrewMember(memberId: string): RankProfile {
+export function profileForCrewMember(memberId: string): RankProfile {
   if (memberId === LEE_PRIEST_ID) return LEE_PRIEST_PROFILE;
   if (memberId === BRO_ID) return BRO_PROFILE;
+  if (memberId === PEACH_ID) return PEACH_PROFILE;
   return mockProfileFor(memberId);
 }
 
 function weightForCrewMember(liftId: LiftCardId, memberId: string, myWeightKg: number): number {
   if (memberId === LEE_PRIEST_ID) return LEE_PRIEST_LIFTS_KG[liftId];
   if (memberId === BRO_ID) return BRO_LIFTS_KG[liftId];
+  if (memberId === PEACH_ID) return PEACH_LIFTS_KG[liftId];
 
   const majorLift = MAJOR_LIFT_CARDS.find((lift) => lift.id === liftId)?.majorLift;
   if (majorLift) {
@@ -213,6 +262,15 @@ export function memberLiftCards(memberId: string, myCards: LiftRankCard[]): Lift
       kgToNextTier: null,
     };
   });
+}
+
+/** Muscle-group ranks for any crew member (not "me") — Peach's hard override (see above) if it's
+ * her, otherwise the normal weighted-composite formula off her/his lift cards. Exported so every
+ * consumer of a crew member's muscle rank (the member profile Stats tab, the full body-graph page)
+ * shows the same result instead of each re-deciding whether to special-case her. */
+export function muscleGroupRanksForCrewMember(memberId: string, myCards: LiftRankCard[]): Partial<Record<MuscleGroup, MuscleGroupRank>> {
+  if (memberId === PEACH_ID) return PEACH_MUSCLE_OVERRIDE;
+  return computeMuscleGroupRanks(memberLiftCards(memberId, myCards));
 }
 
 export type PairedProgressionPoint = { date: string; mineKg: number; theirsKg: number };

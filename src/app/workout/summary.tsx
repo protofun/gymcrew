@@ -11,6 +11,7 @@ import { VolumeTrendChart } from "@/components/VolumeTrendChart";
 import { formatMuscleName } from "@/data/exercises";
 import { formatElapsed } from "@/hooks/use-elapsed-timer";
 import type { LoggedExercise } from "@/store/active-workout-store";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutHistoryStore, type CompletedWorkout } from "@/store/workout-history-store";
 import { colors } from "@/theme";
 
@@ -108,6 +109,7 @@ export default function WorkoutSummaryScreen() {
   const allWorkouts = useWorkoutHistoryStore((state) => state.workouts);
   const workout = allWorkouts.find((w) => w.id === id) ?? allWorkouts[0];
   const updateWorkoutNotes = useWorkoutHistoryStore((state) => state.updateWorkoutNotes);
+  const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
 
   if (!workout) {
     router.replace("/home");
@@ -235,7 +237,7 @@ export default function WorkoutSummaryScreen() {
             <Text className="body-md py-10 text-center text-text-secondary">No muscle data for this workout.</Text>
           ) : (
             <View className="items-center gap-4">
-              <MuscleHeatmap muscleIntensity={workout.muscleIntensity} height={300} />
+              <MuscleHeatmap muscleIntensity={workout.muscleIntensity} height={300} gender={gender} />
             </View>
           ))}
       </ScrollView>

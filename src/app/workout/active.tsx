@@ -1,18 +1,24 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
+import { RankBadge } from "@/components/RankBadge";
 import { RestTimerBanner } from "@/components/RestTimerBanner";
 import { WorkoutLogger } from "@/components/WorkoutLogger";
 import { WorkoutSettingsModal } from "@/components/WorkoutSettingsModal";
 import { formatElapsed, useElapsedTimer } from "@/hooks/use-elapsed-timer";
 import { recordChallengeContributions } from "@/lib/challenge-progress";
+import { tierForExercise } from "@/lib/generic-lift-rank";
+import { buildLiftRankCards } from "@/lib/lift-rank-cards";
+import type { RankProfile } from "@/lib/rank";
 import { checkPersonalRecords, computeCompletedSets, computeMuscleIntensity, computeVolumeKg } from "@/lib/workout-finish";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
+import { TOKENS_PER_PR, TOKENS_PER_WORKOUT, useCurrencyStore } from "@/store/currency-store";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
@@ -60,6 +66,13 @@ export default function ActiveWorkoutScreen() {
   const hasProgress = exercises.length > 0;
   const posthog = usePostHog();
 
+  const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
+  const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
+  const age = useOnboardingStore((state) => state.onboarding.age);
+  const records = usePersonalRecordsStore((state) => state.records);
+  const rankProfile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
+  const rankCards = useMemo(() => buildLiftRankCards(records, rankProfile, "gym"), [records, rankProfile]);
+
   function handleFinish() {
     const id = `workout-${Date.now()}`;
     // Snapshot records before they're updated below — capping a challenge contribution against a
@@ -94,7 +107,11 @@ export default function ActiveWorkoutScreen() {
       unit,
     });
 
-    useProfileLevelStore.getState().addXp(WORKOUT_XP_REWARD + prs.length * PR_XP_BONUS);
+    const currency = useCurrencyStore.getState();
+    const xpEarned = WORKOUT_XP_REWARD + prs.length * PR_XP_BONUS;
+    useProfileLevelStore.getState().addXp(currency.xpBoostActive ? xpEarned * 2 : xpEarned);
+    currency.grantTokens(TOKENS_PER_WORKOUT + prs.length * TOKENS_PER_PR);
+    if (currency.xpBoostActive) currency.consumeXpBoost();
 
     finishWorkout();
     router.replace({ pathname: "/workout/complete", params: { id } });
@@ -227,6 +244,7 @@ export default function ActiveWorkoutScreen() {
             exercise_count: exercises.length + 1,
           });
         }}
+        renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, rankCards, records, rankProfile)} size={34} />}
       />
 
       <ExercisePickerModal
@@ -238,6 +256,7 @@ export default function ActiveWorkoutScreen() {
           setExpandedExerciseId(exercise.id);
           setReplacingExerciseId(null);
         }}
+        renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, rankCards, records, rankProfile)} size={34} />}
       />
 
       <WorkoutSettingsModal

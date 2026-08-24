@@ -5,15 +5,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { ProgressBar } from "@/components/ProgressBar";
+import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
+import { sameDivisionRivals } from "@/lib/crew-league";
 import { DIVISION_COLOR, nextDivision, xpRequiredFor } from "@/lib/division";
 import { useCrewStore } from "@/store/crew-store";
 import { colors } from "@/theme";
-
-const REWARDS = [
-  { key: "xp-boost", label: "+10% Crew XP Boost", unlocked: true },
-  { key: "badge", label: "Division Badge", unlocked: true },
-  { key: "border", label: "Exclusive Crew Border", unlocked: false },
-] as const;
 
 export default function DivisionInfoScreen() {
   const insets = useSafeAreaInsets();
@@ -22,6 +18,13 @@ export default function DivisionInfoScreen() {
   const xp = useCrewStore((state) => state.xp);
   const xpNeeded = xpRequiredFor(division);
   const next = nextDivision(division);
+
+  const rivalCount = sameDivisionRivals(OTHER_CREWS_POWER, division).length;
+  const rewards = [
+    { key: "league", label: "Weekly League Standings", unlocked: true },
+    { key: "badge", label: "Division Badge", unlocked: true },
+    { key: "battles", label: `Battles vs ${rivalCount} Rival Crew${rivalCount === 1 ? "" : "s"}`, unlocked: rivalCount > 0 },
+  ] as const;
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
@@ -69,7 +72,7 @@ export default function DivisionInfoScreen() {
 
         <View className="gap-3 rounded-2xl border border-divider bg-surface p-4">
           <Text className="caption text-text-secondary">DIVISION REWARDS</Text>
-          {REWARDS.map((reward) => (
+          {rewards.map((reward) => (
             <View key={reward.key} className="flex-row items-center justify-between">
               <Text className="body-md text-text-primary">{reward.label}</Text>
               <Ionicons

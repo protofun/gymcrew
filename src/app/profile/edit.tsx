@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { SearchableSelectField } from "@/components/SearchableSelectField";
 import { useOnboardingStore, type Gender } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
@@ -48,25 +49,31 @@ function TextField({ label, value, onChangeText, keyboardType, placeholder }: { 
   );
 }
 
-function ChipPicker<T extends string>({ label, options, value, onChange }: { label: string; options: { key: T; label: string }[]; value: T; onChange: (key: T) => void }) {
+/** Wraps the app's standard `SearchableSelectField` (used everywhere else for single-choice fields,
+ * e.g. crew Training Focus) for options keyed separately from their display label. */
+function KeyedSelectField<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { key: T; label: string }[];
+  value: T;
+  onChange: (key: T) => void;
+}) {
+  const currentLabel = options.find((option) => option.key === value)?.label ?? options[0].label;
+
   return (
-    <View className="gap-1.5">
-      <FieldLabel label={label} />
-      <View className="flex-row flex-wrap gap-2">
-        {options.map((option) => {
-          const active = option.key === value;
-          return (
-            <Pressable
-              key={option.key}
-              onPress={() => onChange(option.key)}
-              className={`rounded-full border px-4 py-2.5 ${active ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"}`}
-            >
-              <Text className={`body-sm font-body-semibold ${active ? "text-brand-iron" : "text-text-primary"}`}>{option.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
+    <SearchableSelectField
+      label={label}
+      value={currentLabel}
+      options={options.map((option) => option.label)}
+      onChange={(selectedLabel) => {
+        const match = options.find((option) => option.label === selectedLabel);
+        if (match) onChange(match.key);
+      }}
+    />
   );
 }
 
@@ -132,9 +139,9 @@ export default function EditProfileScreen() {
           </View>
         </View>
 
-        <ChipPicker label="Gender" options={GENDERS} value={gender} onChange={setGender} />
-        <ChipPicker label="Goal" options={GOALS} value={goal} onChange={setGoal} />
-        <ChipPicker label="Experience Level" options={EXPERIENCE_LEVELS} value={experienceLevel} onChange={setExperienceLevel} />
+        <KeyedSelectField label="Gender" options={GENDERS} value={gender} onChange={setGender} />
+        <KeyedSelectField label="Goal" options={GOALS} value={goal} onChange={setGoal} />
+        <KeyedSelectField label="Experience Level" options={EXPERIENCE_LEVELS} value={experienceLevel} onChange={setExperienceLevel} />
 
         <View className="flex-row items-start gap-2 rounded-2xl border border-divider bg-surface p-3">
           <Ionicons name="information-circle-outline" size={16} color={colors.neutral.textSecondary} style={{ marginTop: 1 }} />

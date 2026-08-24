@@ -2,11 +2,13 @@ import "../../global.css";
 
 import { ClerkProvider, useUser } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
+import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { useEffect, useRef } from "react";
 import { Stack, usePathname, useGlobalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { PostHogProvider, usePostHog } from "posthog-react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { DivisionCelebrationWatcher } from "@/components/DivisionCelebrationWatcher";
 import { useAppFonts } from "@/hooks/use-app-fonts";
@@ -18,6 +20,21 @@ const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 if (!publishableKey) {
   throw new Error("Add your Clerk Publishable Key to the .env.local file");
 }
+
+// Without this, the navigator's own background (visible at the edges whenever a screen doesn't
+// perfectly cover the viewport — e.g. on web, around safe-area insets) defaults to React
+// Navigation's light theme background (#f2f2f2), showing as a pale bar above/below the app.
+const navTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: colors.neutral.background,
+    card: colors.neutral.background,
+    text: colors.neutral.textPrimary,
+    border: colors.neutral.divider,
+    primary: colors.brand.yellow,
+  },
+};
 
 SplashScreen.preventAutoHideAsync();
 
@@ -73,27 +90,31 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <PostHogProvider
-        client={posthog}
-        autocapture={{
-          captureScreens: false, // Manual screen tracking via PostHogScreenTracker
-          captureTouches: true,
-          propsToCapture: ["testID"],
-          maxElementsCaptured: 20,
-        }}
-      >
-        <PostHogUserSync />
-        <PostHogScreenTracker />
-        <StatusBar style="light" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.neutral.background },
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+        <PostHogProvider
+          client={posthog}
+          autocapture={{
+            captureScreens: false, // Manual screen tracking via PostHogScreenTracker
+            captureTouches: true,
+            propsToCapture: ["testID"],
+            maxElementsCaptured: 20,
           }}
-        />
-        <DivisionCelebrationWatcher />
-      </PostHogProvider>
-    </ClerkProvider>
+        >
+          <PostHogUserSync />
+          <PostHogScreenTracker />
+          <StatusBar style="light" />
+          <ThemeProvider value={navTheme}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.neutral.background },
+              }}
+            />
+          </ThemeProvider>
+          <DivisionCelebrationWatcher />
+        </PostHogProvider>
+      </ClerkProvider>
+    </GestureHandlerRootView>
   );
 }

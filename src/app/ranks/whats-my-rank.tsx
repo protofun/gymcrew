@@ -15,10 +15,10 @@ import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { ProgressBar } from "@/components/ProgressBar";
 import { RankBadge } from "@/components/RankBadge";
 import type { Exercise } from "@/data/exercises";
-import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
+import { genericExerciseRankDetail, tierForExercise } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards, type LiftRankCard } from "@/lib/lift-rank-cards";
 import { checkLiftPlausibility, type PlausibilityResult } from "@/lib/rank-plausibility";
-import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
+import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile } from "@/lib/rank";
 import {
   maxRealisticGoalKg,
   rankForHypotheticalWeight,
@@ -26,7 +26,7 @@ import {
   type HypotheticalRankResult,
   type SimulationPoint,
 } from "@/lib/rank-simulator";
-import { useDecimalCountUp } from "@/hooks/use-decimal-count-up";
+import { estimateOneRepMax } from "@/lib/workout-metrics";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore, type PersonalRecord } from "@/store/personal-records-store";
 import { colors, fontFamily } from "@/theme";
@@ -64,14 +64,6 @@ const wordmarkStyle = {
   transform: [{ skewX: "-10deg" }],
 };
 
-const metricValueStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 17,
-  lineHeight: 19,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
-
 const tierNameStyle = {
   fontFamily: fontFamily.heading,
   fontSize: 38,
@@ -80,29 +72,21 @@ const tierNameStyle = {
   transform: [{ skewX: "-8deg" }],
 };
 
-/** A one-line hype tagline per tier, shown under the "Top X%" pill on the reveal card — the numbers
- * alone read flat, this is what makes the reveal feel like a payoff worth sharing. */
-const TIER_HYPE_COPY: Record<RankTier, string> = {
-  rookie: "Every legend starts somewhere 💪",
-  novice: "Building real momentum 🔥",
-  bronze: "Solid work — keep stacking plates",
-  silver: "Getting seriously strong",
-  gold: "Certified gold-tier strength 🏆",
-  platinum: "Elite territory. Respect. 💎",
-  diamond: "Crushing it — top-tier form",
-  elite: "Genuinely elite strength ⚡",
-  master: "Mastery unlocked 👑",
-  grandmaster: "Grandmaster-level power",
-  champion: "Champion-tier performance 🏆",
-  titan: "Titan strength. Unreal.",
-  mythic: "Mythic-tier — almost unheard of",
-  immortal: "Immortal strength. Legendary.",
-  legend: "LEGEND STATUS. 🦁👑",
+const exerciseNameStyle = {
+  fontFamily: fontFamily.heading,
+  fontSize: 24,
+  lineHeight: 26,
+  fontStyle: "italic" as const,
+  transform: [{ skewX: "-8deg" }],
 };
 
-function estimateOneRepMax(weightKg: number, reps: number): number {
-  return reps <= 1 ? weightKg : Math.round(weightKg * (1 + reps / 30));
-}
+const metricPillTextStyle = {
+  fontFamily: fontFamily.heading,
+  fontSize: 20,
+  lineHeight: 22,
+  fontStyle: "italic" as const,
+  transform: [{ skewX: "8deg" }],
+};
 
 /**
  * Any exercise picked in the wizard, not just the 9 tracked lifts — `knownCard` is set for those 9
@@ -250,9 +234,6 @@ function RevealStep({
   const { tier, progressToNextTier } = rankAtWeight(lift, weightKg, reps, profile);
   const topPercent = Math.max(1, 100 - Math.round(progressToNextTier * 100));
   const plausibility: PlausibilityResult = checkLiftPlausibility(lift.knownCard?.id ?? lift.exercise.id, weightKg, reps, profile);
-  const estimated1RM = estimateOneRepMax(weightKg, reps);
-  const animated1RM = useDecimalCountUp(estimated1RM);
-  const bwRatio = weightKg / profile.bodyWeightKg;
 
   return (
     <View className="items-center gap-4 px-6 pt-6">
@@ -272,7 +253,7 @@ function RevealStep({
           </View>
         </View>
 
-        <Text className="body-md font-body-semibold text-text-primary" numberOfLines={1}>
+        <Text style={exerciseNameStyle} className="text-text-primary" numberOfLines={1}>
           {lift.name}
         </Text>
 
@@ -288,32 +269,16 @@ function RevealStep({
               Top {topPercent}% for your bodyweight
             </Text>
           </View>
-          <Text className="body-sm text-text-secondary">{TIER_HYPE_COPY[tier]}</Text>
+        </View>
+
+        <View style={{ transform: [{ skewX: "-8deg" }] }} className="border border-divider bg-background px-6 py-2.5">
+          <Text style={metricPillTextStyle} className="text-text-primary">
+            {weightKg}kg × {reps} {reps === 1 ? "rep" : "reps"}
+          </Text>
         </View>
 
         <View className="w-full">
           <ProgressBar ratio={progressToNextTier} color={RANK_TIER_COLOR[tier]} height={6} />
-        </View>
-
-        <View className="w-full flex-row gap-2">
-          <View className="flex-1 items-center gap-0.5 rounded-2xl border border-divider bg-background p-3">
-            <Text className="caption text-text-secondary">THIS SET</Text>
-            <Text style={metricValueStyle} className="text-text-primary">
-              {weightKg}kg × {reps}
-            </Text>
-          </View>
-          <View className="flex-1 items-center gap-0.5 rounded-2xl border border-divider bg-background p-3">
-            <Text className="caption text-text-secondary">EST. 1RM</Text>
-            <Text style={metricValueStyle} className="text-text-primary">
-              {animated1RM}kg
-            </Text>
-          </View>
-          <View className="flex-1 items-center gap-0.5 rounded-2xl border border-divider bg-background p-3">
-            <Text className="caption text-text-secondary">BW RATIO</Text>
-            <Text style={metricValueStyle} className="text-text-primary">
-              {bwRatio.toFixed(1)}×
-            </Text>
-          </View>
         </View>
       </View>
 
@@ -771,6 +736,7 @@ export default function WhatsMyRankScreen() {
         onClose={() => router.back()}
         onSelect={handleSelectExercise}
         hideCreateRow
+        renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, cards, records, profile)} size={34} />}
       />
 
       <ExerciseInstructionsModal exercise={infoExercise} onClose={() => setInfoExercise(null)} />

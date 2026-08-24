@@ -12,9 +12,12 @@ type TodayWorkoutModalProps = {
   isOverridden: boolean;
   onSave: (workoutName: string) => void;
   onClearOverride: () => void;
+  /** Defaults to "Today's Training" — overridden (e.g. to a weekday name) when this same picker is
+   * reused to assign a day in the recurring weekly schedule rather than a one-off override. */
+  title?: string;
 };
 
-export function TodayWorkoutModal({ visible, onClose, isOverridden, onSave, onClearOverride }: TodayWorkoutModalProps) {
+export function TodayWorkoutModal({ visible, onClose, isOverridden, onSave, onClearOverride, title = "Today's Training" }: TodayWorkoutModalProps) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
 
@@ -34,14 +37,14 @@ export function TodayWorkoutModal({ visible, onClose, isOverridden, onSave, onCl
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)" }} onPress={handleClose}>
+      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" }} onPress={handleClose}>
         <Pressable
           onPress={() => {}}
           style={{ maxHeight: "80%", backgroundColor: colors.neutral.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
           className="gap-4 px-5 pb-5 pt-6"
         >
           <View className="flex-row items-center justify-between">
-            <Text className="heading-4 text-text-primary">Today&apos;s Training</Text>
+            <Text className="heading-4 text-text-primary">{title}</Text>
             <Pressable onPress={handleClose} hitSlop={12}>
               <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
             </Pressable>

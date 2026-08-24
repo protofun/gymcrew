@@ -2,8 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { advanceDivision, type Division } from "@/lib/division";
+import { advanceDivision, divisionIndex, type Division } from "@/lib/division";
+import { DEMO_PROFILE_LEVEL } from "@/lib/demo-seed";
 import type { DivisionCelebration, DivisionHistoryEntry } from "@/store/crew-store";
+import { TOKENS_PER_DIVISION, useCurrencyStore } from "@/store/currency-store";
 
 type ProfileLevelState = {
   xp: number;
@@ -20,10 +22,13 @@ type ProfileLevelActions = {
   clearDivisionCelebration: () => void;
 };
 
+// A brand new account starts already at the division/XP a year of consistent training (see
+// lib/demo-seed.ts) would realistically earn, computed by replaying the exact same `advanceDivision`
+// logic `addXp` below uses — so this isn't a made-up division, it's what the demo history actually adds up to.
 const DEFAULT_STATE: ProfileLevelState = {
-  xp: 0,
-  division: "Rookie",
-  divisionHistory: [{ division: "Rookie", reachedAt: Date.now() }],
+  xp: DEMO_PROFILE_LEVEL.xp,
+  division: DEMO_PROFILE_LEVEL.division,
+  divisionHistory: DEMO_PROFILE_LEVEL.divisionHistory,
   pendingDivisionCelebration: null,
 };
 
@@ -35,6 +40,9 @@ export const useProfileLevelStore = create<ProfileLevelState & ProfileLevelActio
         set((state) => {
           const result = advanceDivision(state.xp, state.division, amount);
           if (!result.leveledUp) return { xp: result.xp };
+
+          const tiersGained = Math.max(1, divisionIndex(result.to) - divisionIndex(result.from));
+          useCurrencyStore.getState().grantTokens(TOKENS_PER_DIVISION * tiersGained);
 
           return {
             xp: result.xp,
@@ -48,6 +56,13 @@ export const useProfileLevelStore = create<ProfileLevelState & ProfileLevelActio
     {
       name: "gymcrew-profile-level",
       storage: createJSONStorage(() => AsyncStorage),
+      // Only backfill the demo division/XP for a genuinely untouched account (still at 0 XP) — any
+      // real earned XP, even a little, always wins and is never overwritten.
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState as Partial<ProfileLevelState & ProfileLevelActions> | undefined) ?? {};
+        if (persisted.xp && persisted.xp > 0) return { ...currentState, ...persisted };
+        return currentState;
+      },
     },
   ),
 );

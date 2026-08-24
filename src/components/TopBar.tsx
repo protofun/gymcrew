@@ -8,6 +8,7 @@ import { NotificationsDropdown } from "@/components/NotificationsDropdown";
 import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
 import type { AppNotification } from "@/data/notifications";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
+import { useNotificationsStore } from "@/store/notifications-store";
 import { useTodayTrainingStore } from "@/store/today-training-store";
 import { colors, fontFamily } from "@/theme";
 
@@ -34,10 +35,19 @@ export function TopBar({ avatarSource, streakDays, notifications }: TopBarProps)
   const insets = useSafeAreaInsets();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [todayModalOpen, setTodayModalOpen] = useState(false);
-  const hasUnreadNotifications = notifications.length > 0;
+  const readIds = useNotificationsStore((state) => state.readIds);
+  const markAllRead = useNotificationsStore((state) => state.markAllRead);
+  const hasUnreadNotifications = notifications.some((notification) => !readIds.includes(notification.id));
   const today = useTodayWorkout();
   const setTodayOverride = useTodayTrainingStore((state) => state.setTodayOverride);
   const clearTodayOverride = useTodayTrainingStore((state) => state.clearTodayOverride);
+
+  function toggleNotifications() {
+    setNotificationsOpen((open) => {
+      if (!open) markAllRead(notifications.map((notification) => notification.id));
+      return !open;
+    });
+  }
 
   return (
     <View style={{ paddingTop: insets.top + 10, zIndex: 20 }} className="border-b border-divider bg-surface px-4 pb-3">
@@ -78,7 +88,7 @@ export function TopBar({ avatarSource, streakDays, notifications }: TopBarProps)
           </View>
 
           <Pressable
-            onPress={() => setNotificationsOpen((open) => !open)}
+            onPress={toggleNotifications}
             hitSlop={4}
             className="items-center justify-center rounded-full border border-divider bg-background p-2"
           >

@@ -1,9 +1,9 @@
-import { useSignUp } from "@clerk/expo";
+import { useAuth, useClerk, useSignUp } from "@clerk/expo";
 import { useSSO } from "@clerk/expo/experimental";
 import { Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
-import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
 import { usePostHog } from "posthog-react-native";
 
 import { AuthDivider } from "@/components/AuthDivider";
@@ -11,10 +11,14 @@ import { AuthHeader } from "@/components/AuthHeader";
 import { FormField } from "@/components/FormField";
 import { SocialAuthButton } from "@/components/SocialAuthButton";
 import { VerificationCodeModal } from "@/components/VerificationCodeModal";
+import { useWarmUpBrowser } from "@/hooks/use-warm-up-browser";
 import { getClerkErrorMessage } from "@/lib/clerk";
 import { colors } from "@/theme";
 
 export default function SignUpScreen() {
+  useWarmUpBrowser();
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { signOut } = useClerk();
   const { signUp } = useSignUp();
   const { startSSOFlow } = useSSO();
   const posthog = usePostHog();
@@ -24,6 +28,14 @@ export default function SignUpScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [verifying, setVerifying] = useState(false);
+
+  // Creating an account must never silently reuse whatever session happens to already be active
+  // (e.g. a developer's own test account, or a previous person's session on a shared/test device)
+  // — clear it the moment this screen is reached so the form below always creates a genuinely new,
+  // separate account.
+  useEffect(() => {
+    if (authLoaded && isSignedIn) void signOut();
+  }, [authLoaded, isSignedIn, signOut]);
 
   async function handleSignUp() {
     setFormError(null);
@@ -58,7 +70,12 @@ export default function SignUpScreen() {
     }
 
     posthog.capture("user_signed_up", { auth_method: "email" });
-    router.replace("/build-crew");
+    // The normal path here is wizard -> sign-up, so `hasCompletedOnboarding` is already true and
+    // this lands on /build-crew as before. But sign-up is also reachable directly (e.g. from
+    // sign-in's "Don't have an account?" link) without ever doing the wizard — routing through "/"
+    // lets the central gate (lib/onboarding-gate.ts) send that case to /onboarding instead, rather
+    // than skipping straight to crew selection with no profile data collected.
+    router.replace("/");
   }
 
   async function handleSocialAuth(strategy: "oauth_google" | "oauth_facebook" | "oauth_apple") {
@@ -68,11 +85,19 @@ export default function SignUpScreen() {
       if (createdSessionId) {
         const provider = strategy.replace("oauth_", "");
         posthog.capture("user_signed_up", { auth_method: provider });
-        router.replace("/build-crew");
+        router.replace("/");
       }
     } catch (error) {
       setFormError(getClerkErrorMessage(error));
     }
+  }
+
+  if (!authLoaded || isSignedIn) {
+    return (
+      <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.neutral.background }}>
+        <ActivityIndicator size="large" color={colors.brand.yellow} />
+      </SafeAreaView>
+    );
   }
 
   return (

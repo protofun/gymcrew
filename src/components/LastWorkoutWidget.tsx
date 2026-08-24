@@ -2,10 +2,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 
+import { RankBadge } from "@/components/RankBadge";
 import { WorkoutSummaryModal } from "@/components/WorkoutSummaryModal";
-import { findExerciseByDisplayName } from "@/data/exercises";
+import { EXERCISE_BY_ID, findExerciseByDisplayName } from "@/data/exercises";
 import type { WorkoutSession } from "@/data/workout-log";
+import { tierForExercise } from "@/lib/generic-lift-rank";
+import { buildLiftRankCards } from "@/lib/lift-rank-cards";
 import { getLastWorkout } from "@/lib/workout-history";
+import { useOnboardingStore } from "@/store/onboarding-store";
+import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { colors } from "@/theme";
 
 type LastWorkoutWidgetProps = {
@@ -17,9 +22,20 @@ export function LastWorkoutWidget({ sessions }: LastWorkoutWidgetProps) {
   const today = useMemo(() => new Date(), []);
   const lastWorkout = useMemo(() => getLastWorkout(sessions, today), [sessions, today]);
 
+  const onboarding = useOnboardingStore((state) => state.onboarding);
+  const records = usePersonalRecordsStore((state) => state.records);
+  const profile = useMemo(
+    () => ({ gender: onboarding.gender ?? ("male" as const), bodyWeightKg: onboarding.weightKg ?? 85, age: onboarding.age }),
+    [onboarding.gender, onboarding.weightKg, onboarding.age],
+  );
+  const cards = useMemo(() => buildLiftRankCards(records, profile, "gym"), [records, profile]);
+
   if (!lastWorkout) return null;
   const { date, session } = lastWorkout;
-  const exercise = findExerciseByDisplayName(session.primaryExercise.name);
+  const exercise =
+    (session.primaryExercise.exerciseId ? EXERCISE_BY_ID[session.primaryExercise.exerciseId] : undefined) ??
+    findExerciseByDisplayName(session.primaryExercise.name);
+  const tier = exercise ? tierForExercise(exercise, cards, records, profile) : null;
 
   return (
     <>
@@ -58,7 +74,10 @@ export function LastWorkoutWidget({ sessions }: LastWorkoutWidgetProps) {
           <Image source={{ uri: exercise.imageUrl }} resizeMode="cover" className="h-24 w-24 rounded-2xl" />
         )}
 
-        <Ionicons name="chevron-forward" size={18} color={colors.neutral.textSecondary} />
+        <View className="items-center gap-1.5">
+          {tier && <RankBadge tier={tier} size={32} />}
+          <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
+        </View>
       </Pressable>
 
       <WorkoutSummaryModal visible={modalVisible} onClose={() => setModalVisible(false)} date={date} session={session} />

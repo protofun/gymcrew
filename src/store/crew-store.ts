@@ -38,6 +38,10 @@ export const LEE_PRIEST_MEMBER_ID = "m6";
 /** A curated "glutes only" meme member (see lib/crew-lift-compare.ts) — same backfill reasoning as
  * Lee Priest above. */
 export const BRO_MEMBER_ID = "m7";
+/** A second, more extreme "glutes only" meme member — unlike Bro (whose quads/back inevitably ride
+ * along partway since they share lifts with glutes), her muscle rank is a hard override: glutes
+ * maxed, literally every other muscle group Rookie. Same backfill reasoning as Lee Priest above. */
+export const GLUTE_ONLY_MEMBER_ID = "m8";
 
 export type DivisionHistoryEntry = { division: Division; reachedAt: number };
 export type DivisionCelebration = { from: Division; to: Division };
@@ -121,7 +125,7 @@ const DEFAULT_CREW: CrewState = {
   xp: 4250,
   crewPower: 28540,
   crewPowerChangePercent: 5.6,
-  maxMembers: 7,
+  maxMembers: 8,
   members: [
     {
       id: "m1",
@@ -192,6 +196,16 @@ const DEFAULT_CREW: CrewState = {
       role: "member",
       isAdmin: false,
       isOnline: true,
+    },
+    {
+      id: GLUTE_ONLY_MEMBER_ID,
+      name: "Peach",
+      username: "onlyglutes",
+      avatarUrl: "https://picsum.photos/seed/iron-squad-8/128",
+      level: 14,
+      role: "member",
+      isAdmin: false,
+      isOnline: false,
     },
   ],
   todayPlan: {
@@ -270,21 +284,21 @@ export const useCrewStore = create<CrewState & CrewActions>()(
       name: "gymcrew-crew",
       storage: createJSONStorage(() => AsyncStorage),
       // A plain shallow merge would let an already-persisted `members` array (saved before Lee
-      // Priest or Bro existed) replace the whole array and silently drop them — same issue and same
-      // fix as personal-records-store.ts's DEFAULT_RECORDS merge. Backfill whichever curated member
-      // is missing, leave everything else untouched.
+      // Priest, Bro, or Peach existed) replace the whole array and silently drop them — same issue
+      // and same fix as personal-records-store.ts's DEFAULT_RECORDS merge. Backfill whichever
+      // curated member is missing, leave everything else untouched.
       merge: (persistedState, currentState) => {
         const persisted = (persistedState as Partial<CrewState & CrewActions> | undefined) ?? {};
         const members = persisted.members ?? currentState.members;
+        const curatedIds = new Set([LEE_PRIEST_MEMBER_ID, BRO_MEMBER_ID, GLUTE_ONLY_MEMBER_ID]);
         const missingCurated = DEFAULT_CREW.members.filter(
-          (defaultMember) =>
-            (defaultMember.id === LEE_PRIEST_MEMBER_ID || defaultMember.id === BRO_MEMBER_ID) &&
-            !members.some((member) => member.id === defaultMember.id),
+          (defaultMember) => curatedIds.has(defaultMember.id) && !members.some((member) => member.id === defaultMember.id),
         );
 
         return {
           ...currentState,
           ...persisted,
+          maxMembers: persisted.maxMembers && persisted.maxMembers >= DEFAULT_CREW.maxMembers ? persisted.maxMembers : DEFAULT_CREW.maxMembers,
           members: missingCurated.length === 0 ? members : [...members, ...missingCurated],
         };
       },

@@ -4,24 +4,29 @@ import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { CHALLENGE_TEMPLATES, type ChallengeTemplate } from "@/data/challenges";
-import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
+import type { RivalCrewInput } from "@/lib/crew-league";
 import { colors } from "@/theme";
 
 const DURATION_OPTIONS = [7, 14, 30] as const;
 
 type CreateChallengeModalProps = {
   visible: boolean;
+  /** Same-division rival crews only — a battle should be a fair fight. */
+  rivalCrews: RivalCrewInput[];
   onClose: () => void;
-  onCreate: (template: ChallengeTemplate, opponentCrewName: string, durationDays: number) => void;
+  onCreate: (template: ChallengeTemplate, opponent: RivalCrewInput, durationDays: number) => void;
 };
 
-export function CreateChallengeModal({ visible, onClose, onCreate }: CreateChallengeModalProps) {
+export function CreateChallengeModal({ visible, rivalCrews, onClose, onCreate }: CreateChallengeModalProps) {
   const [template, setTemplate] = useState<ChallengeTemplate>(CHALLENGE_TEMPLATES[0]);
-  const [opponentCrewName, setOpponentCrewName] = useState(OTHER_CREWS_POWER[0].name);
+  const [opponentCrewName, setOpponentCrewName] = useState(rivalCrews[0]?.name);
   const [durationDays, setDurationDays] = useState<(typeof DURATION_OPTIONS)[number]>(14);
 
+  const opponent = rivalCrews.find((crew) => crew.name === opponentCrewName) ?? rivalCrews[0];
+
   function handleCreate() {
-    onCreate(template, opponentCrewName, durationDays);
+    if (!opponent) return;
+    onCreate(template, opponent, durationDays);
     onClose();
   }
 
@@ -69,23 +74,27 @@ export function CreateChallengeModal({ visible, onClose, onCreate }: CreateChall
               </View>
 
               <View className="gap-2">
-                <Text className="body-sm text-text-secondary">Opponent Crew</Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {OTHER_CREWS_POWER.map((crew) => {
-                    const selected = crew.name === opponentCrewName;
-                    return (
-                      <Pressable
-                        key={crew.name}
-                        onPress={() => setOpponentCrewName(crew.name)}
-                        className={`rounded-full border px-3 py-2 ${selected ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-background"}`}
-                      >
-                        <Text className={`caption font-body-semibold ${selected ? "text-brand-iron" : "text-text-secondary"}`}>
-                          {crew.name}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                <Text className="body-sm text-text-secondary">Opponent Crew (your division)</Text>
+                {rivalCrews.length === 0 ? (
+                  <Text className="caption text-text-secondary">No rival crews in your division yet — check back after this week&apos;s league.</Text>
+                ) : (
+                  <View className="flex-row flex-wrap gap-2">
+                    {rivalCrews.map((crew) => {
+                      const selected = crew.name === opponentCrewName;
+                      return (
+                        <Pressable
+                          key={crew.name}
+                          onPress={() => setOpponentCrewName(crew.name)}
+                          className={`rounded-full border px-3 py-2 ${selected ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-background"}`}
+                        >
+                          <Text className={`caption font-body-semibold ${selected ? "text-brand-iron" : "text-text-secondary"}`}>
+                            {crew.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
 
               <View className="gap-2">
@@ -110,8 +119,12 @@ export function CreateChallengeModal({ visible, onClose, onCreate }: CreateChall
             </View>
           </ScrollView>
 
-          <Pressable onPress={handleCreate} className="items-center rounded-full bg-brand-yellow py-3.5">
-            <Text className="body-md font-body-bold text-brand-iron">Send Challenge</Text>
+          <Pressable
+            onPress={handleCreate}
+            disabled={!opponent}
+            className={`items-center rounded-full py-3.5 ${opponent ? "bg-brand-yellow" : "bg-surface"}`}
+          >
+            <Text className={`body-md font-body-bold ${opponent ? "text-brand-iron" : "text-text-secondary"}`}>Send Challenge</Text>
           </Pressable>
         </Animated.View>
       </View>

@@ -90,7 +90,9 @@ export function StrengthProgressChart({ exerciseName, points, title = "Strength 
   const xAxisIndices = points.length >= 3 ? [0, Math.floor((points.length - 1) / 2), points.length - 1] : [0, points.length - 1];
 
   const pathD = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x} ${c.y}`).join(" ");
-  const delta = points[points.length - 1].value - points[0].value;
+  // Rounded to 1 decimal — a raw float subtraction on non-integer values (e.g. a BMI series) can
+  // land on something like -0.9000000000000021 due to IEEE754 imprecision.
+  const delta = Math.round((points[points.length - 1].value - points[0].value) * 10) / 10;
   const deltaColor = delta > 0 ? colors.semantic.success : delta < 0 ? colors.semantic.error : colors.neutral.textSecondary;
 
   const active = activeIndex !== null ? { point: points[activeIndex], coord: coords[activeIndex] } : null;

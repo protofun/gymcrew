@@ -2,7 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { MAJOR_LIFT_EXERCISE_IDS } from "@/lib/rank";
+import { api, isApiConfigured } from "@/lib/api";
+import { DEMO_RECORDS } from "@/lib/demo-seed";
 
 export type PersonalRecord = {
   exerciseId: string;
@@ -12,39 +13,10 @@ export type PersonalRecord = {
   achievedAt: number;
 };
 
-// Starter PRs — upper body maxed out, squat barely touched, on purpose: this is the account behind
-// the "skips leg day" bit, and the muscle rank heatmap (member profile → Stats) is built to show it
-// off at a glance. A real logged set that beats one of these overwrites it via `checkAndRecord`.
-const DEFAULT_RECORDS: Record<string, PersonalRecord> = {
-  [MAJOR_LIFT_EXERCISE_IDS.benchPress]: {
-    exerciseId: MAJOR_LIFT_EXERCISE_IDS.benchPress,
-    exerciseName: "Bench Press",
-    bestWeightKg: 195,
-    bestReps: 2,
-    achievedAt: Date.UTC(2026, 7, 17),
-  },
-  [MAJOR_LIFT_EXERCISE_IDS.deadlift]: {
-    exerciseId: MAJOR_LIFT_EXERCISE_IDS.deadlift,
-    exerciseName: "Deadlift",
-    bestWeightKg: 300,
-    bestReps: 1,
-    achievedAt: Date.UTC(2026, 7, 19),
-  },
-  [MAJOR_LIFT_EXERCISE_IDS.overheadPress]: {
-    exerciseId: MAJOR_LIFT_EXERCISE_IDS.overheadPress,
-    exerciseName: "Overhead Press",
-    bestWeightKg: 120,
-    bestReps: 2,
-    achievedAt: Date.UTC(2026, 7, 15),
-  },
-  [MAJOR_LIFT_EXERCISE_IDS.squat]: {
-    exerciseId: MAJOR_LIFT_EXERCISE_IDS.squat,
-    exerciseName: "Squat",
-    bestWeightKg: 20,
-    bestReps: 8,
-    achievedAt: Date.UTC(2026, 7, 5),
-  },
-};
+// Starter PRs, one per exercise in the year-long demo history (see lib/demo-seed.ts) — a fresh
+// account's Ranks tab and Achievements page already look like real, established progress instead
+// of empty. A real logged set that beats one of these overwrites it via `checkAndRecord`.
+const DEFAULT_RECORDS: Record<string, PersonalRecord> = DEMO_RECORDS;
 
 type PrCheckResult = {
   isNewRecord: boolean;
@@ -56,8 +28,13 @@ type PrCheckResult = {
 type PersonalRecordsStore = {
   /** Keyed by exerciseId — the heaviest completed set ever logged for that exercise. */
   records: Record<string, PersonalRecord>;
-  /** Compares a lift against the stored best and updates it if this one is heavier. */
+  /** Compares a lift against the stored best and updates it if this one is heavier. Stays
+   * synchronous (callers use the return value immediately) — a new record also fires a background
+   * sync to the backend, not awaited. */
   checkAndRecord: (exerciseId: string, exerciseName: string, weightKg: number, reps: number) => PrCheckResult;
+  /** Pulls the real backend state once a backend is configured and reachable — see body-log-store's
+   * `syncFromServer` for the same "backend wins on success, otherwise keep local data" rule. */
+  syncFromServer: () => Promise<void>;
 };
 
 export const usePersonalRecordsStore = create<PersonalRecordsStore>()(
@@ -77,9 +54,23 @@ export const usePersonalRecordsStore = create<PersonalRecordsStore>()(
               [exerciseId]: { exerciseId, exerciseName, bestWeightKg: weightKg, bestReps: reps, achievedAt: Date.now() },
             },
           }));
+          if (isApiConfigured) {
+            api.checkAndRecord({ exerciseId, exerciseName, weightKg, reps }).catch((error) =>
+              console.warn("Failed to sync new PR to server", error),
+            );
+          }
         }
 
         return { isNewRecord, previousBestKg, previousAchievedAt };
+      },
+      syncFromServer: async () => {
+        if (!isApiConfigured) return;
+        try {
+          const records = await api.getRecords();
+          set({ records });
+        } catch (error) {
+          console.warn("Failed to sync personal records from server, keeping local data", error);
+        }
       },
     }),
     {

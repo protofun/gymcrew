@@ -6,8 +6,13 @@ export function currentWeekday(): Weekday {
   return WEEKDAYS[(jsDay + 6) % 7];
 }
 
-/** The workout name scheduled for today, per the user's onboarding weekly schedule — or null on a rest day / if unset. */
+/**
+ * The workout name scheduled for today, per the user's weekly schedule — `null` if today has no
+ * entry at all (falls back to the crew's default plan), or `""` for an explicit rest day (distinct
+ * from "unset" — see `use-today-workout.ts`, which is the only place that distinction matters).
+ */
 export function todaysScheduledWorkout(weeklySchedule: Partial<Record<Weekday, string>> | undefined): string | null {
   if (!weeklySchedule) return null;
-  return weeklySchedule[currentWeekday()] ?? null;
+  const today = currentWeekday();
+  return today in weeklySchedule ? (weeklySchedule[today] ?? null) : null;
 }

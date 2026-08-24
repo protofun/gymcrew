@@ -1,14 +1,10 @@
-import { BACK_MUSCLES, FRONT_MUSCLES } from "body-muscles";
 import { Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
+import { BACK_MUSCLES, BACK_VIEW_BOX, BODY_ASPECT_RATIO, FRONT_MUSCLES, FRONT_VIEW_BOX } from "@/data/body-muscle-paths";
 import type { MuscleGroup } from "@/data/workout-log";
 import { formatMuscleLabel, MUSCLE_GROUP_BY_REGION_ID } from "@/lib/muscle-groups";
 import { colors } from "@/theme";
-
-const FRONT_VIEW_BOX = "0 0 35 93";
-const BACK_VIEW_BOX = "37 0 35 93";
-const BODY_ASPECT_RATIO = 35 / 93;
 
 function colorForGroup(group: MuscleGroup | undefined, primaryMuscle: MuscleGroup | null, secondaryMuscles: MuscleGroup[]) {
   if (!group) return colors.neutral.divider;

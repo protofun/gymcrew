@@ -3,6 +3,8 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import type { MuscleGroup } from "@/data/workout-log";
+import { api, isApiConfigured } from "@/lib/api";
+import { DEMO_WORKOUTS } from "@/lib/demo-seed";
 import type { WorkoutPr } from "@/lib/workout-finish";
 import type { LoggedExercise, WeightUnit } from "@/store/active-workout-store";
 
@@ -25,21 +27,54 @@ type WorkoutHistoryStore = {
   workouts: CompletedWorkout[];
   addWorkout: (workout: CompletedWorkout) => void;
   updateWorkoutNotes: (id: string, notes: string) => void;
+  /** Pulls the real backend state once a backend is configured and reachable — see body-log-store's
+   * `syncFromServer` for the same "backend wins on success, otherwise keep local data" rule. */
+  syncFromServer: () => Promise<void>;
 };
 
 export const useWorkoutHistoryStore = create<WorkoutHistoryStore>()(
   persist(
     (set) => ({
-      workouts: [],
-      addWorkout: (workout) => set((state) => ({ workouts: [workout, ...state.workouts] })),
-      updateWorkoutNotes: (id, notes) =>
+      workouts: DEMO_WORKOUTS,
+      addWorkout: (workout) => {
+        set((state) => ({ workouts: [workout, ...state.workouts] }));
+        if (isApiConfigured) {
+          api.createWorkout(workout).catch((error) => console.warn("Failed to sync new workout to server", error));
+        }
+      },
+      updateWorkoutNotes: (id, notes) => {
         set((state) => ({
           workouts: state.workouts.map((workout) => (workout.id === id ? { ...workout, notes } : workout)),
-        })),
+        }));
+        if (isApiConfigured) {
+          api.updateWorkoutNotes(id, notes).catch((error) => console.warn("Failed to sync workout notes to server", error));
+        }
+      },
+      syncFromServer: async () => {
+        if (!isApiConfigured) return;
+        try {
+          const workouts = await api.getWorkouts();
+          set({ workouts });
+        } catch (error) {
+          console.warn("Failed to sync workout history from server, keeping local data", error);
+        }
+      },
     }),
     {
       name: "gymcrew-workout-history",
       storage: createJSONStorage(() => AsyncStorage),
+      // A brand new account ships with a year of demo history (see lib/demo-seed.ts) so the app
+      // never looks empty — but the instant a real workout is logged, that persisted (real) array
+      // always wins here. Never overwrite real logged history with the demo set. Once a backend is
+      // configured, `syncFromServer` takes over as the real source of truth.
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState as Partial<WorkoutHistoryStore> | undefined) ?? {};
+        return {
+          ...currentState,
+          ...persisted,
+          workouts: persisted.workouts && persisted.workouts.length > 0 ? persisted.workouts : currentState.workouts,
+        };
+      },
     },
   ),
 );

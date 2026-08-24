@@ -5,6 +5,11 @@ import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { DEMO_BODY_LOG, DEMO_PROFILE_LEVEL, DEMO_RECORDS, DEMO_WORKOUTS } from "@/lib/demo-seed";
+import { useBodyLogStore } from "@/store/body-log-store";
+import { usePersonalRecordsStore } from "@/store/personal-records-store";
+import { useProfileLevelStore } from "@/store/profile-level-store";
+import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors } from "@/theme";
 
 function PasswordField({ label, value, onChangeText }: { label: string; value: string; onChangeText: (value: string) => void }) {
@@ -93,6 +98,32 @@ export default function AccountScreen() {
     ]);
   }
 
+  function handleLoadDemoYear() {
+    Alert.alert(
+      "Load a Year of Training Data",
+      "This replaces your current workout history, personal records, body log, and division/XP with a full year of demo training (6 days a week). This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Load Demo Year",
+          style: "destructive",
+          onPress: () => {
+            useWorkoutHistoryStore.setState({ workouts: DEMO_WORKOUTS });
+            usePersonalRecordsStore.setState({ records: DEMO_RECORDS });
+            useBodyLogStore.setState({ entries: DEMO_BODY_LOG });
+            useProfileLevelStore.setState({
+              xp: DEMO_PROFILE_LEVEL.xp,
+              division: DEMO_PROFILE_LEVEL.division,
+              divisionHistory: DEMO_PROFILE_LEVEL.divisionHistory,
+              pendingDivisionCelebration: null,
+            });
+            Alert.alert("Done", "A year of training history has been loaded.");
+          },
+        },
+      ],
+    );
+  }
+
   function handleDeleteAccount() {
     Alert.alert(
       "Delete Account",
@@ -161,6 +192,16 @@ export default function AccountScreen() {
         <Pressable onPress={handleSignOut} className="items-center rounded-full border border-divider py-4">
           <Text className="body-md font-body-bold text-text-primary">Sign Out</Text>
         </Pressable>
+
+        <View className="gap-2 rounded-2xl border border-divider bg-surface p-4">
+          <Text className="body-sm font-body-semibold text-text-primary">Demo Data</Text>
+          <Text className="body-sm text-text-secondary">
+            Load a full year of consistent training history — 6 days a week, ever-improving lifts, lots of PRs.
+          </Text>
+          <Pressable onPress={handleLoadDemoYear} className="mt-1 items-center rounded-full border border-brand-yellow py-3.5">
+            <Text className="body-sm font-body-bold text-brand-yellow">Load a Year of Training Data</Text>
+          </Pressable>
+        </View>
 
         <View className="gap-2 rounded-2xl border border-error/40 bg-error/10 p-4">
           <Text className="body-sm font-body-semibold" style={{ color: colors.semantic.error }}>

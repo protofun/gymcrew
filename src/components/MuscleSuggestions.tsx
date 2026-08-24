@@ -5,6 +5,7 @@ import { Text, View } from "react-native";
 import { formatMuscleLabel, MuscleHeatmap } from "@/components/MuscleHeatmap";
 import type { MuscleGroup, WorkoutSession } from "@/data/workout-log";
 import { getMuscleSuggestions, type SuggestionPriority } from "@/lib/muscle-suggestions";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
 // Medium priority is a muted version of the brand yellow-green — same hue,
@@ -26,6 +27,7 @@ type MuscleSuggestionsProps = {
 };
 
 export function MuscleSuggestions({ sessions }: MuscleSuggestionsProps) {
+  const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const suggestions = useMemo(() => getMuscleSuggestions(sessions, new Date()), [sessions]);
 
   const heatmapIntensity = useMemo(() => {
@@ -71,7 +73,7 @@ export function MuscleSuggestions({ sessions }: MuscleSuggestionsProps) {
             ))}
           </View>
 
-          <MuscleHeatmap muscleIntensity={heatmapIntensity} height={190} showLegend={false} />
+          <MuscleHeatmap muscleIntensity={heatmapIntensity} height={190} showLegend={false} gender={gender} />
         </View>
       </View>
     </View>

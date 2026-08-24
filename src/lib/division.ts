@@ -201,3 +201,13 @@ export function divisionForCrewPower(power: number): Division {
   }
   return result;
 }
+
+/**
+ * A crew member has no real XP history of their own (only a `level` int — see store/crew-store.ts),
+ * so their division badge/frame is approximated straight from that level. Used only for showing a
+ * division cosmetic on OTHER members; the current user always shows their real division instead.
+ */
+export function divisionForMemberLevel(level: number): Division {
+  const index = Math.max(0, Math.min(DIVISIONS.length - 1, Math.floor(level / 2.5)));
+  return DIVISIONS[index];
+}

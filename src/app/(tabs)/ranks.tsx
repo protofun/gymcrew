@@ -10,10 +10,11 @@ import { captureRef } from "react-native-view-shot";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { ProgressBar } from "@/components/ProgressBar";
 import { RankBadge } from "@/components/RankBadge";
+import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { images } from "@/constants/images";
 import { EXERCISE_BY_ID, type Exercise } from "@/data/exercises";
 import { MAJOR_LIFT_CARDS, SEEDED_LIFT_CARDS, type LiftCardId } from "@/data/rank-lifts";
-import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
+import { genericExerciseRankDetail, tierForExercise } from "@/lib/generic-lift-rank";
 import {
   applyRankScope,
   buildLiftRankCards,
@@ -22,10 +23,13 @@ import {
   type LiftCardSortKey,
   type RankScope,
 } from "@/lib/lift-rank-cards";
+import { buildSnapshotRecords } from "@/lib/profile-snapshot";
 import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
+import { useProfileSnapshotStore } from "@/store/profile-snapshot-store";
 import { useTrackedLiftsStore } from "@/store/tracked-lifts-store";
+import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
 
 /** A tile on the Ranks overview grid — either one of the 9 default tracked lifts or a custom
@@ -346,7 +350,17 @@ export default function RanksScreen() {
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
   const age = useOnboardingStore((state) => state.onboarding.age);
-  const records = usePersonalRecordsStore((state) => state.records);
+  const weightUnit = useOnboardingStore((state) => state.weightUnit);
+  const liveRecords = usePersonalRecordsStore((state) => state.records);
+  const workouts = useWorkoutHistoryStore((state) => state.workouts);
+  const snapshotAsOfMs = useProfileSnapshotStore((state) => state.asOfMs);
+  const snapshotWeightKg = useProfileSnapshotStore((state) => state.weightKg);
+  const clearSnapshot = useProfileSnapshotStore((state) => state.clearSnapshot);
+
+  const records = useMemo(
+    () => (snapshotAsOfMs != null ? buildSnapshotRecords(workouts.filter((workout) => workout.completedAt <= snapshotAsOfMs)) : liveRecords),
+    [snapshotAsOfMs, workouts, liveRecords],
+  );
 
   const customExerciseIds = useTrackedLiftsStore((state) => state.customExerciseIds);
   const removedDefaultIds = useTrackedLiftsStore((state) => state.removedDefaultIds);
@@ -367,7 +381,10 @@ export default function RanksScreen() {
   const [gridWidth, setGridWidth] = useState(0);
   const bannerRef = useRef<View>(null);
 
-  const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
+  const profile: RankProfile = useMemo(
+    () => ({ gender, bodyWeightKg: snapshotAsOfMs != null && snapshotWeightKg != null ? snapshotWeightKg : weightKg, age }),
+    [gender, weightKg, age, snapshotAsOfMs, snapshotWeightKg],
+  );
   const builtInCards = useMemo(() => buildLiftRankCards(records, profile, scope), [records, profile, scope]);
 
   const cards = useMemo<DisplayLiftCard[]>(() => {
@@ -476,7 +493,11 @@ export default function RanksScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
+    <View className="flex-1 bg-background">
+      {snapshotAsOfMs != null && snapshotWeightKg != null && (
+        <SnapshotBanner asOfMs={snapshotAsOfMs} weightKg={snapshotWeightKg} weightUnit={weightUnit} onExit={clearSnapshot} />
+      )}
+      <ScrollView className="flex-1" contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
       <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="px-4 pt-4">
         <View ref={bannerRef} collapsable={false}>
           <RanksBanner
@@ -519,15 +540,17 @@ export default function RanksScreen() {
               <Ionicons name="chevron-down" size={12} color={colors.neutral.textSecondary} />
             </Pressable>
 
-            <Pressable
-              onPress={() => setEditMode((current) => !current)}
-              style={PRESSED_STYLE}
-              className={`rounded-full border px-3 py-1.5 ${editMode ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"}`}
-            >
-              <Text className={`caption font-body-semibold ${editMode ? "text-brand-iron" : "text-text-secondary"}`}>
-                {editMode ? "Done" : "Edit"}
-              </Text>
-            </Pressable>
+            {snapshotAsOfMs == null && (
+              <Pressable
+                onPress={() => setEditMode((current) => !current)}
+                style={PRESSED_STYLE}
+                className={`rounded-full border px-3 py-1.5 ${editMode ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"}`}
+              >
+                <Text className={`caption font-body-semibold ${editMode ? "text-brand-iron" : "text-text-secondary"}`}>
+                  {editMode ? "Done" : "Edit"}
+                </Text>
+              </Pressable>
+            )}
           </View>
         </View>
 
@@ -545,7 +568,9 @@ export default function RanksScreen() {
                 onRemove={() => handleRemoveCard(card)}
               />
             ))}
-          {cardWidth > 0 && <AddLiftTile width={cardWidth} index={sortedCards.length} onPress={() => setAddModalVisible(true)} />}
+          {cardWidth > 0 && snapshotAsOfMs == null && (
+            <AddLiftTile width={cardWidth} index={sortedCards.length} onPress={() => setAddModalVisible(true)} />
+          )}
         </View>
       </Animated.View>
 
@@ -558,7 +583,9 @@ export default function RanksScreen() {
         onClose={() => setAddModalVisible(false)}
         onSelect={handleAddExercise}
         hideCreateRow
+        renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, cards, records, profile)} size={34} />}
       />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }

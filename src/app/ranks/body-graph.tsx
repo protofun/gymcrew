@@ -9,7 +9,7 @@ import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { RankBadge } from "@/components/RankBadge";
 import { muscleGroupImages } from "@/constants/images";
 import { ALL_MUSCLE_GROUPS, type MuscleGroup } from "@/data/workout-log";
-import { memberLiftCards } from "@/lib/crew-lift-compare";
+import { memberLiftCards, muscleGroupRanksForCrewMember } from "@/lib/crew-lift-compare";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
 import { computeMuscleGroupRanks, type MuscleGroupRank } from "@/lib/muscle-group-rank";
 import { formatMuscleLabel } from "@/lib/muscle-groups";
@@ -207,7 +207,10 @@ export default function MuscleRankScreen() {
     () => (viewingOtherMember ? memberLiftCards(memberId!, myCards) : myCards),
     [viewingOtherMember, memberId, myCards],
   );
-  const ranksByGroup = useMemo(() => computeMuscleGroupRanks(cards), [cards]);
+  const ranksByGroup = useMemo(
+    () => (viewingOtherMember ? muscleGroupRanksForCrewMember(memberId!, myCards) : computeMuscleGroupRanks(cards)),
+    [viewingOtherMember, memberId, myCards, cards],
+  );
 
   const tierIndexByGroup: Partial<Record<MuscleGroup, number>> = {};
   for (const [group, rank] of Object.entries(ranksByGroup) as [MuscleGroup, MuscleGroupRank][]) {
@@ -252,6 +255,7 @@ export default function MuscleRankScreen() {
             showLegend={false}
             colorForIntensity={(tierIndex) => RANK_TIER_COLOR[RANK_TIERS[tierIndex]]}
             onPressGroup={(group) => setSelectedGroup(group)}
+            gender={gender}
           />
 
           <View className="flex-row flex-wrap justify-center gap-2">

@@ -1,15 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
+import { RankBadge } from "@/components/RankBadge";
 import { WorkoutOptionsSheet } from "@/components/WorkoutOptionsSheet";
 import { WorkoutTemplateCard } from "@/components/WorkoutTemplateCard";
 import { EXERCISE_BY_ID, type Exercise, formatMuscleName } from "@/data/exercises";
+import { tierForExercise } from "@/lib/generic-lift-rank";
+import { buildLiftRankCards } from "@/lib/lift-rank-cards";
+import type { RankProfile } from "@/lib/rank";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { type CustomWorkout, useCustomWorkoutsStore } from "@/store/custom-workouts-store";
+import { useOnboardingStore } from "@/store/onboarding-store";
+import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { colors } from "@/theme";
 
 function BuilderExerciseRow({ exercise, onRemove }: { exercise: Exercise; onRemove: () => void }) {
@@ -48,6 +54,13 @@ export default function BuildWorkoutScreen() {
   const addCustomWorkout = useCustomWorkoutsStore((state) => state.addWorkout);
   const updateCustomWorkout = useCustomWorkoutsStore((state) => state.updateWorkout);
   const removeCustomWorkout = useCustomWorkoutsStore((state) => state.removeWorkout);
+
+  const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
+  const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
+  const age = useOnboardingStore((state) => state.onboarding.age);
+  const records = usePersonalRecordsStore((state) => state.records);
+  const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
+  const cards = useMemo(() => buildLiftRankCards(records, profile, "gym"), [records, profile]);
 
   const startWorkout = useActiveWorkoutStore((state) => state.startWorkout);
   const setName = useActiveWorkoutStore((state) => state.setName);
@@ -244,6 +257,7 @@ export default function BuildWorkoutScreen() {
           setDraftExercises((prev) => [...prev, exercise]);
           setPickerVisible(false);
         }}
+        renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, cards, records, profile)} size={34} />}
       />
 
       <WorkoutOptionsSheet

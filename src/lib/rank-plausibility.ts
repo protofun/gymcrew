@@ -18,6 +18,9 @@ const MAX_BODYWEIGHT_RATIO: Record<LiftCardId, number> = {
   inclinePress: 2.6,
   legPress: 8.0,
   lunge: 2.5,
+  barbellCurl: 1.0,
+  cableCrunch: 1.2,
+  calfRaise: 4.0,
 };
 
 /** Ceiling for any exercise outside the 9 tracked lifts (no per-lift ratio tuned for it) — pitched

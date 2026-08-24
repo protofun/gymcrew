@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { images } from "@/constants/images";
 import { formatElapsed } from "@/hooks/use-elapsed-timer";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors } from "@/theme";
 
@@ -36,6 +37,7 @@ export default function WorkoutCompleteScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const workout = useWorkoutHistoryStore((state) => state.workouts.find((w) => w.id === id));
+  const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const posthog = usePostHog();
 
   useEffect(() => {
@@ -142,7 +144,7 @@ export default function WorkoutCompleteScreen() {
       {Object.keys(workout.muscleIntensity).length > 0 && (
         <View className="w-full items-center gap-3">
           <Text className="body-md font-body-semibold text-text-primary">Muscles Trained</Text>
-          <MuscleHeatmap muscleIntensity={workout.muscleIntensity} height={160} showLegend={false} />
+          <MuscleHeatmap muscleIntensity={workout.muscleIntensity} height={160} showLegend={false} gender={gender} />
         </View>
       )}
 

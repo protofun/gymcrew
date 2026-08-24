@@ -25,10 +25,12 @@ type ChallengeCardProps = {
   timeLabel: string;
   isComplete: boolean;
   xpReward: number;
+  /** Only set for crew Battles (custom challenges with a real rival opponent) — whether the crew is currently ahead. */
+  battleStatus?: "winning" | "losing";
   onPress: () => void;
 };
 
-export function ChallengeCard({ metric, name, progress, target, unit, timeLabel, isComplete, xpReward, onPress }: ChallengeCardProps) {
+export function ChallengeCard({ metric, name, progress, target, unit, timeLabel, isComplete, xpReward, battleStatus, onPress }: ChallengeCardProps) {
   const ratio = target > 0 ? progress / target : 0;
   const percent = Math.min(100, Math.round(ratio * 100));
   const accent = isComplete ? colors.semantic.success : colors.brand.yellow;
@@ -58,9 +60,26 @@ export function ChallengeCard({ metric, name, progress, target, unit, timeLabel,
           )}
         </View>
 
-        <View className="flex-row items-center gap-1">
-          <Ionicons name="flash" size={11} color={colors.brand.yellow} />
-          <Text className="caption font-body-semibold text-brand-yellow">+{xpReward.toLocaleString("en-US")} XP</Text>
+        <View className="flex-row items-center gap-2">
+          <View className="flex-row items-center gap-1">
+            <Ionicons name="flash" size={11} color={colors.brand.yellow} />
+            <Text className="caption font-body-semibold text-brand-yellow">+{xpReward.toLocaleString("en-US")} XP</Text>
+          </View>
+          {battleStatus && !isComplete && (
+            <View className="flex-row items-center gap-1">
+              <Ionicons
+                name={battleStatus === "winning" ? "trending-up" : "trending-down"}
+                size={11}
+                color={battleStatus === "winning" ? colors.semantic.success : colors.semantic.error}
+              />
+              <Text
+                className="caption font-body-semibold"
+                style={{ color: battleStatus === "winning" ? colors.semantic.success : colors.semantic.error }}
+              >
+                {battleStatus === "winning" ? "Ahead" : "Behind"}
+              </Text>
+            </View>
+          )}
         </View>
 
         <ProgressBar ratio={ratio} color={accent} height={7} />

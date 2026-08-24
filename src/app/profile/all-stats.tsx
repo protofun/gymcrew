@@ -4,11 +4,13 @@ import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { StatCard, StatRow, StatSectionHeader } from "@/components/StatRow";
 import { fromDateKey } from "@/lib/date";
 import { DIVISION_COLOR, xpRequiredFor } from "@/lib/division";
 import { buildLiftRankCards, overallPowerScore, highestTier } from "@/lib/lift-rank-cards";
 import { formatMuscleLabel } from "@/lib/muscle-groups";
+import { computeProfileSnapshot } from "@/lib/profile-snapshot";
 import { formatRankTier, MAJOR_LIFT_EXERCISE_IDS } from "@/lib/rank";
 import { computeCurrentStreak, computeLongestStreak, computeTrainedDaysThisWeek } from "@/lib/streak";
 import { kgToLbs } from "@/lib/units";
@@ -19,6 +21,7 @@ import type { WeightUnit } from "@/store/active-workout-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
+import { useProfileSnapshotStore } from "@/store/profile-snapshot-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors } from "@/theme";
 
@@ -44,23 +47,60 @@ export default function AllStatsScreen() {
 
   const onboarding = useOnboardingStore((state) => state.onboarding);
   const weightUnit = useOnboardingStore((state) => state.weightUnit);
-  const workouts = useWorkoutHistoryStore((state) => state.workouts);
-  const records = usePersonalRecordsStore((state) => state.records);
-  const bodyLogEntries = useBodyLogStore((state) => state.entries);
+  const allWorkouts = useWorkoutHistoryStore((state) => state.workouts);
+  const liveRecords = usePersonalRecordsStore((state) => state.records);
+  const allBodyLogEntries = useBodyLogStore((state) => state.entries);
   const xp = useProfileLevelStore((state) => state.xp);
-  const division = useProfileLevelStore((state) => state.division);
+  const liveDivision = useProfileLevelStore((state) => state.division);
+  const divisionHistory = useProfileLevelStore((state) => state.divisionHistory);
   const crew = useCrewStore((state) => state);
+  const snapshotAsOfMs = useProfileSnapshotStore((state) => state.asOfMs);
+  const snapshotWeightKg = useProfileSnapshotStore((state) => state.weightKg);
+  const clearSnapshot = useProfileSnapshotStore((state) => state.clearSnapshot);
+
+  const snapshot = useMemo(
+    () => (snapshotAsOfMs != null ? computeProfileSnapshot(snapshotAsOfMs, allWorkouts, divisionHistory) : null),
+    [snapshotAsOfMs, allWorkouts, divisionHistory],
+  );
+  const workouts = snapshot?.workoutsUpToDate ?? allWorkouts;
+  const records = snapshot?.records ?? liveRecords;
+  const division = snapshot?.division ?? liveDivision;
+  const bodyLogEntries = useMemo(
+    () => (snapshotAsOfMs != null ? allBodyLogEntries.filter((entry) => entry.loggedAt <= snapshotAsOfMs) : allBodyLogEntries),
+    [allBodyLogEntries, snapshotAsOfMs],
+  );
 
   const totals = useMemo(() => workoutTotals(workouts), [workouts]);
   const { most, least } = useMemo(() => muscleTrainingBreakdown(workouts), [workouts]);
   const best = useMemo(() => bestWeek(workouts), [workouts]);
-  const currentStreak = computeCurrentStreak(workouts);
+  const referenceDate = snapshotAsOfMs != null ? new Date(snapshotAsOfMs) : new Date();
+  const currentStreak = computeCurrentStreak(workouts, referenceDate);
   const longestStreak = computeLongestStreak(workouts);
-  const workoutsThisWeek = computeTrainedDaysThisWeek(workouts).filter(Boolean).length;
+  const workoutsThisWeek = computeTrainedDaysThisWeek(workouts, referenceDate).filter(Boolean).length;
 
+  const now = referenceDate;
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const monthTotals = useMemo(() => {
+    const thisMonth = workouts.filter((workout) => {
+      const date = new Date(workout.completedAt);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    });
+    return workoutTotals(thisMonth);
+  }, [workouts, currentMonth, currentYear]);
+  const prsThisMonth = useMemo(
+    () =>
+      Object.values(records).filter((record) => {
+        const date = new Date(record.achievedAt);
+        return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+      }).length,
+    [records, currentMonth, currentYear],
+  );
+
+  const bodyWeightKg = snapshotAsOfMs != null && snapshotWeightKg != null ? snapshotWeightKg : (onboarding.weightKg ?? 85);
   const cards = useMemo(
-    () => buildLiftRankCards(records, { gender: onboarding.gender ?? "male", bodyWeightKg: onboarding.weightKg ?? 85, age: onboarding.age }, "gym"),
-    [records, onboarding.gender, onboarding.weightKg, onboarding.age],
+    () => buildLiftRankCards(records, { gender: onboarding.gender ?? "male", bodyWeightKg, age: onboarding.age }, "gym"),
+    [records, onboarding.gender, bodyWeightKg, onboarding.age],
   );
   const powerScore = overallPowerScore(cards);
   const topTier = highestTier(cards);
@@ -73,9 +113,12 @@ export default function AllStatsScreen() {
   const currentWeightKg = sortedBodyLogAsc[sortedBodyLogAsc.length - 1]?.weightKg ?? onboarding.weightKg;
   const weightChangeKg = currentWeightKg - startingWeightKg;
   const latestBodyFat = [...bodyLogEntries].sort((a, b) => b.loggedAt - a.loggedAt).find((entry) => entry.bodyFatPercent !== null)?.bodyFatPercent;
+  const heightM = onboarding.heightCm ? onboarding.heightCm / 100 : null;
+  const bmi = heightM ? currentWeightKg / (heightM * heightM) : null;
+  const leanMassKg = latestBodyFat != null ? currentWeightKg * (1 - latestBodyFat / 100) : null;
 
-  const firstWorkoutAt = workouts.length > 0 ? Math.min(...workouts.map((workout) => workout.completedAt)) : Date.now();
-  const weeksSinceFirstWorkout = Math.max(1, Math.round((Date.now() - firstWorkoutAt) / (7 * 86400000)));
+  const firstWorkoutAt = workouts.length > 0 ? Math.min(...workouts.map((workout) => workout.completedAt)) : referenceDate.getTime();
+  const weeksSinceFirstWorkout = Math.max(1, Math.round((referenceDate.getTime() - firstWorkoutAt) / (7 * 86400000)));
   const avgWorkoutsPerWeek = (totals.workouts / weeksSinceFirstWorkout).toFixed(1);
 
   const me = crew.members.find((member) => member.id === CURRENT_MEMBER_ID);
@@ -97,12 +140,15 @@ export default function AllStatsScreen() {
         { label: "Most Trained Muscle", value: most ? formatMuscleLabel(most) : "—", color: most ? colors.semantic.success : undefined },
         { label: "Least Trained Muscle", value: least ? formatMuscleLabel(least) : "—", color: least ? colors.semantic.error : undefined },
         { label: "Best Week (Volume)", value: best ? `${formatWeekLabel(best.weekKey)} · ${formatWeight(best.volumeKg, weightUnit)}` : "—" },
+        { label: "Workouts This Month", value: String(monthTotals.workouts) },
+        { label: "Volume This Month", value: formatWeight(monthTotals.volumeKg, weightUnit) },
       ],
     },
     {
       title: "Personal Records",
       rows: [
         { label: "Total PRs Logged", value: String(prList.length) },
+        { label: "PRs This Month", value: String(prsThisMonth), color: prsThisMonth > 0 ? colors.semantic.success : undefined },
         { label: "Bench Press", value: records[MAJOR_LIFT_EXERCISE_IDS.benchPress] ? formatWeight(records[MAJOR_LIFT_EXERCISE_IDS.benchPress].bestWeightKg, weightUnit) : "—" },
         { label: "Squat", value: records[MAJOR_LIFT_EXERCISE_IDS.squat] ? formatWeight(records[MAJOR_LIFT_EXERCISE_IDS.squat].bestWeightKg, weightUnit) : "—" },
         { label: "Deadlift", value: records[MAJOR_LIFT_EXERCISE_IDS.deadlift] ? formatWeight(records[MAJOR_LIFT_EXERCISE_IDS.deadlift].bestWeightKg, weightUnit) : "—" },
@@ -119,8 +165,8 @@ export default function AllStatsScreen() {
         { label: "Power Score", value: powerScore.toLocaleString("en-US"), color: colors.brand.yellow },
         { label: "Highest Tier Reached", value: formatRankTier(topTier) },
         { label: "Current Division", value: division, color: DIVISION_COLOR[division] },
-        { label: "Total XP Earned", value: xp.toLocaleString("en-US") },
-        { label: "XP To Next Division", value: Math.max(0, xpRequiredFor(division) - xp).toLocaleString("en-US") },
+        { label: "Total XP Earned", value: snapshot == null ? xp.toLocaleString("en-US") : "—" },
+        { label: "XP To Next Division", value: snapshot == null ? Math.max(0, xpRequiredFor(division) - xp).toLocaleString("en-US") : "—" },
       ],
     },
     {
@@ -134,6 +180,8 @@ export default function AllStatsScreen() {
           color: weightChangeKg === 0 ? undefined : weightChangeKg > 0 ? colors.semantic.success : colors.semantic.error,
         },
         { label: "Body Fat %", value: latestBodyFat != null ? `${latestBodyFat}%` : "—" },
+        { label: "Lean Body Mass", value: leanMassKg != null ? formatWeight(leanMassKg, weightUnit) : "—" },
+        { label: "BMI", value: bmi != null ? bmi.toFixed(1) : "—" },
         { label: "Height", value: onboarding.heightCm ? `${onboarding.heightCm} cm` : "—" },
         { label: "Age", value: onboarding.age ? String(onboarding.age) : "—" },
         { label: "Gender", value: onboarding.gender === "male" ? "Male" : "Female" },
@@ -148,6 +196,9 @@ export default function AllStatsScreen() {
         { label: "Crew Name", value: crew.name || "—" },
         { label: "Crew Division", value: crew.division, color: DIVISION_COLOR[crew.division] },
         { label: "Crew Power", value: crew.crewPower.toLocaleString("en-US") },
+        { label: "Global Rank", value: `#${crew.globalRank.toLocaleString("en-US")}` },
+        { label: "Region", value: crew.region || "—" },
+        { label: "Top % In Division", value: `Top ${crew.divisionTopPercentile}%` },
         { label: "Members", value: `${crew.members.length} / ${crew.maxMembers}` },
         { label: "Your Role", value: me ? me.role.charAt(0).toUpperCase() + me.role.slice(1) : "—" },
       ],
@@ -162,6 +213,10 @@ export default function AllStatsScreen() {
         </Pressable>
         <Text className="heading-4 text-text-primary">All Stats</Text>
       </View>
+
+      {snapshotAsOfMs != null && snapshotWeightKg != null && (
+        <SnapshotBanner asOfMs={snapshotAsOfMs} weightKg={snapshotWeightKg} weightUnit={weightUnit} onExit={clearSnapshot} />
+      )}
 
       <ScrollView
         className="flex-1"

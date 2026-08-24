@@ -84,14 +84,19 @@ export function bestWeek(workouts: CompletedWorkout[]): { weekKey: string; volum
  * weekly rather than daily because a per-day series is mostly zeros (rest days) and reads as noise
  * rather than a trend; summing by week smooths that out.
  */
-export function weeklyMetricSeries(workouts: CompletedWorkout[], metric: ChartMetric, weeks: number): { date: string; value: number }[] {
+export function weeklyMetricSeries(
+  workouts: CompletedWorkout[],
+  metric: ChartMetric,
+  weeks: number,
+  referenceDate: Date = new Date(),
+): { date: string; value: number }[] {
   const byWeek = new Map<string, number>();
   for (const workout of workouts) {
     const key = currentWeekKey(new Date(workout.completedAt));
     byWeek.set(key, (byWeek.get(key) ?? 0) + METRIC_VALUE[metric](workout));
   }
 
-  const today = new Date();
+  const today = referenceDate;
   const points: { date: string; value: number }[] = [];
   for (let i = weeks - 1; i >= 0; i--) {
     const reference = new Date(today);

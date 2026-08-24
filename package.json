@@ -7,7 +7,6 @@
     "@expo/ui": "~0.2.0-beta.9",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "body-muscles": "^1.0.0",
     "expo": "~54.0.36",
     "expo-auth-session": "~7.0.11",
     "expo-clipboard": "~8.0.8",
@@ -58,6 +57,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "build:web": "expo export --platform web",
     "lint": "expo lint"
   },
   "private": true,

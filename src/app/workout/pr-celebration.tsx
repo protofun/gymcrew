@@ -27,6 +27,22 @@ const wordmarkStyle = {
   transform: [{ skewX: "-10deg" }],
 };
 
+const exerciseNameStyle = {
+  fontFamily: fontFamily.heading,
+  fontSize: 28,
+  lineHeight: 30,
+  fontStyle: "italic" as const,
+  transform: [{ skewX: "-8deg" }],
+};
+
+const metricPillTextStyle = {
+  fontFamily: fontFamily.heading,
+  fontSize: 20,
+  lineHeight: 22,
+  fontStyle: "italic" as const,
+  transform: [{ skewX: "8deg" }],
+};
+
 export default function PrCelebrationScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -152,11 +168,15 @@ export default function PrCelebrationScreen() {
             entering={FadeInUp.delay(550).springify().damping(16)}
             className="items-center gap-2"
           >
-            <Text className="heading-3 text-center text-text-primary">{pr.exerciseName}</Text>
-            <Text className="heading-4 mt-1 text-text-primary">
-              {displayWeight}
-              {workout.unit} × {pr.reps} reps
+            <Text style={exerciseNameStyle} className="text-center text-text-primary">
+              {pr.exerciseName}
             </Text>
+            <View style={{ transform: [{ skewX: "-8deg" }] }} className="mt-1 border border-divider bg-surface px-6 py-2.5">
+              <Text style={metricPillTextStyle} className="text-text-primary">
+                {displayWeight}
+                {workout.unit} × {pr.reps} {pr.reps === 1 ? "rep" : "reps"}
+              </Text>
+            </View>
 
             {percentIncrease !== null && (
               <Animated.Text

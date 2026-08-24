@@ -1,13 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { InviteMembersModal } from "@/components/InviteMembersModal";
 import { MemberActionsSheet } from "@/components/MemberActionsSheet";
+import { FLEX_TAGS } from "@/data/flex-tags";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
+import { divisionForMemberLevel, type Division } from "@/lib/division";
+import { useCosmeticsStore } from "@/store/cosmetics-store";
 import { CURRENT_MEMBER_ID, useCrewStore, type CrewMember } from "@/store/crew-store";
+import { useProfileLevelStore } from "@/store/profile-level-store";
 import { colors } from "@/theme";
 
 const FILTERS = ["all", "admin", "online"] as const;
@@ -28,12 +33,16 @@ function inviteCodeFor(crewName: string): string {
 
 function MemberRow({
   member,
+  division,
+  flexTagEmoji,
   trainingLabel,
   canManage,
   onManage,
   onPress,
 }: {
   member: CrewMember;
+  division: Division;
+  flexTagEmoji?: string;
   trainingLabel: string | null;
   canManage: boolean;
   onManage: () => void;
@@ -48,7 +57,7 @@ function MemberRow({
       className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3"
     >
       <View>
-        <Image source={{ uri: member.avatarUrl }} className="rounded-full bg-divider" style={{ width: 44, height: 44 }} />
+        <DivisionAvatarFrame source={{ uri: member.avatarUrl }} division={division} size={44} />
         {member.isOnline && (
           <View
             className="absolute rounded-full border-2 border-surface bg-success"
@@ -60,6 +69,7 @@ function MemberRow({
       <View className="flex-1 gap-0.5">
         <View className="flex-row items-center gap-2">
           <Text className="body-md font-body-semibold text-text-primary">{member.name}</Text>
+          {flexTagEmoji && <Text style={{ fontSize: 13 }}>{flexTagEmoji}</Text>}
           {roleLabel && (
             <View className="rounded-full bg-background px-2 py-0.5">
               <Text className="caption text-text-secondary">{roleLabel}</Text>
@@ -103,9 +113,16 @@ export default function CrewMembersScreen() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [managingId, setManagingId] = useState<string | null>(null);
 
+  const myDivision = useProfileLevelStore((state) => state.division);
+  const equippedTagId = useCosmeticsStore((state) => state.equippedTagId);
+  const equippedFlexTag = FLEX_TAGS.find((tag) => tag.id === equippedTagId);
   const me = members.find((member) => member.id === CURRENT_MEMBER_ID);
   const iAmAdmin = me?.isAdmin ?? false;
   const managingMember = members.find((member) => member.id === managingId) ?? null;
+
+  function divisionFor(member: CrewMember): Division {
+    return member.id === CURRENT_MEMBER_ID ? myDivision : divisionForMemberLevel(member.level);
+  }
 
   function trainingLabelFor(member: CrewMember): string | null {
     if (member.id === CURRENT_MEMBER_ID) {
@@ -185,6 +202,8 @@ export default function CrewMembersScreen() {
             <MemberRow
               key={member.id}
               member={member}
+              division={divisionFor(member)}
+              flexTagEmoji={member.id === CURRENT_MEMBER_ID ? equippedFlexTag?.emoji : undefined}
               trainingLabel={trainingLabelFor(member)}
               canManage={iAmAdmin && member.id !== CURRENT_MEMBER_ID && member.role !== "leader"}
               onManage={() => setManagingId(member.id)}
