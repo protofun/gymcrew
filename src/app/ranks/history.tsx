@@ -1,16 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { RankBadge } from "@/components/RankBadge";
 import { EXERCISE_BY_ID, type Exercise } from "@/data/exercises";
+import { api, isApiConfigured } from "@/lib/api";
 import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards, type LiftRankCard } from "@/lib/lift-rank-cards";
 import { formatRankTier, RANK_TIER_COLOR, type RankProfile, type RankTier } from "@/lib/rank";
-import { rankHistoryForCard } from "@/lib/rank-history";
+import { realRankHistoryForLift, type RecordHistoryPoint } from "@/lib/rank-history";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore, type PersonalRecord } from "@/store/personal-records-store";
 import { colors } from "@/theme";
@@ -22,18 +23,18 @@ function formatHistoryDate(timestampMs: number): string {
   return new Date(timestampMs).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 }
 
-type HistoryLift = { name: string; tier: RankTier; bestWeightKg: number };
+type HistoryLift = { name: string; tier: RankTier; bestWeightKg: number; knownCard: LiftRankCard | null };
 
 /** Uses the precise 9-tracked-lift card when the picked exercise is one of them, falling back to
  * the muscle-group proxy (see generic-lift-rank.ts) for any of the other 800+. */
 function buildHistoryLift(exercise: Exercise, cards: LiftRankCard[], records: Record<string, PersonalRecord>, profile: RankProfile): HistoryLift {
-  const knownCard = cards.find((card) => card.exerciseId === exercise.id);
-  if (knownCard) return { name: knownCard.name, tier: knownCard.tier, bestWeightKg: knownCard.bestWeightKg };
+  const knownCard = cards.find((card) => card.exerciseId === exercise.id) ?? null;
+  if (knownCard) return { name: knownCard.name, tier: knownCard.tier, bestWeightKg: knownCard.bestWeightKg, knownCard };
 
   const bestWeightKg = records[exercise.id]?.bestWeightKg ?? 0;
   const bestReps = records[exercise.id]?.bestReps ?? 0;
   const detail = genericExerciseRankDetail(exercise, bestWeightKg, bestReps, profile);
-  return { name: exercise.name, tier: detail.tier, bestWeightKg };
+  return { name: exercise.name, tier: detail.tier, bestWeightKg, knownCard: null };
 }
 
 export default function RankHistoryScreen() {
@@ -58,9 +59,48 @@ export default function RankHistoryScreen() {
   }
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(resolveInitialExercise);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [recordHistory, setRecordHistory] = useState<RecordHistoryPoint[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(isApiConfigured);
 
   const lift = selectedExercise ? buildHistoryLift(selectedExercise, cards, records, profile) : null;
-  const history = useMemo(() => (lift ? rankHistoryForCard(lift) : []), [lift]);
+
+  // Every PR ever set for the picked exercise (see backend/routes/records.php) — refetched whenever
+  // the picked exercise changes, since the timeline is per-exercise.
+  useEffect(() => {
+    if (!selectedExercise || !isApiConfigured) {
+      setLoadingHistory(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingHistory(true);
+    api
+      .getRecordHistory(selectedExercise.id)
+      .then((points) => {
+        if (!cancelled) setRecordHistory(points);
+      })
+      .catch((error) => {
+        console.warn("Failed to load rank history from server", error);
+        if (!cancelled) setRecordHistory([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingHistory(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedExercise]);
+
+  const history = useMemo(() => {
+    if (!selectedExercise || !lift) return [];
+    const currentRecord = records[selectedExercise.id] ?? null;
+    return realRankHistoryForLift(
+      recordHistory,
+      currentRecord ? { weightKg: currentRecord.bestWeightKg, reps: currentRecord.bestReps, achievedAt: currentRecord.achievedAt } : null,
+      lift.knownCard,
+      lift.knownCard ? null : selectedExercise,
+      profile,
+    );
+  }, [selectedExercise, lift, recordHistory, records, profile]);
 
   if (!selectedExercise || !lift) {
     router.replace("/(tabs)/ranks");
@@ -95,12 +135,14 @@ export default function RankHistoryScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: insets.bottom + 32 }}
         showsVerticalScrollIndicator={false}
       >
-        {history.length === 1 ? (
+        {loadingHistory ? (
+          <View className="items-center py-10">
+            <ActivityIndicator color={colors.brand.yellow} />
+          </View>
+        ) : history.length === 0 ? (
           <View className="items-center gap-2 rounded-2xl border border-dashed border-divider px-6 py-10">
             <Ionicons name="time-outline" size={22} color={colors.neutral.textSecondary} />
-            <Text className="body-sm text-center text-text-secondary">
-              Still on your first tier for {lift.name} — rank-ups will show up here as you climb.
-            </Text>
+            <Text className="body-sm text-center text-text-secondary">No PR logged yet for {lift.name}.</Text>
           </View>
         ) : (
           history.map((entry, index) => {

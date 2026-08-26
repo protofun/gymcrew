@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { InviteMembersModal } from "@/components/InviteMembersModal";
 import { SearchableSelectField } from "@/components/SearchableSelectField";
@@ -13,11 +14,6 @@ import { CREW_TRAINING_TYPES } from "@/data/crew-training-types";
 import { useCrewStore, type CrewPrivacy } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
-
-function inviteCodeFor(crewName: string): string {
-  const slug = crewName.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 10) || "GYMCREW";
-  return `${slug}-CREW`;
-}
 
 const PRIVACY_LABEL: Record<CrewPrivacy, string> = {
   "invite-only": "Invite Only",
@@ -110,8 +106,10 @@ export default function CrewSettingsScreen() {
   const setMaxMembers = useCrewStore((state) => state.setMaxMembers);
   const toggleNotification = useCrewStore((state) => state.toggleNotification);
   const leaveCrew = useCrewStore((state) => state.leaveCrew);
+  const inviteCode = useCrewStore((state) => state.inviteCode);
   const resetCrewSelection = useOnboardingStore((state) => state.resetCrewSelection);
 
+  const [leaveConfirmVisible, setLeaveConfirmVisible] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
@@ -137,18 +135,14 @@ export default function CrewSettingsScreen() {
   }
 
   function handleLeaveCrew() {
-    Alert.alert("Leave Crew", `Are you sure you want to leave ${name}? You'll keep all your challenge points.`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Leave Crew",
-        style: "destructive",
-        onPress: () => {
-          leaveCrew();
-          resetCrewSelection();
-          router.replace("/build-crew");
-        },
-      },
-    ]);
+    setLeaveConfirmVisible(true);
+  }
+
+  async function confirmLeaveCrew() {
+    setLeaveConfirmVisible(false);
+    await leaveCrew();
+    resetCrewSelection();
+    router.replace("/build-crew");
   }
 
   return (
@@ -262,7 +256,17 @@ export default function CrewSettingsScreen() {
         </View>
       </SheetModal>
 
-      <InviteMembersModal visible={inviteOpen} onClose={() => setInviteOpen(false)} crewName={name} inviteCode={inviteCodeFor(name)} />
+      <InviteMembersModal visible={inviteOpen} onClose={() => setInviteOpen(false)} crewName={name} inviteCode={inviteCode} />
+
+      <ConfirmModal
+        visible={leaveConfirmVisible}
+        title="Leave Crew"
+        message={`Are you sure you want to leave ${name}? You'll keep all your challenge points.`}
+        confirmLabel="Leave Crew"
+        destructive
+        onConfirm={confirmLeaveCrew}
+        onCancel={() => setLeaveConfirmVisible(false)}
+      />
 
       <SheetModal visible={subscriptionOpen} onClose={() => setSubscriptionOpen(false)} title="Subscription">
         <View className="gap-4">

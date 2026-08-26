@@ -14,6 +14,7 @@ import { buildLiftRankCards } from "@/lib/lift-rank-cards";
 import { computeMuscleGroupRanks, type MuscleGroupRank } from "@/lib/muscle-group-rank";
 import { formatMuscleLabel } from "@/lib/muscle-groups";
 import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile } from "@/lib/rank";
+import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { CURRENT_MEMBER_ID, useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
@@ -197,6 +198,7 @@ export default function MuscleRankScreen() {
   const age = useOnboardingStore((state) => state.onboarding.age);
   const records = usePersonalRecordsStore((state) => state.records);
   const crewMembers = useCrewStore((state) => state.members);
+  const membersActivity = useCrewActivityStore((state) => state.membersActivity);
 
   const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
   const myCards = useMemo(() => buildLiftRankCards(records, profile, "gym"), [records, profile]);
@@ -204,12 +206,12 @@ export default function MuscleRankScreen() {
   const viewingOtherMember = !!memberId && memberId !== CURRENT_MEMBER_ID;
   const viewedMember = viewingOtherMember ? crewMembers.find((member) => member.id === memberId) : undefined;
   const cards = useMemo(
-    () => (viewingOtherMember ? memberLiftCards(memberId!, myCards) : myCards),
-    [viewingOtherMember, memberId, myCards],
+    () => (viewingOtherMember ? memberLiftCards(memberId!, myCards, membersActivity) : myCards),
+    [viewingOtherMember, memberId, myCards, membersActivity],
   );
   const ranksByGroup = useMemo(
-    () => (viewingOtherMember ? muscleGroupRanksForCrewMember(memberId!, myCards) : computeMuscleGroupRanks(cards)),
-    [viewingOtherMember, memberId, myCards, cards],
+    () => (viewingOtherMember ? muscleGroupRanksForCrewMember(memberId!, myCards, membersActivity) : computeMuscleGroupRanks(cards)),
+    [viewingOtherMember, memberId, myCards, cards, membersActivity],
   );
 
   const tierIndexByGroup: Partial<Record<MuscleGroup, number>> = {};

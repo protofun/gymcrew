@@ -14,22 +14,43 @@ import { StatTile } from "@/components/StatTile";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
 import { VisualTrainingCalendar, type CalendarWorkout } from "@/components/VisualTrainingCalendar";
 import { EXERCISE_BY_ID, type Exercise } from "@/data/exercises";
-import { generateMemberWorkoutSessions, type MuscleGroup } from "@/data/workout-log";
+import type { MuscleGroup } from "@/data/workout-log";
 import { memberLiftCards, muscleGroupRanksForCrewMember, profileForCrewMember } from "@/lib/crew-lift-compare";
-import { fromDateKey, isSameMonth, startOfMonth } from "@/lib/date";
-import { divisionForMemberLevel, type Division } from "@/lib/division";
+import { isSameMonth, startOfMonth } from "@/lib/date";
+import { xpRequiredFor, type Division } from "@/lib/division";
 import { tierForExercise } from "@/lib/generic-lift-rank";
-import { buildLiftRankCards } from "@/lib/lift-rank-cards";
-import { memberAchievements, memberStats, memberStrengthProgress, memberXp } from "@/lib/member-mock-profile";
+import { buildLiftRankCards, type LiftRankCard } from "@/lib/lift-rank-cards";
+import { memberAchievements } from "@/lib/member-mock-profile";
 import { realMemberAchievements, realMemberStats, realStrengthProgress } from "@/lib/member-real-profile";
 import { computeMuscleGroupRanks, type MuscleGroupRank } from "@/lib/muscle-group-rank";
 import { formatRankTier, MAJOR_LIFT_EXERCISE_IDS, RANK_TIER_COLOR, RANK_TIERS, type RankProfile } from "@/lib/rank";
-import { CURRENT_MEMBER_ID, useCrewStore, type CrewMember, type CrewRole } from "@/store/crew-store";
+import { useCrewActivityStore } from "@/store/crew-activity-store";
+import {
+  BRO_MEMBER_ID,
+  CURRENT_MEMBER_ID,
+  GLUTE_ONLY_MEMBER_ID,
+  LEE_PRIEST_MEMBER_ID,
+  useCrewStore,
+  type CrewMember,
+  type CrewRole,
+} from "@/store/crew-store";
 import { useOnboardingStore, type Gender } from "@/store/onboarding-store";
-import { usePersonalRecordsStore } from "@/store/personal-records-store";
+import { usePersonalRecordsStore, type PersonalRecord } from "@/store/personal-records-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
-import { useWorkoutHistoryStore } from "@/store/workout-history-store";
+import { useWorkoutHistoryStore, type CompletedWorkout } from "@/store/workout-history-store";
 import { colors } from "@/theme";
+
+/** Real Clerk crew members never have one of these curated "boss" ids (see crew-store.ts) — only
+ * an explicit Developer Mode demo tool would ever add one. Keeps the curated comparisons (Lee
+ * Priest, Bro, Peach) working exactly as before; every real crewmate uses their real data below. */
+function isCuratedMember(memberId: string): boolean {
+  return memberId === LEE_PRIEST_MEMBER_ID || memberId === BRO_MEMBER_ID || memberId === GLUTE_ONLY_MEMBER_ID;
+}
+
+// Stable empty fallbacks — a fresh `{}`/`[]` literal on every render (before a crewmate's activity
+// has loaded) would otherwise change identity each time and defeat the useMemo below.
+const NO_WORKOUTS: CompletedWorkout[] = [];
+const NO_RECORDS: Record<string, PersonalRecord> = {};
 
 const TABS = ["Overview", "Workouts", "Stats", "Achievements"] as const;
 type Tab = (typeof TABS)[number];
@@ -69,7 +90,10 @@ function OverviewTab({
   achievements: ReturnType<typeof memberAchievements>;
   onSeeAllAchievements: () => void;
 }) {
-  const { xp, xpToNextLevel } = memberXp(member);
+  // Real XP/division from the backend (see crew-store.ts's CrewMember doc comment) — `member.level`
+  // is their real current-division XP, directly comparable to `xpRequiredFor`, same as "me" everywhere else.
+  const xp = member.level;
+  const xpToNextLevel = xpRequiredFor(division);
   const roleLabel = ROLE_LABEL[member.role];
 
   return (
@@ -302,65 +326,63 @@ export default function MemberProfileScreen() {
   const members = useCrewStore((state) => state.members);
   const member = members.find((candidate) => candidate.id === id);
   const isMe = id === CURRENT_MEMBER_ID;
+  const isCurated = !isMe && Boolean(member) && isCuratedMember(member!.id);
+  // Real division from the backend (see crew-store.ts's CrewMember doc comment) — never derived
+  // from `level`, which is real total XP, not the old mock 1-30 "level" scale.
   const myDivision = useProfileLevelStore((state) => state.division);
-  const memberDivision = isMe ? myDivision : divisionForMemberLevel(member?.level ?? 1);
+  const memberDivision = isMe ? myDivision : (member?.division ?? "Rookie");
 
   const realWorkouts = useWorkoutHistoryStore((state) => state.workouts);
   const realRecords = usePersonalRecordsStore((state) => state.records);
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
   const age = useOnboardingStore((state) => state.onboarding.age);
-  // Crew members have no real tracked gender (only mock data) — only "me" gets my real silhouette.
-  const displayGender: Gender = isMe ? gender : "male";
+  const membersActivity = useCrewActivityStore((state) => state.membersActivity);
+  const otherActivity = member ? membersActivity[member.id] : undefined;
+  const otherWorkouts = otherActivity?.recentWorkouts ?? NO_WORKOUTS;
+  const otherRecords = otherActivity?.records ?? NO_RECORDS;
+  // A real crewmate's real gender/bodyweight (see backend/routes/crews.php) once it's loaded;
+  // curated "boss" members keep their own fixed profile either way.
+  const displayGender: Gender = isMe ? gender : (otherActivity?.profile.gender ?? "male");
 
-  const mockSessions = useMemo(() => generateMemberWorkoutSessions(member?.id ?? id ?? "member"), [member?.id, id]);
-
-  const stats = isMe ? realMemberStats(realWorkouts) : memberStats(mockSessions);
-  const achievements = isMe ? realMemberAchievements(realRecords) : memberAchievements(mockSessions);
-  const strengthByExercise = isMe ? realStrengthProgress(realWorkouts) : memberStrengthProgress(mockSessions);
+  const stats = isMe ? realMemberStats(realWorkouts) : realMemberStats(otherWorkouts);
+  const achievements = isMe ? realMemberAchievements(realRecords) : realMemberAchievements(otherRecords);
+  const strengthByExercise = isMe ? realStrengthProgress(realWorkouts) : realStrengthProgress(otherWorkouts);
 
   const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
+  const otherProfile: RankProfile = useMemo(
+    () => ({ gender: otherActivity?.profile.gender ?? "male", bodyWeightKg: otherActivity?.profile.weightKg ?? 85 }),
+    [otherActivity],
+  );
   const myCards = useMemo(() => buildLiftRankCards(realRecords, profile, "gym"), [realRecords, profile]);
+  const otherCards = useMemo(() => buildLiftRankCards(otherRecords, otherProfile, "gym"), [otherRecords, otherProfile]);
+
   const muscleRanks = useMemo(() => {
     if (!member) return {};
-    return isMe ? computeMuscleGroupRanks(myCards) : muscleGroupRanksForCrewMember(member.id, myCards);
-  }, [member, isMe, myCards]);
+    if (isMe) return computeMuscleGroupRanks(myCards);
+    if (isCurated) return muscleGroupRanksForCrewMember(member.id, myCards, membersActivity);
+    return computeMuscleGroupRanks(otherCards);
+  }, [member, isMe, isCurated, myCards, otherCards, membersActivity]);
 
-  // The exercise-picker medal below is the pictured member's own rank, not always mine — for
-  // anyone else that means their curated/mock lift cards and profile, and no real PR records (they
-  // have none), so an untracked exercise falls back to Rookie same as everywhere else in the app.
-  const pickerCards = useMemo(() => (isMe ? myCards : memberLiftCards(member?.id ?? "", myCards)), [isMe, member, myCards]);
-  const pickerProfile = isMe ? profile : profileForCrewMember(member?.id ?? "");
-  const pickerRecords = isMe ? realRecords : {};
+  // The exercise-picker medal below is the pictured member's own rank, not always mine — a real
+  // crewmate's own real lift cards/profile/records, or the curated set for a "boss" comparison.
+  const pickerCards: LiftRankCard[] = isMe ? myCards : isCurated ? memberLiftCards(member?.id ?? "", myCards, membersActivity) : otherCards;
+  const pickerProfile = isMe ? profile : isCurated ? profileForCrewMember(member?.id ?? "") : otherProfile;
+  const pickerRecords = isMe ? realRecords : isCurated ? {} : otherRecords;
 
   const [selectedExercise, setSelectedExercise] = useState<Exercise>(() => EXERCISE_BY_ID[MAJOR_LIFT_EXERCISE_IDS.benchPress]);
   const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
 
-  const workoutEntries: SimpleWorkoutEntry[] = isMe
-    ? realWorkouts.map((workout) => ({
-        id: workout.id,
-        name: workout.name,
-        date: new Date(workout.completedAt),
-        subtitle: `${workout.completedSets} sets · ${workout.volumeKg.toLocaleString("en-US")} ${workout.unit}`,
-        hasPr: workout.prs.length > 0,
-      }))
-    : Object.entries(mockSessions).map(([dateKey, session]) => ({
-        id: dateKey,
-        name: session.name,
-        date: fromDateKey(dateKey),
-        subtitle: `${session.exercises} exercises · ${session.volumeKg.toLocaleString("en-US")} kg`,
-        hasPr: achievements.some((achievement) => achievement.id.endsWith(dateKey)),
-      }));
+  const workoutsForEntries = isMe ? realWorkouts : otherWorkouts;
+  const workoutEntries: SimpleWorkoutEntry[] = workoutsForEntries.map((workout) => ({
+    id: workout.id,
+    name: workout.name,
+    date: new Date(workout.completedAt),
+    subtitle: `${workout.completedSets} sets · ${workout.volumeKg.toLocaleString("en-US")} ${workout.unit}`,
+    hasPr: workout.prs.length > 0,
+  }));
 
-  // Mock sessions have no real workout id to open a summary screen for, so the calendar renders
-  // (and is worth showing — it's the whole point of the ask), but isn't tappable for anyone but "me".
-  const calendarWorkouts: CalendarWorkout[] = isMe
-    ? realWorkouts
-    : Object.entries(mockSessions).map(([dateKey, session]) => ({
-        id: dateKey,
-        completedAt: fromDateKey(dateKey).getTime(),
-        muscleIntensity: session.muscleIntensity,
-      }));
+  const calendarWorkouts: CalendarWorkout[] = workoutsForEntries;
 
   if (!member) {
     return (

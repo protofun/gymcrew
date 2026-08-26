@@ -9,7 +9,6 @@ import { SearchableSelectField } from "@/components/SearchableSelectField";
 import { images } from "@/constants/images";
 import { CREW_ICONS } from "@/data/crew-icons";
 import { CREW_TRAINING_TYPES } from "@/data/crew-training-types";
-import { EXISTING_CREWS } from "@/data/crews";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
@@ -24,11 +23,6 @@ export default function CreateCrewScreen() {
     const trimmedName = crewName.trim();
     if (!trimmedName) {
       setNameError("Enter a crew name.");
-      return;
-    }
-    const nameTaken = EXISTING_CREWS.some((crew) => crew.name.toLowerCase() === trimmedName.toLowerCase());
-    if (nameTaken) {
-      setNameError("This crew name is already taken.");
       return;
     }
     setNameError(null);

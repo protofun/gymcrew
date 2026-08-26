@@ -8,16 +8,17 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { RankBadge } from "@/components/RankBadge";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
 import { EXERCISE_BY_ID } from "@/data/exercises";
-import { MOCK_WORKOUT_SESSIONS } from "@/data/workout-log";
 import { crewLiftStandings, type CrewLiftStanding } from "@/lib/crew-lift-compare";
 import { fromDateKey } from "@/lib/date";
 import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards, SCORE_PER_BODYWEIGHT_RATIO, type LiftRankCard } from "@/lib/lift-rank-cards";
-import { memberStrengthProgress } from "@/lib/member-mock-profile";
+import { realStrengthProgress } from "@/lib/member-real-profile";
 import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
+import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
+import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
 
 const RANGE_OPTIONS = [
@@ -82,6 +83,8 @@ export default function LiftRankDetailScreen() {
   const age = useOnboardingStore((state) => state.onboarding.age);
   const records = usePersonalRecordsStore((state) => state.records);
   const crewMembers = useCrewStore((state) => state.members);
+  const membersActivity = useCrewActivityStore((state) => state.membersActivity);
+  const myWorkouts = useWorkoutHistoryStore((state) => state.workouts);
 
   const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
   // "Gym" scope, same as the rank page's default — this detail view doesn't have its own toggle yet.
@@ -121,8 +124,11 @@ export default function LiftRankDetailScreen() {
       : null;
 
   const standings = useMemo(
-    () => (knownCard ? crewLiftStandings(knownCard.id, knownCard, crewMembers) : []),
-    [knownCard, crewMembers],
+    () =>
+      knownCard
+        ? crewLiftStandings(knownCard.id, knownCard, records[knownCard.exerciseId], crewMembers, membersActivity)
+        : [],
+    [knownCard, records, crewMembers, membersActivity],
   );
 
   if (!card) {
@@ -136,7 +142,7 @@ export default function LiftRankDetailScreen() {
   const tierIndex = RANK_TIERS.indexOf(card.tier);
   const nextTier = tierIndex < RANK_TIERS.length - 1 ? RANK_TIERS[tierIndex + 1] : null;
 
-  const rawTrendPoints = memberStrengthProgress(MOCK_WORKOUT_SESSIONS)[card.name] ?? [];
+  const rawTrendPoints = realStrengthProgress(myWorkouts)[card.name] ?? [];
   const rangeDays = RANGE_OPTIONS.find((option) => option.key === range)?.days ?? null;
   const trendPoints = rangeDays
     ? rawTrendPoints.filter((point) => Date.now() - fromDateKey(point.date).getTime() <= rangeDays * 86400000)

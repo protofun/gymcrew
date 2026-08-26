@@ -8,12 +8,12 @@ import { ChallengeCard } from "@/components/ChallengeCard";
 import { CreateChallengeModal } from "@/components/CreateChallengeModal";
 import { activeWeeklyChallenges, CHALLENGE_XP_REWARD, upcomingWeeklyChallenges, type ChallengeTemplate } from "@/data/challenges";
 import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
-import { generateMemberWorkoutSessions } from "@/data/workout-log";
 import { crewChallengeProgress, simulatedOpponentProgress, weekKeyRange } from "@/lib/challenge-progress";
 import { sameDivisionRivals, type RivalCrewInput } from "@/lib/crew-league";
 import { currentWeekKey, fromDateKey, toDateKey } from "@/lib/date";
 import { divisionIndex } from "@/lib/division";
 import { useChallengeStore } from "@/store/challenge-store";
+import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewStore } from "@/store/crew-store";
 import { TOKENS_PER_BATTLE_WIN, TOKENS_PER_CHALLENGE_COMPLETE, useCurrencyStore } from "@/store/currency-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
@@ -68,6 +68,8 @@ export function ChallengesTab() {
   const markBattleWinAwarded = useChallengeStore((state) => state.markBattleWinAwarded);
   const createCustomChallenge = useChallengeStore((state) => state.createCustomChallenge);
   const grantTokens = useCurrencyStore((state) => state.grantTokens);
+  const membersActivity = useCrewActivityStore((state) => state.membersActivity);
+  const memberActivityLookup = (memberId: string) => membersActivity[memberId] ?? { recentWorkouts: [], records: {} };
 
   const rivalCrews: RivalCrewInput[] = sameDivisionRivals(OTHER_CREWS_POWER, crewDivision);
   const canIssueBattle = divisionIndex(personalDivision) >= divisionIndex(BATTLE_LEADER_MIN_DIVISION);
@@ -79,7 +81,7 @@ export function ChallengesTab() {
   const weekly = activeWeeklyChallenges(weekKey).map((challenge) => {
     const myContribution = progress[challenge.instanceId] ?? 0;
     const target = challenge.perMemberTarget * members.length;
-    const total = crewChallengeProgress(challenge.metric, members, myContribution, startKey, endKey, generateMemberWorkoutSessions);
+    const total = crewChallengeProgress(challenge.metric, members, myContribution, startKey, endKey, memberActivityLookup);
     const isComplete = total >= target || Date.now() > weekEndsAt;
     return {
       key: challenge.instanceId,
@@ -99,7 +101,7 @@ export function ChallengesTab() {
     const myContribution = progress[challenge.id] ?? 0;
     const startKeyC = toDateKey(new Date(challenge.startedAt));
     const endKeyC = toDateKey(new Date(challenge.endsAt));
-    const total = crewChallengeProgress(challenge.metric, members, myContribution, startKeyC, endKeyC, generateMemberWorkoutSessions);
+    const total = crewChallengeProgress(challenge.metric, members, myContribution, startKeyC, endKeyC, memberActivityLookup);
     const isComplete = total >= challenge.target || Date.now() > challenge.endsAt;
     const opponentProgress = simulatedOpponentProgress(challenge.id, challenge.target, challenge.startedAt, challenge.endsAt);
     return {

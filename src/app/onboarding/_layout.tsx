@@ -1,35 +1,33 @@
-import { useAuth } from "@clerk/expo";
+import { useAuth, useUser } from "@clerk/expo";
 import { Redirect, Stack } from "expo-router";
-import { useEffect, useState } from "react";
 
+import { useClerkFlagSync } from "@/hooks/use-clerk-flag-sync";
 import { getPostAuthRedirect } from "@/lib/onboarding-gate";
 import { useOnboardingStore } from "@/store/onboarding-store";
 
 export default function OnboardingLayout() {
   const { isLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
   const hasCompletedOnboarding = useOnboardingStore((state) => state.hasCompletedOnboarding);
   const hasCompletedCrewSelection = useOnboardingStore((state) => state.hasCompletedCrewSelection);
-  const [backendChecked, setBackendChecked] = useState(false);
+  const completeOnboarding = useOnboardingStore((state) => state.completeOnboarding);
+  const completeCrewSelection = useOnboardingStore((state) => state.completeCrewSelection);
 
-  // Same gap as app/index.tsx: a signed-in account with no local "completed" flag might just be
-  // landing here directly (e.g. a relaunched PWA resuming its last URL) on a device that's never
-  // synced with the backend yet — check before trapping them in the wizard. See
-  // store/onboarding-store.ts's syncProfileFromServer for the "no-op without a backend" behavior.
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn || hasCompletedOnboarding) {
-      setBackendChecked(true);
-      return;
-    }
-    useOnboardingStore
-      .getState()
-      .syncProfileFromServer()
-      .finally(() => setBackendChecked(true));
-  }, [isLoaded, isSignedIn, hasCompletedOnboarding]);
+  // Same check as app/index.tsx — a signed-in account might land here directly (e.g. a relaunched
+  // PWA resuming its last URL) on a device that's never seen this account before locally. See
+  // hooks/use-clerk-flag-sync.ts / lib/clerk.ts.
+  const clerkOnboarded = user?.unsafeMetadata?.hasCompletedOnboarding === true;
+  const clerkCrewSelected = user?.unsafeMetadata?.hasCompletedCrewSelection === true;
+  useClerkFlagSync(Boolean(isSignedIn), hasCompletedOnboarding, clerkOnboarded, completeOnboarding);
+  useClerkFlagSync(Boolean(isSignedIn), hasCompletedCrewSelection, clerkCrewSelected, completeCrewSelection);
 
-  if (!isLoaded || !backendChecked) return null;
+  if (!isLoaded) return null;
 
   if (isSignedIn) {
-    const redirect = getPostAuthRedirect({ hasCompletedOnboarding, hasCompletedCrewSelection });
+    const redirect = getPostAuthRedirect({
+      hasCompletedOnboarding: hasCompletedOnboarding || clerkOnboarded,
+      hasCompletedCrewSelection: hasCompletedCrewSelection || clerkCrewSelected,
+    });
     if (redirect !== "/onboarding") return <Redirect href={redirect ?? "/"} />;
   }
 

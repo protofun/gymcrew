@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useMemo } from "react";
-import { ScrollView, View } from "react-native";
+import { ActivityIndicator, ScrollView, View } from "react-native";
 import { usePostHog } from "posthog-react-native";
 
 import { CrewCard } from "@/components/CrewCard";
@@ -12,9 +12,12 @@ import { WelcomeWidget } from "@/components/WelcomeWidget";
 import { deriveWorkoutSessions } from "@/lib/workout-sessions";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
+import { useSyncStatusStore } from "@/store/sync-status-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
+import { colors } from "@/theme";
 
 export default function HomeScreen() {
+  const hasSyncedOnce = useSyncStatusStore((state) => state.hasSyncedOnce);
   const fullName = useOnboardingStore((state) => state.onboarding.fullName);
   const firstName = fullName?.trim().split(" ")[0] || "Athlete";
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
@@ -28,6 +31,17 @@ export default function HomeScreen() {
     startWorkout();
     posthog.capture("workout_started", { source: "home" });
     router.push("/workout/active");
+  }
+
+  // Blocks on the real database pull (see (tabs)/_layout.tsx and sync-status-store.ts) rather than
+  // ever showing whatever happens to be sitting in local storage as if it were confirmed — a stale
+  // or wrong-account local cache must never flash on screen even for a moment.
+  if (!hasSyncedOnce) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background">
+        <ActivityIndicator size="large" color={colors.brand.yellow} />
+      </View>
+    );
   }
 
   return (

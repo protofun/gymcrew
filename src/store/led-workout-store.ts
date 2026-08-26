@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { pullState, pushState } from "@/lib/backend-sync";
+
 export type LedWorkoutSession = {
   leaderId: string;
   leaderName: string;
@@ -12,11 +14,15 @@ export type LedWorkoutSession = {
   startedAt: number;
 };
 
-type LedWorkoutStore = {
+type LedWorkoutSyncedState = {
   session: LedWorkoutSession | null;
+};
+
+type LedWorkoutStore = LedWorkoutSyncedState & {
   startSession: (leaderId: string, leaderName: string, workoutName: string, exerciseIds: string[]) => void;
   join: (memberId: string) => void;
   endSession: () => void;
+  syncFromServer: () => Promise<void>;
 };
 
 // Seeded so "Join a Workout" has something real to show before the user ever leads one themselves.
@@ -31,16 +37,25 @@ const DEFAULT_SESSION: LedWorkoutSession = {
 
 export const useLedWorkoutStore = create<LedWorkoutStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       session: DEFAULT_SESSION,
-      startSession: (leaderId, leaderName, workoutName, exerciseIds) =>
-        set({ session: { leaderId, leaderName, workoutName, exerciseIds, participantIds: [leaderId], startedAt: Date.now() } }),
-      join: (memberId) =>
+      startSession: (leaderId, leaderName, workoutName, exerciseIds) => {
+        const session = { leaderId, leaderName, workoutName, exerciseIds, participantIds: [leaderId], startedAt: Date.now() };
+        set({ session });
+        pushState("led-workout", { session });
+      },
+      join: (memberId) => {
         set((state) => {
           if (!state.session || state.session.participantIds.includes(memberId)) return {};
           return { session: { ...state.session, participantIds: [...state.session.participantIds, memberId] } };
-        }),
-      endSession: () => set({ session: null }),
+        });
+        pushState("led-workout", { session: get().session });
+      },
+      endSession: () => {
+        set({ session: null });
+        pushState("led-workout", { session: null });
+      },
+      syncFromServer: () => pullState<LedWorkoutSyncedState>("led-workout", (data) => set(data)),
     }),
     {
       name: "gymcrew-led-workout",

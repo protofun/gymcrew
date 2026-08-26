@@ -1,7 +1,7 @@
 import { useAuth, useSignIn } from "@clerk/expo";
 import { useSSO } from "@clerk/expo/experimental";
 import { Ionicons } from "@expo/vector-icons";
-import { Link, router } from "expo-router";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
 import { usePostHog } from "posthog-react-native";
@@ -11,6 +11,7 @@ import { AuthHeader } from "@/components/AuthHeader";
 import { FormField } from "@/components/FormField";
 import { SocialAuthButton } from "@/components/SocialAuthButton";
 import { useWarmUpBrowser } from "@/hooks/use-warm-up-browser";
+import { waitForAuthToken } from "@/lib/api";
 import { getClerkErrorMessage } from "@/lib/clerk";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
@@ -18,8 +19,11 @@ import { colors } from "@/theme";
 /** After a real sign-in (not sign-up), pulls this account's backend profile — `syncProfileFromServer`
  * itself marks onboarding complete when that profile already has real data, so a returning user
  * isn't dragged through the wizard again just because this device's local storage is fresh. Falls
- * back to the normal "/onboarding" gate if there's no backend data yet. */
+ * back to the normal "/onboarding" gate if there's no backend data yet. Waits for a real session
+ * first (see `waitForAuthToken`) — without it, the sync below can silently no-op ("not signed in")
+ * even though sign-in just reported success. */
 async function resumeAsReturningUser() {
+  await waitForAuthToken();
   await useOnboardingStore.getState().syncProfileFromServer();
   router.replace("/");
 }
@@ -135,11 +139,9 @@ export default function SignInScreen() {
 
           <View className="flex-row justify-center gap-1">
             <Text className="body-md text-text-secondary">Don&apos;t have an account?</Text>
-            <Link href="/sign-up" asChild>
-              <Pressable hitSlop={8}>
-                <Text className="body-md text-brand-yellow">Sign up</Text>
-              </Pressable>
-            </Link>
+            <Pressable hitSlop={8} onPress={() => router.push("/sign-up")}>
+              <Text className="body-md text-brand-yellow">Sign up</Text>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

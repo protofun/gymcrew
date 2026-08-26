@@ -3,7 +3,6 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { api, isApiConfigured } from "@/lib/api";
-import { DEMO_BODY_LOG } from "@/lib/demo-seed";
 
 export type BodyLogEntry = {
   id: string;
@@ -27,7 +26,7 @@ type BodyLogStore = {
 export const useBodyLogStore = create<BodyLogStore>()(
   persist(
     (set) => ({
-      entries: DEMO_BODY_LOG,
+      entries: [],
       addEntry: (entry) => {
         const newEntry: BodyLogEntry = { ...entry, id: `body-log-${Date.now()}`, loggedAt: Date.now() };
         set((state) => ({ entries: [newEntry, ...state.entries] }));
@@ -54,17 +53,11 @@ export const useBodyLogStore = create<BodyLogStore>()(
     {
       name: "gymcrew-body-log",
       storage: createJSONStorage(() => AsyncStorage),
-      // A brand new account ships with a year of weekly demo weigh-ins (see lib/demo-seed.ts) so
-      // the Body Log chart isn't empty — the moment a real entry exists, it always wins. Once a
-      // backend is configured, `syncFromServer` takes over as the real source of truth.
-      merge: (persistedState, currentState) => {
-        const persisted = (persistedState as Partial<BodyLogStore> | undefined) ?? {};
-        return {
-          ...currentState,
-          ...persisted,
-          entries: persisted.entries && persisted.entries.length > 0 ? persisted.entries : currentState.entries,
-        };
-      },
+      // Bumped once to hard-discard any locally cached demo/seed weigh-ins from before this app
+      // stopped shipping fake weekly entries by default — only real entries and whatever the
+      // database actually has (via `syncFromServer`) count from here on.
+      version: 1,
+      migrate: () => ({ entries: [] }),
     },
   ),
 );

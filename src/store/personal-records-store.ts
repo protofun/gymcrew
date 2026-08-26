@@ -3,7 +3,6 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { api, isApiConfigured } from "@/lib/api";
-import { DEMO_RECORDS } from "@/lib/demo-seed";
 
 export type PersonalRecord = {
   exerciseId: string;
@@ -12,11 +11,6 @@ export type PersonalRecord = {
   bestReps: number;
   achievedAt: number;
 };
-
-// Starter PRs, one per exercise in the year-long demo history (see lib/demo-seed.ts) — a fresh
-// account's Ranks tab and Achievements page already look like real, established progress instead
-// of empty. A real logged set that beats one of these overwrites it via `checkAndRecord`.
-const DEFAULT_RECORDS: Record<string, PersonalRecord> = DEMO_RECORDS;
 
 type PrCheckResult = {
   isNewRecord: boolean;
@@ -40,7 +34,7 @@ type PersonalRecordsStore = {
 export const usePersonalRecordsStore = create<PersonalRecordsStore>()(
   persist(
     (set, get) => ({
-      records: DEFAULT_RECORDS,
+      records: {},
       checkAndRecord: (exerciseId, exerciseName, weightKg, reps) => {
         const previous = get().records[exerciseId];
         const previousBestKg = previous?.bestWeightKg ?? null;
@@ -76,18 +70,11 @@ export const usePersonalRecordsStore = create<PersonalRecordsStore>()(
     {
       name: "gymcrew-personal-records",
       storage: createJSONStorage(() => AsyncStorage),
-      // A plain shallow merge would let an already-persisted `records` object (even one missing
-      // some of the four major lifts, e.g. from before DEFAULT_RECORDS existed) replace the whole
-      // thing and drop the starter meme data. This merges per-lift instead — DEFAULT_RECORDS is the
-      // floor, but a real logged PR for that same lift still wins since it's spread on top.
-      merge: (persistedState, currentState) => {
-        const persisted = (persistedState as Partial<PersonalRecordsStore> | undefined) ?? {};
-        return {
-          ...currentState,
-          ...persisted,
-          records: { ...DEFAULT_RECORDS, ...(persisted.records ?? {}) },
-        };
-      },
+      // Bumped once to hard-discard any locally cached demo/seed records from before this app
+      // stopped shipping fake starter PRs by default — only real logged PRs and whatever the
+      // database actually has (via `syncFromServer`) count from here on.
+      version: 1,
+      migrate: () => ({ records: {} }),
     },
   ),
 );

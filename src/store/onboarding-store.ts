@@ -3,6 +3,8 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { api, isApiConfigured } from "@/lib/api";
+import { pullState, pushState } from "@/lib/backend-sync";
+import { markClerkAccountCrewSelected, markClerkAccountOnboarded } from "@/lib/clerk";
 import type { Weekday } from "@/data/weekdays";
 import type { WeightUnit } from "@/store/active-workout-store";
 
@@ -38,9 +40,11 @@ type OnboardingData = {
   marketingTips: boolean;
 };
 
-/** The subset of OnboardingData that also lives in the backend `users` table (see
- * backend/routes/profile.php) — everything else (crew choice, notification toggles, the weekly
- * schedule, ...) stays device-local for now. */
+/** The subset of OnboardingData that's also broken out into real columns on the backend `users`
+ * table (see backend/routes/profile.php) — handy for anything that ever needs to query/browse
+ * profiles directly (e.g. via phpMyAdmin). The *complete* onboarding answers (every field on
+ * OnboardingData, not just this subset) are separately synced wholesale as one JSON blob — see
+ * `setOnboardingData`/`syncProfileFromServer` below and backend/routes/state.php. */
 const PROFILE_SYNC_KEYS = ["fullName", "gender", "heightCm", "weightKg", "age", "gymName", "goal", "experienceLevel"] as const;
 
 function pickDefined<T extends object, K extends keyof T>(obj: T, keys: readonly K[]): Partial<Pick<T, K>> {
@@ -78,11 +82,25 @@ type OnboardingStore = {
   /** Sends the user back through the crew choose/create/join flow — e.g. after leaving their crew. */
   resetCrewSelection: () => void;
   setWeightUnit: (unit: WeightUnit) => void;
-  /** Pulls the real backend profile once a backend is configured and reachable, merging in only
-   * the fields the backend actually has a value for — a brand-new backend row (all nulls) never
+  /** Pulls the real backend profile once a backend is configured and reachable — both the "core"
+   * columns (fast, queryable) and the complete onboarding-answers blob — merging in only the
+   * fields the backend actually has a value for, so a brand-new backend row (all nulls) never
    * blanks out onboarding data the wizard already collected locally. */
   syncProfileFromServer: () => Promise<void>;
+  /** Re-pushes everything the wizard collected so far. The wizard runs entirely *before* sign-up —
+   * every push during it (see `setOnboardingData`/`setCrewData` above) silently fails with "not
+   * signed in" (no session exists yet) and gets swallowed by its own `.catch()`. Call this once,
+   * right after sign-up actually completes and a session exists (see sign-up.tsx), so that
+   * already-collected data doesn't just vanish into local storage. */
+  pushAllOnboardingData: () => void;
 };
+
+type OnboardingBlob = { onboarding: Partial<OnboardingData>; crew: Partial<CrewData>; weightUnit: WeightUnit };
+
+function pushOnboardingBlob(get: () => OnboardingStore) {
+  const { onboarding, crew, weightUnit } = get();
+  pushState("onboarding-full", { onboarding, crew, weightUnit });
+}
 
 export const useOnboardingStore = create<OnboardingStore>()(
   persist(
@@ -96,6 +114,7 @@ export const useOnboardingStore = create<OnboardingStore>()(
       weightUnit: "kg",
       setOnboardingData: (data) => {
         set((state) => ({ onboarding: { ...state.onboarding, ...data } }));
+        pushOnboardingBlob(get);
 
         if (isApiConfigured) {
           const profileUpdate = pickDefined(data, PROFILE_SYNC_KEYS);
@@ -104,13 +123,37 @@ export const useOnboardingStore = create<OnboardingStore>()(
           }
         }
       },
-      completeOnboarding: () => set({ hasCompletedOnboarding: true }),
-      setCrewData: (data) => set((state) => ({ crew: { ...state.crew, ...data } })),
-      completeCrewSelection: () => set({ hasCompletedCrewSelection: true }),
+      completeOnboarding: () => {
+        set({ hasCompletedOnboarding: true });
+        // No-op if nobody's signed in yet (e.g. mid-wizard, before account creation) — the
+        // sign-up screen calls this again once a real account exists, which is what actually
+        // persists it. See lib/clerk.ts.
+        void markClerkAccountOnboarded();
+      },
+      setCrewData: (data) => {
+        set((state) => ({ crew: { ...state.crew, ...data } }));
+        pushOnboardingBlob(get);
+      },
+      completeCrewSelection: () => {
+        set({ hasCompletedCrewSelection: true });
+        void markClerkAccountCrewSelected();
+      },
       resetCrewSelection: () => set({ hasCompletedCrewSelection: false }),
-      setWeightUnit: (weightUnit) => set({ weightUnit }),
+      setWeightUnit: (weightUnit) => {
+        set({ weightUnit });
+        pushOnboardingBlob(get);
+      },
       syncProfileFromServer: async () => {
         if (!isApiConfigured) return;
+
+        await pullState<OnboardingBlob>("onboarding-full", (data) => {
+          set((state) => ({
+            onboarding: { ...state.onboarding, ...data.onboarding },
+            crew: { ...state.crew, ...data.crew },
+            weightUnit: data.weightUnit ?? state.weightUnit,
+          }));
+        });
+
         try {
           const profile = await api.getProfile();
           const update: Partial<OnboardingData> = {};
@@ -129,10 +172,19 @@ export const useOnboardingStore = create<OnboardingStore>()(
           // that's already active when the app loads with no local "completed" flag set yet.
           const merged = get().onboarding;
           if (merged.gender && merged.weightKg && merged.heightCm) {
-            set({ hasCompletedOnboarding: true });
+            get().completeOnboarding();
           }
         } catch (error) {
           console.warn("Failed to sync profile from server, keeping local data", error);
+        }
+      },
+      pushAllOnboardingData: () => {
+        pushOnboardingBlob(get);
+        if (isApiConfigured) {
+          const profileUpdate = pickDefined(get().onboarding, PROFILE_SYNC_KEYS);
+          if (Object.keys(profileUpdate).length > 0) {
+            api.updateProfile(profileUpdate).catch((error) => console.warn("Failed to sync profile to server", error));
+          }
         }
       },
     }),

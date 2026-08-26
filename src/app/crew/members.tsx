@@ -9,7 +9,7 @@ import { InviteMembersModal } from "@/components/InviteMembersModal";
 import { MemberActionsSheet } from "@/components/MemberActionsSheet";
 import { FLEX_TAGS } from "@/data/flex-tags";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
-import { divisionForMemberLevel, type Division } from "@/lib/division";
+import type { Division } from "@/lib/division";
 import { useCosmeticsStore } from "@/store/cosmetics-store";
 import { CURRENT_MEMBER_ID, useCrewStore, type CrewMember } from "@/store/crew-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
@@ -25,11 +25,6 @@ const ROLE_LABEL: Record<CrewMember["role"], string | null> = {
   "co-leader": "Co-Leader",
   member: null,
 };
-
-function inviteCodeFor(crewName: string): string {
-  const slug = crewName.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 10) || "GYMCREW";
-  return `${slug}-CREW`;
-}
 
 function MemberRow({
   member,
@@ -102,6 +97,7 @@ export default function CrewMembersScreen() {
   const insets = useSafeAreaInsets();
   const members = useCrewStore((state) => state.members);
   const crewName = useCrewStore((state) => state.name);
+  const inviteCode = useCrewStore((state) => state.inviteCode);
   const todayPlan = useCrewStore((state) => state.todayPlan);
   const setMemberRole = useCrewStore((state) => state.setMemberRole);
   const toggleMemberAdmin = useCrewStore((state) => state.toggleMemberAdmin);
@@ -121,7 +117,7 @@ export default function CrewMembersScreen() {
   const managingMember = members.find((member) => member.id === managingId) ?? null;
 
   function divisionFor(member: CrewMember): Division {
-    return member.id === CURRENT_MEMBER_ID ? myDivision : divisionForMemberLevel(member.level);
+    return member.id === CURRENT_MEMBER_ID ? myDivision : member.division;
   }
 
   function trainingLabelFor(member: CrewMember): string | null {
@@ -227,7 +223,7 @@ export default function CrewMembersScreen() {
         visible={inviteOpen}
         onClose={() => setInviteOpen(false)}
         crewName={crewName}
-        inviteCode={inviteCodeFor(crewName)}
+        inviteCode={inviteCode}
       />
 
       <MemberActionsSheet

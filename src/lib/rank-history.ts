@@ -1,4 +1,8 @@
-import { RANK_TIERS, type RankTier } from "@/lib/rank";
+import type { Exercise } from "@/data/exercises";
+import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
+import type { LiftRankCard } from "@/lib/lift-rank-cards";
+import { RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
+import { rankForHypotheticalWeight } from "@/lib/rank-simulator";
 
 export type RankHistoryEntry = {
   tier: RankTier;
@@ -6,28 +10,44 @@ export type RankHistoryEntry = {
   weightKg: number;
 };
 
-const CLIMB_SPAN_DAYS = 365;
+export type RecordHistoryPoint = { weightKg: number; reps: number; achievedAt: number };
 
 /**
- * A rank-up timeline for one lift, newest first — one entry per tier already reached, from the
- * current tier down to Rookie. personal-records-store only keeps a lift's current best (not a
- * history of every past PR), so this interpolates a plausible climb between a starting weight and
- * the current best rather than reading real historical data — illustrative until PR history is
- * tracked over time. Takes just the two fields it needs (not the full `LiftRankCard`) so it works
- * for any exercise, not just the 9 tracked lifts.
+ * A real "when did I first reach each tier" timeline for one lift, newest first — built from every
+ * PR ever logged (see backend/routes/records.php's `personal_record_history`, fetched via
+ * `api.getRecordHistory`), not an invented climb. Walks the real PRs oldest-first and records a
+ * milestone only the first time the tier genuinely goes up, so repeat PRs within the same tier
+ * don't clutter the timeline. `currentRecord` (today's live best) is folded in too, since a PR set
+ * before this history table existed only survives there — safe to include even if it's already
+ * represented in `history`, since a tier that hasn't increased is never recorded twice.
  */
-export function rankHistoryForCard(card: { tier: RankTier; bestWeightKg: number }): RankHistoryEntry[] {
-  const currentIndex = RANK_TIERS.indexOf(card.tier);
-  const tiers = RANK_TIERS.slice(0, currentIndex + 1); // Rookie .. current tier, ascending
-  const startWeightKg = Math.max(1, Math.round(card.bestWeightKg * 0.5));
-  const now = Date.now();
+export function realRankHistoryForLift(
+  history: RecordHistoryPoint[],
+  currentRecord: { weightKg: number; reps: number; achievedAt: number } | null,
+  knownCard: LiftRankCard | null,
+  exercise: Exercise | null,
+  profile: RankProfile,
+): RankHistoryEntry[] {
+  function tierForWeight(weightKg: number, reps: number): RankTier {
+    if (knownCard) return rankForHypotheticalWeight(knownCard, weightKg, profile).tier;
+    if (exercise) return genericExerciseRankDetail(exercise, weightKg, reps, profile).tier;
+    return "rookie";
+  }
 
-  return tiers
-    .map((tier, index) => {
-      const progress = tiers.length > 1 ? index / (tiers.length - 1) : 1;
-      const weightKg = Math.round(startWeightKg + (card.bestWeightKg - startWeightKg) * progress);
-      const daysAgo = Math.round(CLIMB_SPAN_DAYS * (1 - progress));
-      return { tier, achievedAt: now - daysAgo * 86400000, weightKg };
-    })
-    .reverse(); // newest (current tier) first, matching the timeline UI
+  const points = [...history];
+  if (currentRecord) points.push(currentRecord);
+  const chronological = points.sort((a, b) => a.achievedAt - b.achievedAt);
+
+  const milestones: RankHistoryEntry[] = [];
+  let highestTierIndex = -1;
+  for (const point of chronological) {
+    const tier = tierForWeight(point.weightKg, point.reps);
+    const tierIndex = RANK_TIERS.indexOf(tier);
+    if (tierIndex > highestTierIndex) {
+      highestTierIndex = tierIndex;
+      milestones.push({ tier, achievedAt: point.achievedAt, weightKg: point.weightKg });
+    }
+  }
+
+  return milestones.reverse();
 }

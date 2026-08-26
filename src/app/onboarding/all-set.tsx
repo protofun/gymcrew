@@ -1,3 +1,4 @@
+import { useAuth } from "@clerk/expo";
 import { router } from "expo-router";
 import { SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
@@ -7,6 +8,21 @@ import { images } from "@/constants/images";
 import { colors } from "@/theme";
 
 export default function AllSetScreen() {
+  const { isSignedIn } = useAuth();
+
+  // Reaching the wizard while already signed in happens when an existing account has no
+  // "completed onboarding" record anywhere yet (fresh browser + a Clerk account from before that
+  // flag existed — see lib/clerk.ts). That's not a new account to create: pushing to /sign-up
+  // would sign this session out first (see sign-up.tsx's account-isolation guard) and lose it
+  // entirely. Just continue as this account instead.
+  function handleContinue() {
+    if (isSignedIn) {
+      router.replace("/");
+    } else {
+      router.push("/sign-up");
+    }
+  }
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.neutral.background }}
@@ -36,7 +52,7 @@ export default function AllSetScreen() {
         <OnboardingFooter
           label="Start My Journey"
           activeIndex={3}
-          onPress={() => router.push("/sign-up")}
+          onPress={handleContinue}
         />
       </View>
     </SafeAreaView>

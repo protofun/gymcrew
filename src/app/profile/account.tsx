@@ -5,11 +5,10 @@ import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { DEMO_BODY_LOG, DEMO_PROFILE_LEVEL, DEMO_RECORDS, DEMO_WORKOUTS } from "@/lib/demo-seed";
-import { useBodyLogStore } from "@/store/body-log-store";
-import { usePersonalRecordsStore } from "@/store/personal-records-store";
-import { useProfileLevelStore } from "@/store/profile-level-store";
-import { useWorkoutHistoryStore } from "@/store/workout-history-store";
+import { ConfirmModal } from "@/components/ConfirmModal";
+import { api, isApiConfigured } from "@/lib/api";
+import { resetLocalStateForAccountSwitch } from "@/lib/reset-local-state";
+import { DEVELOPER_MODE_USER_ID, useDeveloperModeStore } from "@/store/developer-mode-store";
 import { colors } from "@/theme";
 
 function PasswordField({ label, value, onChangeText }: { label: string; value: string; onChangeText: (value: string) => void }) {
@@ -41,6 +40,12 @@ export default function AccountScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [signOutConfirmVisible, setSignOutConfirmVisible] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const isDeveloper = user?.id === DEVELOPER_MODE_USER_ID;
+  const developerModeEnabled = useDeveloperModeStore((state) => state.enabled);
+  const toggleDeveloperMode = useDeveloperModeStore((state) => state.toggleEnabled);
+  const clearAllOverrides = useDeveloperModeStore((state) => state.clearAllOverrides);
 
   const hasPassword = user?.passwordEnabled ?? false;
 
@@ -84,66 +89,27 @@ export default function AccountScreen() {
     }
   }
 
-  function handleSignOut() {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: () => {
-          signOut();
-          router.replace("/");
-        },
-      },
-    ]);
+  async function confirmSignOut() {
+    setSignOutConfirmVisible(false);
+    await signOut();
+    // Reloads the page (web) — see reset-local-state.ts for why this must fully wipe local storage
+    // rather than just navigating away, so a different account signing in next never inherits this
+    // device's cached data.
+    await resetLocalStateForAccountSwitch();
   }
 
-  function handleLoadDemoYear() {
-    Alert.alert(
-      "Load a Year of Training Data",
-      "This replaces your current workout history, personal records, body log, and division/XP with a full year of demo training (6 days a week). This can't be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Load Demo Year",
-          style: "destructive",
-          onPress: () => {
-            useWorkoutHistoryStore.setState({ workouts: DEMO_WORKOUTS });
-            usePersonalRecordsStore.setState({ records: DEMO_RECORDS });
-            useBodyLogStore.setState({ entries: DEMO_BODY_LOG });
-            useProfileLevelStore.setState({
-              xp: DEMO_PROFILE_LEVEL.xp,
-              division: DEMO_PROFILE_LEVEL.division,
-              divisionHistory: DEMO_PROFILE_LEVEL.divisionHistory,
-              pendingDivisionCelebration: null,
-            });
-            Alert.alert("Done", "A year of training history has been loaded.");
-          },
-        },
-      ],
-    );
-  }
-
-  function handleDeleteAccount() {
-    Alert.alert(
-      "Delete Account",
-      "This permanently deletes your GymCrew account and can't be undone. Your crew and its other members are not affected.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete Account",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await user?.delete();
-              router.replace("/");
-            } catch (error) {
-              Alert.alert("Couldn't Delete Account", error instanceof Error ? error.message : "Please try again.");
-            }
-          },
-        },
-      ],
-    );
+  async function confirmDeleteAccount() {
+    setDeleteConfirmVisible(false);
+    try {
+      // Deletes the server-side rows first — the JWT this call authenticates with stops being
+      // valid the instant the Clerk account below is gone.
+      if (isApiConfigured) await api.deleteAccount();
+      await user?.delete();
+      await resetLocalStateForAccountSwitch();
+      router.replace("/");
+    } catch (error) {
+      Alert.alert("Couldn't Delete Account", error instanceof Error ? error.message : "Please try again.");
+    }
   }
 
   return (
@@ -189,32 +155,66 @@ export default function AccountScreen() {
           </Pressable>
         </View>
 
-        <Pressable onPress={handleSignOut} className="items-center rounded-full border border-divider py-4">
+        <Pressable onPress={() => setSignOutConfirmVisible(true)} className="items-center rounded-full border border-divider py-4">
           <Text className="body-md font-body-bold text-text-primary">Sign Out</Text>
         </Pressable>
 
-        <View className="gap-2 rounded-2xl border border-divider bg-surface p-4">
-          <Text className="body-sm font-body-semibold text-text-primary">Demo Data</Text>
-          <Text className="body-sm text-text-secondary">
-            Load a full year of consistent training history — 6 days a week, ever-improving lifts, lots of PRs.
-          </Text>
-          <Pressable onPress={handleLoadDemoYear} className="mt-1 items-center rounded-full border border-brand-yellow py-3.5">
-            <Text className="body-sm font-body-bold text-brand-yellow">Load a Year of Training Data</Text>
-          </Pressable>
-        </View>
+        {isDeveloper && (
+          <View className="gap-2 rounded-2xl border border-brand-yellow/40 bg-surface p-4">
+            <Text className="body-sm font-body-semibold text-text-primary">Developer Mode</Text>
+            <Text className="body-sm text-text-secondary">
+              Tap-to-edit for text/numbers shown around the app — for setting up screenshots or videos. Overrides are
+              local to this device only and are never saved to the server.
+            </Text>
+            <Pressable
+              onPress={toggleDeveloperMode}
+              className={`mt-1 items-center rounded-full border py-3.5 ${
+                developerModeEnabled ? "border-brand-yellow bg-brand-yellow" : "border-brand-yellow"
+              }`}
+            >
+              <Text className={`body-sm font-body-bold ${developerModeEnabled ? "text-brand-iron" : "text-brand-yellow"}`}>
+                Developer Mode: {developerModeEnabled ? "On" : "Off"}
+              </Text>
+            </Pressable>
+            {developerModeEnabled && (
+              <Pressable onPress={clearAllOverrides} className="items-center rounded-full border border-divider py-3.5">
+                <Text className="body-sm text-text-secondary">Reset All Overrides</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
 
         <View className="gap-2 rounded-2xl border border-error/40 bg-error/10 p-4">
           <Text className="body-sm font-body-semibold" style={{ color: colors.semantic.error }}>
             Danger Zone
           </Text>
           <Text className="body-sm text-text-secondary">Permanently delete your account and all of your data. This can&apos;t be undone.</Text>
-          <Pressable onPress={handleDeleteAccount} className="mt-1 items-center rounded-full border border-error py-3.5">
+          <Pressable onPress={() => setDeleteConfirmVisible(true)} className="mt-1 items-center rounded-full border border-error py-3.5">
             <Text className="body-sm font-body-bold" style={{ color: colors.semantic.error }}>
               Delete Account
             </Text>
           </Pressable>
         </View>
       </ScrollView>
+
+      <ConfirmModal
+        visible={signOutConfirmVisible}
+        title="Sign Out"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign Out"
+        destructive
+        onConfirm={confirmSignOut}
+        onCancel={() => setSignOutConfirmVisible(false)}
+      />
+      <ConfirmModal
+        visible={deleteConfirmVisible}
+        title="Delete Account"
+        message="This permanently deletes your GymCrew account and can't be undone. Your crew and its other members are not affected."
+        confirmLabel="Delete Account"
+        destructive
+        onConfirm={confirmDeleteAccount}
+        onCancel={() => setDeleteConfirmVisible(false)}
+      />
     </View>
   );
 }

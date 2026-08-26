@@ -16,12 +16,15 @@ import {
 } from "@/lib/crew-lift-compare";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
 import { formatRankTier, RANK_TIER_COLOR, type RankProfile } from "@/lib/rank";
+import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { colors } from "@/theme";
 
-function formatDaysAgo(days: number): string {
+function formatDaysAgo(days: number | null): string {
+  if (days === null) return "Not logged yet";
+  if (days <= 0) return "Today";
   return days === 1 ? "1 day ago" : `${days} days ago`;
 }
 
@@ -184,12 +187,16 @@ export default function LiftCompareScreen() {
   const age = useOnboardingStore((state) => state.onboarding.age);
   const records = usePersonalRecordsStore((state) => state.records);
   const crewMembers = useCrewStore((state) => state.members);
+  const membersActivity = useCrewActivityStore((state) => state.membersActivity);
 
   const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
   const cards = useMemo(() => buildLiftRankCards(records, profile, "gym"), [records, profile]);
   const card = cards.find((candidate) => candidate.id === liftId);
 
-  const standings = useMemo(() => (card ? crewLiftStandings(card.id, card, crewMembers) : []), [card, crewMembers]);
+  const standings = useMemo(
+    () => (card ? crewLiftStandings(card.id, card, records[card.exerciseId], crewMembers, membersActivity) : []),
+    [card, records, crewMembers, membersActivity],
+  );
   const me = standings.find((standing) => standing.isMe);
   const opponent = standings.find((standing) => standing.id === withId) ?? nearestRival(standings);
 

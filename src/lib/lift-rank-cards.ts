@@ -22,7 +22,10 @@ export type LiftRankCard = {
    * computed (see `gymStandingForCard`) so switching scope doesn't need a recompute. */
   gymRank: number;
   gymPoolSize: number;
-  prDeltaKg: number;
+  /** `null` until real PR-history tracking exists (personal-records-store only keeps the current
+   * best, not a log of previous ones) — there's no real "since last PR" delta to show yet, so this
+   * stays honestly unset rather than showing an illustrative/made-up number. */
+  prDeltaKg: number | null;
   isWeakPoint: boolean;
   bestWeightKg: number;
   bestReps: number;
@@ -84,16 +87,19 @@ export function buildLiftRankCards(records: Record<string, PersonalRecord>, prof
       tier,
       score,
       progressToNextTier,
-      prDeltaKg: lift.prDeltaKg,
+      prDeltaKg: null,
       bestWeightKg: weightKg,
       bestReps: record?.bestReps ?? 0,
       kgToNextTier,
     };
   });
 
-  // A logged PR always wins over the static seed once one exists — see estimateTierPositionForWeight
-  // in lib/rank.ts (there's no real strength-standard table for these 5 lifts yet, so this is an
-  // approximation anchored on the seed's own tier position, not a precise bodyweight-ratio formula).
+  // A logged PR always wins over the seed's calibration curve once one exists — see
+  // estimateTierPositionForWeight in lib/rank.ts (there's no real strength-standard table for these
+  // 8 lifts yet, so a real logged weight is placed on an approximated tier curve anchored on the
+  // seed's assumed reference point, not a precise bodyweight-ratio formula). Without a real record,
+  // this must NEVER show the seed's own tier/weight/reps as if they were something you'd actually
+  // lifted — that reference point exists purely to calibrate the curve above, not to display.
   const seeded = SEEDED_LIFT_CARDS.map((lift) => {
     const record = records[lift.exerciseId];
     if (!record) {
@@ -102,13 +108,13 @@ export function buildLiftRankCards(records: Record<string, PersonalRecord>, prof
         name: lift.name,
         image: lift.image,
         exerciseId: lift.exerciseId,
-        tier: lift.tier,
-        score: lift.score,
-        progressToNextTier: lift.progressToNextTier,
-        prDeltaKg: lift.prDeltaKg,
-        bestWeightKg: lift.bestWeightKg,
-        bestReps: lift.bestReps,
-        kgToNextTier: lift.kgToNextTier as number | null,
+        tier: RANK_TIERS[0],
+        score: 0,
+        progressToNextTier: 0,
+        prDeltaKg: null,
+        bestWeightKg: 0,
+        bestReps: 0,
+        kgToNextTier: null as number | null,
       };
     }
 
@@ -133,7 +139,7 @@ export function buildLiftRankCards(records: Record<string, PersonalRecord>, prof
       tier,
       score,
       progressToNextTier,
-      prDeltaKg: lift.prDeltaKg,
+      prDeltaKg: null,
       bestWeightKg: record.bestWeightKg,
       bestReps: record.bestReps,
       kgToNextTier,
@@ -198,7 +204,7 @@ export function sortLiftRankCards(cards: LiftRankCard[], sortKey: LiftCardSortKe
     case "weakest":
       return sorted.sort((a, b) => a.score - b.score);
     case "recentPr":
-      return sorted.sort((a, b) => b.prDeltaKg - a.prDeltaKg);
+      return sorted.sort((a, b) => (b.prDeltaKg ?? 0) - (a.prDeltaKg ?? 0));
     case "alphabetical":
       return sorted.sort((a, b) => a.name.localeCompare(b.name));
   }

@@ -2,14 +2,14 @@ import { router } from "expo-router";
 import { Image, Pressable, Text, View } from "react-native";
 
 import { images } from "@/constants/images";
-import { EXISTING_CREWS } from "@/data/crews";
-
-// Stands in for "the crew the current user is in" until that's wired to
-// real crew membership (onboarding's crew store only covers join/create
-// intent, not a persisted membership record yet).
-const MY_CREW = EXISTING_CREWS[0];
+import { EditableText } from "@/components/EditableText";
+import { useCrewStore } from "@/store/crew-store";
 
 export function CrewCard() {
+  const name = useCrewStore((state) => state.name);
+  const memberCount = useCrewStore((state) => state.members.length);
+  const maxMembers = useCrewStore((state) => state.maxMembers);
+
   return (
     <Pressable
       onPress={() => router.push("/crew")}
@@ -23,12 +23,24 @@ export function CrewCard() {
 
       <View className="flex-1 gap-1">
         <Text className="caption font-body-bold text-text-secondary">CREW</Text>
-        <Text className="heading-4 text-text-primary">{MY_CREW.name}</Text>
-        <Text className="body-md">
-          <Text className="font-body-bold text-brand-yellow">{MY_CREW.members}</Text>
-          <Text className="text-text-secondary"> / {MY_CREW.maxMembers} Members</Text>
-        </Text>
-        <Text className="caption font-body-semibold mt-1 text-brand-yellow">View crew</Text>
+        {memberCount > 0 ? (
+          <>
+            <EditableText id="home.crewCard.name" className="heading-4 text-text-primary">
+              {name}
+            </EditableText>
+            <Text className="body-md">
+              <Text className="font-body-bold text-brand-yellow">{memberCount}</Text>
+              <Text className="text-text-secondary"> / {maxMembers} Members</Text>
+            </Text>
+            <Text className="caption font-body-semibold mt-1 text-brand-yellow">View crew</Text>
+          </>
+        ) : (
+          <>
+            <Text className="heading-4 text-text-primary">No Crew Yet</Text>
+            <Text className="body-sm text-text-secondary">Join or create one to compete together</Text>
+            <Text className="caption font-body-semibold mt-1 text-brand-yellow">Set up your crew</Text>
+          </>
+        )}
       </View>
     </Pressable>
   );

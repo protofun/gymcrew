@@ -14,6 +14,7 @@ import {
 } from "@/lib/crew-league";
 import { currentWeekKey, fromDateKey } from "@/lib/date";
 import { DIVISION_COLOR } from "@/lib/division";
+import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewLeagueStore, type LeagueWeekResult } from "@/store/crew-league-store";
 import { useCrewStore } from "@/store/crew-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
@@ -119,10 +120,11 @@ export function CrewLeagueTab() {
   const members = useCrewStore((state) => state.members);
   const workouts = useWorkoutHistoryStore((state) => state.workouts);
   const history = useCrewLeagueStore((state) => state.history);
+  const membersActivity = useCrewActivityStore((state) => state.membersActivity);
 
   const weekKey = currentWeekKey();
   const { startKey, endKey } = weekKeyRange(weekKey);
-  const myWeeklyPower = computeCrewWeeklyPower(members, workouts, startKey, endKey);
+  const myWeeklyPower = computeCrewWeeklyPower(members, workouts, membersActivity, startKey, endKey);
   const rivals = sameDivisionRivals(OTHER_CREWS_POWER, crewDivision);
   const standings = computeLeagueStandings(weekKey, crewName, myWeeklyPower, rivals);
   const outcome = determineLeagueOutcome(standings);

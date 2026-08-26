@@ -13,16 +13,31 @@ uploaded straight to shared hosting via FTP and it just works.
 - **JSON columns for workout data** (`exercises_json`, `muscle_intensity_json`, `prs_json`) instead
   of a fully normalized schema — the app never needs to query into individual sets from SQL, so
   normalizing further would just be more tables for no benefit right now.
-- **Scope is deliberately limited** to profile/workouts/records/body-log. Crew, goals, currency,
-  cosmetics, and notifications still live in AsyncStorage on the device — a natural follow-up once
-  this slice is working end to end.
+- **Everything the app stores now syncs.** Profile/onboarding, workouts (including the in-progress
+  draft, not just finished ones), PRs, body log, profile level (XP/division), crews, goals,
+  currency, cosmetics, split theme, tracked lifts, custom exercises/workouts, favorites, workout
+  notes, today's training override, notification read-state, challenges, the crew league, and
+  led-workout sessions all sync. The smaller ones share one generic table (`user_state`, see
+  `routes/state.php`) instead of a bespoke table each — one row per (user, feature key) holding
+  that feature's whole state as JSON. See `db/schema.sql`'s comment above `user_state` for the full
+  list of keys.
+- **Crews are genuinely shared, not per-account.** `crews`/`crew_members` (see `routes/crews.php`)
+  are real relational tables — one row per crew, with a membership row per real account. Two real
+  Clerk accounts in the same crew see and edit the *same* row: creating generates a unique invite
+  code, joining consumes one, leaving/kicking updates membership for everyone. Challenges, the crew
+  league, and led-workout sessions are still per-account only (same caveat as before) — that's the
+  next piece of this same work.
 
 ## 1. Create the database (Hostinger hPanel)
 
 1. hPanel → **Databases → MySQL Databases** → create a database and a database user, note the
    database name, username, password, and host (usually `localhost`).
 2. Open **phpMyAdmin** for that database, go to the **Import** tab, and import `db/schema.sql`.
-   You should end up with four tables: `users`, `workouts`, `personal_records`, `body_log_entries`.
+   You should end up with eight tables: `users`, `workouts`, `personal_records`, `body_log_entries`,
+   `profile_level`, `crews`, `crew_members`, `user_state`. (Already imported an earlier version of
+   this file? Every statement uses `CREATE TABLE IF NOT EXISTS`, so re-importing the current
+   `db/schema.sql` is always safe — it only adds whatever tables are missing, your existing data is
+   untouched.)
 
 ## 2. Find your Clerk JWKS URL
 

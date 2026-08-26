@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Image, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import Animated, {
   FadeInUp,
   useAnimatedStyle,
@@ -23,7 +23,7 @@ import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatsTab } from "@/components/StatsTab";
 import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
-import { exerciseImages, rankTierImages } from "@/constants/images";
+import { exerciseImages, images, rankTierImages } from "@/constants/images";
 import { WORKOUT_NAME_HERO_IMAGE } from "@/data/workout-templates";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
 import { mostRecentCrewAchievement } from "@/lib/crew-achievements";
@@ -33,10 +33,12 @@ import { intensityToRedGreenColor } from "@/lib/muscle-groups";
 import { formatRankTier } from "@/lib/rank";
 import { formatShortAgo } from "@/lib/time-since";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
+import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { CURRENT_MEMBER_ID, useCrewStore } from "@/store/crew-store";
 import { useLedWorkoutStore } from "@/store/led-workout-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
+import { useSyncStatusStore } from "@/store/sync-status-store";
 import { useTodayTrainingStore } from "@/store/today-training-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
@@ -370,7 +372,8 @@ function TodayPlanCard({ onPress }: { onPress: () => void }) {
 function MuscleBalanceCard() {
   const members = useCrewStore((state) => state.members);
   const myWorkouts = useWorkoutHistoryStore((state) => state.workouts);
-  const muscleIntensity = crewMuscleBalance(members, myWorkouts);
+  const membersActivity = useCrewActivityStore((state) => state.membersActivity);
+  const muscleIntensity = crewMuscleBalance(members, myWorkouts, membersActivity);
 
   return (
     <Animated.View
@@ -408,8 +411,9 @@ function RecentAchievementCard() {
   const myRecords = usePersonalRecordsStore((state) => state.records);
   const myGender = useOnboardingStore((state) => state.onboarding.gender);
   const myWeightKg = useOnboardingStore((state) => state.onboarding.weightKg);
+  const membersActivity = useCrewActivityStore((state) => state.membersActivity);
 
-  const result = mostRecentCrewAchievement(members, myRecords, myGender, myWeightKg);
+  const result = mostRecentCrewAchievement(members, myRecords, myGender, myWeightKg, membersActivity);
   if (!result) return null;
 
   const { member, achievement, rankTier } = result;
@@ -448,6 +452,26 @@ function RecentAchievementCard() {
   );
 }
 
+function CrewEmptyState() {
+  return (
+    <View className="flex-1 items-center justify-center gap-6 px-8 pt-16">
+      <Image source={images.mascotsCrew} resizeMode="contain" style={{ width: 220, height: 220 * (420 / 520) }} />
+      <View className="items-center gap-2">
+        <Text className="heading-3 text-center text-text-primary">No Crew Yet</Text>
+        <Text className="body-md text-center text-text-secondary">
+          Join your friends or create your own crew to plan workouts and compete together.
+        </Text>
+      </View>
+      <Pressable
+        onPress={() => router.push("/build-crew/choose-path")}
+        className="w-full items-center rounded-full bg-brand-yellow py-4"
+      >
+        <Text className="body-md font-body-bold text-brand-iron">Set Up Your Crew</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function CrewScreen() {
   const [activeTab, setActiveTab] = useState<CrewTab>("Overview");
   const [activitySheetOpen, setActivitySheetOpen] = useState(false);
@@ -458,9 +482,38 @@ export default function CrewScreen() {
   const setTodayOverride = useTodayTrainingStore((state) => state.setTodayOverride);
   const clearTodayOverride = useTodayTrainingStore((state) => state.clearTodayOverride);
   const today = useTodayWorkout();
+  const hasCrew = useCrewStore((state) => state.members.length > 0);
+  const crewId = useCrewStore((state) => state.id);
+  const fetchCrewActivity = useCrewActivityStore((state) => state.fetchForCrew);
+  const hasSyncedOnce = useSyncStatusStore((state) => state.hasSyncedOnce);
 
   const iAmLeader = session?.leaderId === CURRENT_MEMBER_ID;
   const iHaveJoined = session?.participantIds.includes(CURRENT_MEMBER_ID) ?? false;
+
+  // Real crewmate workouts/PRs for MuscleBalanceCard/RecentAchievementCard (see
+  // crew-activity-store.ts) — fetched once the real crew id is known, not before.
+  useEffect(() => {
+    if (crewId) fetchCrewActivity(crewId);
+  }, [crewId, fetchCrewActivity]);
+
+  // Same "wait for the real database pull before showing anything" gate as (tabs)/home.tsx — see
+  // sync-status-store.ts. Blocks on the same sign-in sync, so a stale/local crew state (or none at
+  // all yet) never flashes before the real one arrives.
+  if (!hasSyncedOnce) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background">
+        <ActivityIndicator size="large" color={colors.brand.yellow} />
+      </View>
+    );
+  }
+
+  if (!hasCrew) {
+    return (
+      <ScrollView className="flex-1 bg-background" contentContainerClassName="flex-1">
+        <CrewEmptyState />
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>

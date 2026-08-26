@@ -11,8 +11,13 @@ function recordRowToJson(array $row): array
     ];
 }
 
-function handleRecords(PDO $pdo, string $userId, string $method, ?array $body): void
+function handleRecords(PDO $pdo, string $userId, string $method, ?array $body, array $segments): void
 {
+    if (($segments[1] ?? null) === 'history' && $method === 'GET') {
+        respondWithRecordHistory($pdo, $userId, $segments[2] ?? '');
+        return;
+    }
+
     if ($method === 'GET') {
         $stmt = $pdo->prepare('SELECT * FROM personal_records WHERE user_id = ?');
         $stmt->execute([$userId]);
@@ -56,6 +61,12 @@ function handleRecords(PDO $pdo, string $userId, string $method, ?array $body): 
                     achieved_at = VALUES(achieved_at)'
             );
             $upsert->execute([$userId, $exerciseId, $data['exerciseName'], $weightKg, $reps, $achievedAt]);
+
+            // Append-only — see db/schema.sql's `personal_record_history` comment. This is what
+            // makes a genuine multi-tier "Rank History" timeline possible instead of an invented one.
+            $pdo->prepare(
+                'INSERT INTO personal_record_history (user_id, exercise_id, weight_kg, reps, achieved_at) VALUES (?, ?, ?, ?, ?)'
+            )->execute([$userId, $exerciseId, $weightKg, $reps, $achievedAt]);
         }
 
         jsonResponse([
@@ -67,4 +78,27 @@ function handleRecords(PDO $pdo, string $userId, string $method, ?array $body): 
     }
 
     errorResponse('Method not allowed', 405);
+}
+
+function respondWithRecordHistory(PDO $pdo, string $userId, string $exerciseId): void
+{
+    if ($exerciseId === '') {
+        errorResponse('exerciseId is required', 400);
+        return;
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT weight_kg, reps, achieved_at FROM personal_record_history WHERE user_id = ? AND exercise_id = ? ORDER BY achieved_at ASC'
+    );
+    $stmt->execute([$userId, $exerciseId]);
+
+    $rows = array_map(function (array $row): array {
+        return [
+            'weightKg' => (float) $row['weight_kg'],
+            'reps' => (int) $row['reps'],
+            'achievedAt' => (int) $row['achieved_at'],
+        ];
+    }, $stmt->fetchAll());
+
+    jsonResponse($rows);
 }

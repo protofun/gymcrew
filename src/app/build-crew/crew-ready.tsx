@@ -1,15 +1,28 @@
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
-import { Image, Linking, Platform, Pressable, SafeAreaView, ScrollView, Share, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Image, Linking, Platform, Pressable, SafeAreaView, ScrollView, Share, Text, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
-import { useCrewStore } from "@/store/crew-store";
+import { type CrewPrivacy, useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
+
+/** Maps the wizard's plain-language crew-settings labels (crew-settings.tsx) onto the real
+ * CrewPrivacy enum the backend understands. */
+function privacyFromWizardChoices(visibility?: string, whoCanJoin?: string): CrewPrivacy {
+  if (visibility === "Private") return "invite-only";
+  if (whoCanJoin === "Anyone") return "public";
+  return "open";
+}
+
+function maxMembersFromWizardChoice(label?: string): number {
+  const parsed = parseInt(label ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 8;
+}
 
 const VISIBLE_SHARE_TARGET_COUNT = 4;
 
@@ -84,30 +97,37 @@ const SHARE_TARGETS: ShareTarget[] = [
   { key: "more", label: "More", iconSet: "ionicon", icon: "ellipsis-horizontal", tint: "#8B929E" },
 ];
 
-// Best-effort uniqueness without a backend: base the code on the crew name
-// (so it's tied to that crew) plus a random suffix. Real guaranteed
-// uniqueness needs a server-side check against all existing crew codes,
-// which this app doesn't have yet.
-function generateInviteCode(crewName: string) {
-  const base = crewName
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 12);
-  const suffix = Math.floor(10 + Math.random() * 90);
-  return `${base || "GYMCREW"}${suffix}`;
-}
-
 export default function CrewReadyScreen() {
   const { crewName } = useLocalSearchParams<{ crewName?: string }>();
   const completeCrewSelection = useOnboardingStore((state) => state.completeCrewSelection);
-  const onboardingFullName = useOnboardingStore((state) => state.onboarding.fullName);
-  const rejoin = useCrewStore((state) => state.rejoin);
-  const [inviteCode] = useState(() => generateInviteCode(crewName ?? ""));
+  const createCrew = useCrewStore((state) => state.createCrew);
+  const inviteCode = useCrewStore((state) => state.inviteCode);
+  const [creating, setCreating] = useState(true);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [showAllTargets, setShowAllTargets] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    const crewData = useOnboardingStore.getState().crew;
+    createCrew({
+      name: crewName ?? crewData.crewName ?? "My Crew",
+      icon: crewData.icon,
+      trainingType: crewData.trainingType,
+      privacy: privacyFromWizardChoices(crewData.visibility, crewData.whoCanJoin),
+      maxMembers: maxMembersFromWizardChoice(crewData.maxMembers),
+    }).then((result) => {
+      setCreating(false);
+      if (!result.ok) setCreateError(result.error);
+    });
+    // Only ever create once, on mount — re-running this on every render would try to create the
+    // same crew again and fail with "already in a crew."
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function handleContinue() {
-    rejoin(crewName ?? "", onboardingFullName ?? "You");
+    if (creating) return;
+    // If creation failed, still let them through — (tabs)/crew.tsx's empty state offers a way to
+    // retry setting up a crew rather than trapping them on this screen.
     completeCrewSelection();
     router.replace("/home");
   }
@@ -171,10 +191,17 @@ export default function CrewReadyScreen() {
         >
           <Text className="body-sm text-text-secondary">Invite Code</Text>
           <View className="flex-row items-center justify-between">
-            <Text className="font-body-bold text-2xl tracking-widest text-brand-yellow">{inviteCode}</Text>
+            {creating ? (
+              <ActivityIndicator color={colors.brand.yellow} />
+            ) : createError ? (
+              <Text className="body-sm text-error">Couldn&apos;t create your crew — {createError}</Text>
+            ) : (
+              <Text className="font-body-bold text-2xl tracking-widest text-brand-yellow">{inviteCode}</Text>
+            )}
             <Pressable
               onPress={handleCopy}
               hitSlop={8}
+              disabled={creating || Boolean(createError)}
               className={`h-10 w-10 items-center justify-center rounded-lg border ${
                 copied ? "border-brand-yellow" : "border-divider"
               }`}

@@ -3,17 +3,21 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { FLEX_TAGS } from "@/data/flex-tags";
+import { pullState, pushState } from "@/lib/backend-sync";
 import { useCurrencyStore } from "@/store/currency-store";
 
-type CosmeticsState = {
+type CosmeticsData = {
   ownedTagIds: string[];
   equippedTagId: string | null;
 };
+
+type CosmeticsState = CosmeticsData;
 
 type CosmeticsActions = {
   /** Buys a Flex Tag with tokens (see currency-store) and equips it if nothing else is equipped yet. Returns false if already owned or tokens are short. */
   purchaseTag: (id: string) => boolean;
   equipTag: (id: string | null) => void;
+  syncFromServer: () => Promise<void>;
 };
 
 export const useCosmeticsStore = create<CosmeticsState & CosmeticsActions>()(
@@ -27,10 +31,16 @@ export const useCosmeticsStore = create<CosmeticsState & CosmeticsActions>()(
         const tag = FLEX_TAGS.find((candidate) => candidate.id === id);
         if (!tag) return false;
         if (!useCurrencyStore.getState().spendTokens(tag.cost)) return false;
-        set({ ownedTagIds: [...state.ownedTagIds, id], equippedTagId: state.equippedTagId ?? id });
+        const next = { ownedTagIds: [...state.ownedTagIds, id], equippedTagId: state.equippedTagId ?? id };
+        set(next);
+        pushState("cosmetics", { ownedTagIds: next.ownedTagIds, equippedTagId: next.equippedTagId });
         return true;
       },
-      equipTag: (id) => set({ equippedTagId: id }),
+      equipTag: (id) => {
+        set({ equippedTagId: id });
+        pushState("cosmetics", { ownedTagIds: get().ownedTagIds, equippedTagId: id });
+      },
+      syncFromServer: () => pullState<CosmeticsData>("cosmetics", (data) => set(data)),
     }),
     {
       name: "gymcrew-cosmetics",

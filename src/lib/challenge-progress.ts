@@ -1,12 +1,18 @@
 import { activeWeeklyChallenges } from "@/data/challenges";
 import type { ChallengeMetric } from "@/data/challenges";
-import type { MuscleGroup, WorkoutSession } from "@/data/workout-log";
 import { currentWeekKey, fromDateKey, toDateKey } from "@/lib/date";
 import { toMuscleGroup } from "@/lib/muscle-groups";
 import type { LoggedExercise } from "@/store/active-workout-store";
 import { useChallengeStore } from "@/store/challenge-store";
 import { CURRENT_MEMBER_ID, type CrewMember } from "@/store/crew-store";
 import type { PersonalRecord } from "@/store/personal-records-store";
+import type { CompletedWorkout } from "@/store/workout-history-store";
+
+/** A crew member's real recent activity — see crew-activity-store.ts, backed by
+ * backend/routes/crews.php's `/crews/:id/activity`. Every "crew-wide" function below takes a
+ * lookup from member id to this shape instead of generating mock history, so a real crewmate's
+ * real workouts drive challenge progress, stats, and league power — never a fabricated stand-in. */
+export type MemberActivity = { recentWorkouts: CompletedWorkout[]; records: Record<string, PersonalRecord> };
 
 // Anti-cheat, without requiring proof photos (too slow, and no one would actually do it): every
 // logged set is capped against (a) an absolute plausible ceiling and (b) the lifter's own personal
@@ -79,68 +85,40 @@ export function challengeContribution(
   }
 }
 
-function mockMuscleVolumeShare(session: WorkoutSession, muscleGroup: MuscleGroup): number {
-  const intensity = session.muscleIntensity[muscleGroup];
-  if (!intensity) return 0;
-  const totalIntensity = Object.values(session.muscleIntensity).reduce((sum: number, value) => sum + (value ?? 0), 0);
-  if (totalIntensity === 0) return 0;
-  return session.volumeKg * (intensity / totalIntensity);
-}
-
-/**
- * A crew member's mock sessions only log one "primary exercise" per day, so exercise-specific
- * challenges only pick up mock contribution on days that primary exercise happens to match — the
- * same approximation tradeoff as the rest of the mock history (see data/workout-log.ts).
- */
-function mockContributionForDay(session: WorkoutSession, metric: ChallengeMetric): number {
-  switch (metric.type) {
-    case "totalVolume":
-      return session.volumeKg;
-    case "totalWorkouts":
-      return 1;
-    case "totalSets":
-      return session.exercises * 4; // ~4 sets/exercise, matching this app's typical templates
-    case "muscleVolume":
-      return mockMuscleVolumeShare(session, metric.muscleGroup);
-    case "exerciseVolume":
-      return session.primaryExercise.name === metric.exerciseName
-        ? session.primaryExercise.oneRepMaxKg * session.primaryExercise.reps
-        : 0;
-    case "exerciseReps":
-      return session.primaryExercise.name === metric.exerciseName ? session.primaryExercise.reps : 0;
-    default:
-      return 0;
-  }
-}
-
-/** A crew member's mock contribution to a metric within a date range. */
-export function mockContributionInRange(
-  sessions: Record<string, WorkoutSession>,
+/** A real member's contribution to a metric within a date range, from their actual logged workouts
+ * (same `challengeContribution` used for the current user's own live progress, applied after the
+ * fact to their real history — anti-cheat capping uses their current personal records as the
+ * reference ceiling, since a full historical PR-at-the-time log doesn't exist). */
+function realContributionInRange(
+  workouts: CompletedWorkout[],
+  records: Record<string, PersonalRecord>,
   metric: ChallengeMetric,
   startKey: string,
   endKey: string,
 ): number {
   let total = 0;
-  for (const [dateKey, session] of Object.entries(sessions)) {
+  for (const workout of workouts) {
+    const dateKey = toDateKey(new Date(workout.completedAt));
     if (dateKey < startKey || dateKey > endKey) continue;
-    total += mockContributionForDay(session, metric);
+    total += challengeContribution(metric, workout.exercises, records);
   }
   return Math.round(total);
 }
 
-/** The crew's combined progress toward a challenge: the current user's real (persisted) contribution, plus every other member's mock contribution within the same date range. */
+/** The crew's combined progress toward a challenge: the current user's real (persisted) contribution, plus every other member's real contribution within the same date range. */
 export function crewChallengeProgress(
   metric: ChallengeMetric,
   members: CrewMember[],
   myContribution: number,
   startKey: string,
   endKey: string,
-  memberSessions: (memberId: string) => Record<string, WorkoutSession>,
+  memberActivity: (memberId: string) => MemberActivity,
 ): number {
   let total = myContribution;
   for (const member of members) {
     if (member.id === CURRENT_MEMBER_ID) continue;
-    total += mockContributionInRange(memberSessions(member.id), metric, startKey, endKey);
+    const { recentWorkouts, records } = memberActivity(member.id);
+    total += realContributionInRange(recentWorkouts, records, metric, startKey, endKey);
   }
   return total;
 }
@@ -154,20 +132,22 @@ export function perMemberContributions(
   myContribution: number,
   startKey: string,
   endKey: string,
-  memberSessions: (memberId: string) => Record<string, WorkoutSession>,
+  memberActivity: (memberId: string) => MemberActivity,
 ): MemberContribution[] {
   return members
-    .map((member) => ({
-      member,
-      amount: member.id === CURRENT_MEMBER_ID ? myContribution : mockContributionInRange(memberSessions(member.id), metric, startKey, endKey),
-    }))
+    .map((member) => {
+      if (member.id === CURRENT_MEMBER_ID) return { member, amount: myContribution };
+      const { recentWorkouts, records } = memberActivity(member.id);
+      return { member, amount: realContributionInRange(recentWorkouts, records, metric, startKey, endKey) };
+    })
     .sort((a, b) => b.amount - a.amount);
 }
 
 /**
- * A day-by-day cumulative progress trend for the challenge detail chart. Other members' mock
- * history is genuinely per-day, so it drives the trend's shape; the current user's own total isn't
- * tracked per-day (only a running sum), so it's spread evenly across elapsed days as an approximation.
+ * A day-by-day cumulative progress trend for the challenge detail chart, from every real member's
+ * actual workout dates. The current user's own total isn't tracked per-day (only a running sum), so
+ * it's spread evenly across elapsed days as an approximation — everyone else's real per-workout
+ * dates drive the trend's actual shape.
  */
 export function challengeProgressTrend(
   metric: ChallengeMetric,
@@ -175,7 +155,7 @@ export function challengeProgressTrend(
   myContribution: number,
   startKey: string,
   endKey: string,
-  memberSessions: (memberId: string) => Record<string, WorkoutSession>,
+  memberActivity: (memberId: string) => MemberActivity,
 ): { date: string; value: number }[] {
   const start = fromDateKey(startKey);
   const end = fromDateKey(endKey < toDateKey(new Date()) ? endKey : toDateKey(new Date()));
@@ -190,7 +170,8 @@ export function challengeProgressTrend(
     let dayTotal = myPerDay;
     for (const member of members) {
       if (member.id === CURRENT_MEMBER_ID) continue;
-      dayTotal += mockContributionInRange(memberSessions(member.id), metric, dateKey, dateKey);
+      const { recentWorkouts, records } = memberActivity(member.id);
+      dayTotal += realContributionInRange(recentWorkouts, records, metric, dateKey, dateKey);
     }
     cumulative += dayTotal;
     points.push({ date: dateKey, value: Math.round(cumulative) });
@@ -200,34 +181,33 @@ export function challengeProgressTrend(
 
 export type ChallengeFeedEntry = { id: string; memberName: string; avatarUrl: string; amount: number; unit: string; timestamp: number };
 
-/** A believable activity feed for the challenge detail screen, built from each member's most recent mock contribution day. */
+/** A real activity feed for the challenge detail screen, built from each member's most recent
+ * genuine contributing workout within the range — real timestamps, not simulated ones. */
 export function challengeFeed(
   metric: ChallengeMetric,
   unit: string,
   members: CrewMember[],
   startKey: string,
   endKey: string,
-  memberSessions: (memberId: string) => Record<string, WorkoutSession>,
+  memberActivity: (memberId: string) => MemberActivity,
 ): ChallengeFeedEntry[] {
   const entries: ChallengeFeedEntry[] = [];
 
   for (const member of members) {
     if (member.id === CURRENT_MEMBER_ID) continue;
-    const sessions = memberSessions(member.id);
-    const dateKeys = Object.keys(sessions)
-      .filter((key) => key >= startKey && key <= endKey)
-      .sort()
-      .reverse();
-    const latestKey = dateKeys[0];
-    if (!latestKey) continue;
+    const { recentWorkouts, records } = memberActivity(member.id);
+    const inRange = recentWorkouts
+      .filter((workout) => {
+        const dateKey = toDateKey(new Date(workout.completedAt));
+        return dateKey >= startKey && dateKey <= endKey;
+      })
+      .sort((a, b) => b.completedAt - a.completedAt);
 
-    const amount = Math.round(mockContributionForDay(sessions[latestKey], metric));
-    if (amount <= 0) continue;
+    const latest = inRange.find((workout) => challengeContribution(metric, workout.exercises, records) > 0);
+    if (!latest) continue;
 
-    const daysAgo = Math.max(0, Math.round((fromDateKey(toDateKey(new Date())).getTime() - fromDateKey(latestKey).getTime()) / 86400000));
-    const timestamp = Date.now() - daysAgo * 86400000 - ((member.id.charCodeAt(1) ?? 0) % 6) * 3600000;
-
-    entries.push({ id: `${member.id}-${latestKey}`, memberName: member.name, avatarUrl: member.avatarUrl, amount, unit, timestamp });
+    const amount = Math.round(challengeContribution(metric, latest.exercises, records));
+    entries.push({ id: `${member.id}-${latest.id}`, memberName: member.name, avatarUrl: member.avatarUrl, amount, unit, timestamp: latest.completedAt });
   }
 
   return entries.sort((a, b) => b.timestamp - a.timestamp);

@@ -1,7 +1,6 @@
-import { crewChallengeProgress, weekKeyRange } from "@/lib/challenge-progress";
+import { crewChallengeProgress, weekKeyRange, type MemberActivity } from "@/lib/challenge-progress";
 import { toDateKey } from "@/lib/date";
 import { divisionForCrewPower, type Division } from "@/lib/division";
-import { generateMemberWorkoutSessions } from "@/data/workout-log";
 import type { CrewMember } from "@/store/crew-store";
 import type { CompletedWorkout } from "@/store/workout-history-store";
 
@@ -28,11 +27,12 @@ export function weeklyRivalPower(crewName: string, basePower: number, weekKey: s
   return Math.round(basePower * RIVAL_WEEKLY_POWER_RATIO * variance);
 }
 
-/** The current user's crew's real weekly power: their own logged volume this week, plus every mock
- * member's simulated volume for the same week — the same aggregation weekly challenges already use. */
+/** The current user's crew's real weekly power: their own logged volume this week, plus every real
+ * member's actual volume for the same week — the same aggregation weekly challenges already use. */
 export function computeCrewWeeklyPower(
   members: CrewMember[],
   myWorkouts: CompletedWorkout[],
+  othersActivity: Record<string, MemberActivity>,
   startKey: string,
   endKey: string,
 ): number {
@@ -44,7 +44,14 @@ export function computeCrewWeeklyPower(
     .reduce((sum, workout) => sum + workout.volumeKg, 0);
 
   return Math.round(
-    crewChallengeProgress({ type: "totalVolume" }, members, myVolume, startKey, endKey, generateMemberWorkoutSessions),
+    crewChallengeProgress(
+      { type: "totalVolume" },
+      members,
+      myVolume,
+      startKey,
+      endKey,
+      (memberId) => othersActivity[memberId] ?? { recentWorkouts: [], records: {} },
+    ),
   );
 }
 

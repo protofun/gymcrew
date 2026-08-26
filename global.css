@@ -116,3 +116,13 @@ body {
   background-color: var(--color-background);
   overscroll-behavior: none;
 }
+
+/* Web only: mobile Safari/Chrome auto-zoom the whole page when focusing an input whose font-size
+   is under 16px (most of ours are body-md/14px) — forcing 16px here stops that zoom-in-then-have-
+   to-zoom-back-out on every field tap. No effect on native, and the visual size difference on web
+   is negligible. */
+input,
+textarea,
+select {
+  font-size: 16px !important;
+}

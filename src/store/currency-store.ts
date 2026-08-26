@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { pullState, pushState } from "@/lib/backend-sync";
+
 /**
  * Spendable tokens — the earnable-currency leveling reward. Earned from every XP-earning activity,
  * not just division level-ups: finishing a workout, hitting a PR, completing a crew challenge, or
@@ -15,13 +17,15 @@ export const TOKENS_PER_BATTLE_WIN = 5;
 export const STREAK_FREEZE_COST = 5;
 export const XP_BOOST_COST = 15;
 
-type CurrencyState = {
+type CurrencyData = {
   tokens: number;
   /** Date-keys a Streak Freeze was spent on — treated as a trained day for streak purposes (see lib/streak.ts). */
   freezeDateKeys: string[];
   /** True once a 2x XP Boost is bought, until the next workout consumes it (see workout/active.tsx). */
   xpBoostActive: boolean;
 };
+
+type CurrencyState = CurrencyData;
 
 type CurrencyActions = {
   grantTokens: (amount: number) => void;
@@ -33,7 +37,13 @@ type CurrencyActions = {
   activateXpBoost: () => boolean;
   /** Called once the boosted workout's XP has been granted, so it doesn't double the next one too. */
   consumeXpBoost: () => void;
+  syncFromServer: () => Promise<void>;
 };
+
+function syncPush(get: () => CurrencyState) {
+  const { tokens, freezeDateKeys, xpBoostActive } = get();
+  pushState("currency", { tokens, freezeDateKeys, xpBoostActive });
+}
 
 export const useCurrencyStore = create<CurrencyState & CurrencyActions>()(
   persist(
@@ -41,26 +51,36 @@ export const useCurrencyStore = create<CurrencyState & CurrencyActions>()(
       tokens: 0,
       freezeDateKeys: [],
       xpBoostActive: false,
-      grantTokens: (amount) => set((state) => ({ tokens: state.tokens + amount })),
+      grantTokens: (amount) => {
+        set((state) => ({ tokens: state.tokens + amount }));
+        syncPush(get);
+      },
       spendTokens: (amount) => {
         const state = get();
         if (state.tokens < amount) return false;
         set({ tokens: state.tokens - amount });
+        syncPush(get);
         return true;
       },
       useStreakFreeze: (dateKey) => {
         const state = get();
         if (state.tokens < STREAK_FREEZE_COST || state.freezeDateKeys.includes(dateKey)) return false;
         set({ tokens: state.tokens - STREAK_FREEZE_COST, freezeDateKeys: [...state.freezeDateKeys, dateKey] });
+        syncPush(get);
         return true;
       },
       activateXpBoost: () => {
         const state = get();
         if (state.xpBoostActive || state.tokens < XP_BOOST_COST) return false;
         set({ tokens: state.tokens - XP_BOOST_COST, xpBoostActive: true });
+        syncPush(get);
         return true;
       },
-      consumeXpBoost: () => set({ xpBoostActive: false }),
+      consumeXpBoost: () => {
+        set({ xpBoostActive: false });
+        syncPush(get);
+      },
+      syncFromServer: () => pullState<CurrencyData>("currency", (data) => set(data)),
     }),
     {
       name: "gymcrew-currency",

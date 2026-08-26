@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import type { Exercise } from "@/data/exercises";
+import { pullState, pushState } from "@/lib/backend-sync";
 import { useOnboardingStore } from "@/store/onboarding-store";
 
 export type WeightUnit = "kg" | "lbs";
@@ -76,10 +77,26 @@ type ActiveWorkoutStore = {
   addSet: (exerciseId: string) => void;
   removeSet: (exerciseId: string, setId: string) => void;
   updateSet: (exerciseId: string, setId: string, updates: Partial<Omit<LoggedSet, "id">>) => void;
+  /** Pulls this account's in-progress workout draft from the backend — so starting the app on a
+   * different device (or after clearing local storage) can resume a workout you're mid-way through
+   * logging, not just whatever's cached on this one device. */
+  syncFromServer: () => Promise<void>;
 };
+
+/** Everything about the draft that's worth resuming on another device — deliberately excludes
+ * nothing here, since even mid-set values (unfinished weight/reps) are worth not losing. */
+type ActiveWorkoutSyncedState = Pick<
+  ActiveWorkoutStore,
+  "startedAt" | "name" | "notes" | "unit" | "exercises" | "restEndTime" | "restDurationSeconds" | "autoFillPreviousSet"
+>;
 
 function initialState(): Pick<ActiveWorkoutStore, "startedAt" | "name" | "notes" | "unit" | "exercises" | "restEndTime"> {
   return { startedAt: null, name: "", notes: "", unit: "kg", exercises: [], restEndTime: null };
+}
+
+function syncPush(get: () => ActiveWorkoutStore) {
+  const { startedAt, name, notes, unit, exercises, restEndTime, restDurationSeconds, autoFillPreviousSet } = get();
+  pushState("active-workout", { startedAt, name, notes, unit, exercises, restEndTime, restDurationSeconds, autoFillPreviousSet });
 }
 
 export const useActiveWorkoutStore = create<ActiveWorkoutStore>()(
@@ -90,62 +107,104 @@ export const useActiveWorkoutStore = create<ActiveWorkoutStore>()(
       autoFillPreviousSet: true,
 
       // Defaults to the user's Profile > Units preference rather than always "kg".
-      startWorkout: () => set({ ...initialState(), unit: useOnboardingStore.getState().weightUnit, startedAt: Date.now() }),
-      discardWorkout: () => set(initialState()),
-      finishWorkout: () => set(initialState()),
-      setName: (name) => set({ name }),
-      setNotes: (notes) => set({ notes }),
-      setUnit: (unit) => set({ unit }),
-      setRestDurationSeconds: (seconds) => set({ restDurationSeconds: seconds }),
-      setAutoFillPreviousSet: (enabled) => set({ autoFillPreviousSet: enabled }),
+      startWorkout: () => {
+        set({ ...initialState(), unit: useOnboardingStore.getState().weightUnit, startedAt: Date.now() });
+        syncPush(get);
+      },
+      discardWorkout: () => {
+        set(initialState());
+        syncPush(get);
+      },
+      finishWorkout: () => {
+        set(initialState());
+        syncPush(get);
+      },
+      setName: (name) => {
+        set({ name });
+        syncPush(get);
+      },
+      setNotes: (notes) => {
+        set({ notes });
+        syncPush(get);
+      },
+      setUnit: (unit) => {
+        set({ unit });
+        syncPush(get);
+      },
+      setRestDurationSeconds: (seconds) => {
+        set({ restDurationSeconds: seconds });
+        syncPush(get);
+      },
+      setAutoFillPreviousSet: (enabled) => {
+        set({ autoFillPreviousSet: enabled });
+        syncPush(get);
+      },
 
       startRest: () => {
         const duration = get().restDurationSeconds;
         if (duration <= 0) return;
         set({ restEndTime: Date.now() + duration * 1000 });
+        syncPush(get);
       },
-      stopRest: () => set({ restEndTime: null }),
-      addRestSeconds: (seconds) =>
+      stopRest: () => {
+        set({ restEndTime: null });
+        syncPush(get);
+      },
+      addRestSeconds: (seconds) => {
         set((state) => {
           if (state.restEndTime === null) return {};
           return { restEndTime: Math.max(Date.now(), state.restEndTime + seconds * 1000) };
-        }),
+        });
+        syncPush(get);
+      },
 
-      addExercise: (exercise) =>
-        set((state) => ({ exercises: [...state.exercises, toLoggedExercise(exercise, [makeSet()])] })),
+      addExercise: (exercise) => {
+        set((state) => ({ exercises: [...state.exercises, toLoggedExercise(exercise, [makeSet()])] }));
+        syncPush(get);
+      },
 
-      removeExercise: (exerciseId) =>
-        set((state) => ({ exercises: state.exercises.filter((e) => e.exerciseId !== exerciseId) })),
+      removeExercise: (exerciseId) => {
+        set((state) => ({ exercises: state.exercises.filter((e) => e.exerciseId !== exerciseId) }));
+        syncPush(get);
+      },
 
-      replaceExercise: (exerciseId, exercise) =>
+      replaceExercise: (exerciseId, exercise) => {
         set((state) => ({
           exercises: state.exercises.map((e) =>
             e.exerciseId === exerciseId ? toLoggedExercise(exercise, e.sets) : e,
           ),
-        })),
+        }));
+        syncPush(get);
+      },
 
-      setExerciseNote: (exerciseId, note) =>
+      setExerciseNote: (exerciseId, note) => {
         set((state) => ({
           exercises: state.exercises.map((e) => (e.exerciseId === exerciseId ? { ...e, note } : e)),
-        })),
+        }));
+        syncPush(get);
+      },
 
-      addSet: (exerciseId) =>
+      addSet: (exerciseId) => {
         set((state) => ({
           exercises: state.exercises.map((e) => {
             if (e.exerciseId !== exerciseId) return e;
             const previousSet = state.autoFillPreviousSet ? e.sets[e.sets.length - 1] : undefined;
             return { ...e, sets: [...e.sets, makeSet(previousSet)] };
           }),
-        })),
+        }));
+        syncPush(get);
+      },
 
-      removeSet: (exerciseId, setId) =>
+      removeSet: (exerciseId, setId) => {
         set((state) => ({
           exercises: state.exercises.map((e) =>
             e.exerciseId === exerciseId ? { ...e, sets: e.sets.filter((s) => s.id !== setId) } : e,
           ),
-        })),
+        }));
+        syncPush(get);
+      },
 
-      updateSet: (exerciseId, setId, updates) =>
+      updateSet: (exerciseId, setId, updates) => {
         set((state) => {
           // Marking a (non-warmup) set complete auto-starts the rest timer — the whole point is to
           // not have to think about it between sets. Warm-ups don't need a full rest, so they're
@@ -166,7 +225,11 @@ export const useActiveWorkoutStore = create<ActiveWorkoutStore>()(
                 : e,
             ),
           };
-        }),
+        });
+        syncPush(get);
+      },
+
+      syncFromServer: () => pullState<ActiveWorkoutSyncedState>("active-workout", (data) => set(data)),
     }),
     {
       name: "gymcrew-active-workout",

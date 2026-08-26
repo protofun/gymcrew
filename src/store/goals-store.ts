@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { pullState, pushState } from "@/lib/backend-sync";
 import { colors } from "@/theme";
 
 export type TrackingMode = "auto" | "manual";
@@ -81,21 +82,29 @@ type GoalsStore = {
   updateGoal: (id: string, updates: Partial<Goal>) => void;
   addGoal: (goal: Omit<Goal, "id">) => void;
   removeGoal: (id: string) => void;
+  syncFromServer: () => Promise<void>;
 };
 
 export const useGoalsStore = create<GoalsStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       goals: DEFAULT_GOALS,
-      updateGoal: (id, updates) =>
-        set((state) => ({
-          goals: state.goals.map((goal) => (goal.id === id ? { ...goal, ...updates } : goal)),
-        })),
-      addGoal: (goal) =>
-        set((state) => ({
-          goals: [...state.goals, { ...goal, id: `custom-${Date.now()}` }],
-        })),
-      removeGoal: (id) => set((state) => ({ goals: state.goals.filter((goal) => goal.id !== id) })),
+      updateGoal: (id, updates) => {
+        const goals = get().goals.map((goal) => (goal.id === id ? { ...goal, ...updates } : goal));
+        set({ goals });
+        pushState("goals", { goals });
+      },
+      addGoal: (goal) => {
+        const goals = [...get().goals, { ...goal, id: `custom-${Date.now()}` }];
+        set({ goals });
+        pushState("goals", { goals });
+      },
+      removeGoal: (id) => {
+        const goals = get().goals.filter((goal) => goal.id !== id);
+        set({ goals });
+        pushState("goals", { goals });
+      },
+      syncFromServer: () => pullState<{ goals: Goal[] }>("goals", (data) => set(data)),
     }),
     {
       name: "gymcrew-goals",

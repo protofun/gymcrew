@@ -1,19 +1,12 @@
-import { ALL_MUSCLE_GROUPS, generateMemberWorkoutSessions, type MuscleGroup } from "@/data/workout-log";
+import { ALL_MUSCLE_GROUPS, type MuscleGroup } from "@/data/workout-log";
 import { MAJOR_LIFT_CARDS, SEEDED_LIFT_CARDS, type LiftCardId } from "@/data/rank-lifts";
+import type { ApiCrewMemberActivity } from "@/lib/api";
 import { toDateKey } from "@/lib/date";
-import { gymStandingForCard, type LiftRankCard } from "@/lib/lift-rank-cards";
-import { memberStrengthProgress } from "@/lib/member-mock-profile";
+import { buildLiftRankCards, gymStandingForCard, type LiftRankCard } from "@/lib/lift-rank-cards";
 import { computeMuscleGroupRanks, type MuscleGroupRank } from "@/lib/muscle-group-rank";
-import {
-  calculateLiftRankDetail,
-  mockNameForMajorLift,
-  mockProfileFor,
-  RANK_TIERS,
-  type MajorLift,
-  type RankProfile,
-  type RankTier,
-} from "@/lib/rank";
+import { calculateLiftRankDetail, RANK_TIERS, type MajorLift, type RankProfile, type RankTier } from "@/lib/rank";
 import { BRO_MEMBER_ID, CURRENT_MEMBER_ID, GLUTE_ONLY_MEMBER_ID, LEE_PRIEST_MEMBER_ID, type CrewMember } from "@/store/crew-store";
+import type { PersonalRecord } from "@/store/personal-records-store";
 
 export type CrewLiftStanding = {
   id: string;
@@ -24,7 +17,8 @@ export type CrewLiftStanding = {
   tier: RankTier;
   percentileInTier: number;
   score: number;
-  daysSinceLogged: number;
+  /** `null` when this person has never logged this lift — never a fabricated placeholder. */
+  daysSinceLogged: number | null;
 };
 
 /** Matches lib/lift-rank-cards.ts's score formula, so crew and personal scores stay comparable. */
@@ -33,8 +27,9 @@ const SCORE_PER_BODYWEIGHT_RATIO = 4000;
 /**
  * Lee Priest — added as a "boss" crew member with curated numbers clear of the current user's own
  * on every tracked lift, so there's always someone worth comparing against. Real profile + weights
- * instead of the generic per-member mock, so his card is deliberately, consistently maxed out rather
- * than landing on Legend by formula coincidence.
+ * instead of a real crewmate's own data, so his card is deliberately, consistently maxed out rather
+ * than landing on Legend by formula coincidence. A real Clerk account is never one of these three
+ * curated ids (see crew-store.ts) — they only ever appear via an explicit Developer Mode demo tool.
  */
 const LEE_PRIEST_ID = LEE_PRIEST_MEMBER_ID;
 const LEE_PRIEST_PROFILE: RankProfile = { gender: "male", bodyWeightKg: 95, age: 54 };
@@ -132,72 +127,99 @@ const PEACH_MUSCLE_OVERRIDE: Partial<Record<MuscleGroup, MuscleGroupRank>> = Obj
 
 const CURATED_MEMBER_IDS = new Set([LEE_PRIEST_ID, BRO_ID, PEACH_ID]);
 
+function isCuratedMember(memberId: string): boolean {
+  return CURATED_MEMBER_IDS.has(memberId);
+}
+
 function hashString(value: string): number {
   let hash = 0;
   for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
   return hash;
 }
 
+/** A curated member's fixed profile — only ever called for one of the 3 curated ids above. */
 export function profileForCrewMember(memberId: string): RankProfile {
   if (memberId === LEE_PRIEST_ID) return LEE_PRIEST_PROFILE;
   if (memberId === BRO_ID) return BRO_PROFILE;
-  if (memberId === PEACH_ID) return PEACH_PROFILE;
-  return mockProfileFor(memberId);
+  return PEACH_PROFILE;
 }
 
-function weightForCrewMember(liftId: LiftCardId, memberId: string, myWeightKg: number): number {
+function curatedWeightForMember(liftId: LiftCardId, memberId: string): number {
   if (memberId === LEE_PRIEST_ID) return LEE_PRIEST_LIFTS_KG[liftId];
   if (memberId === BRO_ID) return BRO_LIFTS_KG[liftId];
-  if (memberId === PEACH_ID) return PEACH_LIFTS_KG[liftId];
-
-  const majorLift = MAJOR_LIFT_CARDS.find((lift) => lift.id === liftId)?.majorLift;
-  if (majorLift) {
-    const points = memberStrengthProgress(generateMemberWorkoutSessions(memberId))[mockNameForMajorLift(majorLift)] ?? [];
-    if (points.length > 0) return Math.max(...points.map((point) => point.value));
-  }
-  // No strength standard (or no mock session history) for this lift — a deterministic jitter around
-  // the user's own best keeps every crew member's number stable and plausible without a real dataset.
-  const hash = hashString(`${liftId}-${memberId}`);
-  return Math.round(myWeightKg * (0.82 + (hash % 40) / 100));
+  return PEACH_LIFTS_KG[liftId];
 }
 
-/** The major lift to rank `liftId` against for `memberId` — the real one for the 4 major lifts, a
- * proxy for seeded lifts but only for curated members (see SEEDED_LIFT_PROXY_MAJOR_LIFT above). */
+/** The major lift to rank `liftId` against for a curated member's seeded lifts (see
+ * SEEDED_LIFT_PROXY_MAJOR_LIFT above) — the real one for the 4 major lifts either way. */
 function majorLiftFor(liftId: LiftCardId, memberId: string): MajorLift | undefined {
-  return MAJOR_LIFT_CARDS.find((lift) => lift.id === liftId)?.majorLift ?? (CURATED_MEMBER_IDS.has(memberId) ? SEEDED_LIFT_PROXY_MAJOR_LIFT[liftId] : undefined);
+  return MAJOR_LIFT_CARDS.find((lift) => lift.id === liftId)?.majorLift ?? (isCuratedMember(memberId) ? SEEDED_LIFT_PROXY_MAJOR_LIFT[liftId] : undefined);
 }
 
-/** Where every other crew member (mocked, except Lee Priest's curated numbers) and "me" (real)
- * stand on one specific lift, heaviest first — powers the lift detail page's "In your crew" list
- * and the compare screen. */
-export function crewLiftStandings(liftId: LiftCardId, myCard: LiftRankCard, crewMembers: CrewMember[]): CrewLiftStanding[] {
+/** A real crewmate's real gender/bodyweight (see backend/routes/crews.php's `/crews/:id/activity`),
+ * or a neutral placeholder while it's still loading. */
+function realProfileFor(memberId: string, othersActivity: Record<string, ApiCrewMemberActivity>): RankProfile {
+  const profile = othersActivity[memberId]?.profile;
+  return { gender: profile?.gender ?? "male", bodyWeightKg: profile?.weightKg ?? 85 };
+}
+
+/** A real crewmate's full lift-card set, computed from their real personal records — the exact same
+ * function/formula "my" cards use (see lib/lift-rank-cards.ts), never a mock generator. */
+function realCardsFor(memberId: string, othersActivity: Record<string, ApiCrewMemberActivity>): LiftRankCard[] {
+  const records = othersActivity[memberId]?.records ?? {};
+  return buildLiftRankCards(records, realProfileFor(memberId, othersActivity), "gym");
+}
+
+/** Where every other crew member and "me" stand on one specific lift, heaviest first — powers the
+ * lift detail page's "In your crew" list and the compare screen. Real crewmates use their real
+ * records (via `othersActivity`, see crew-activity-store.ts); the 3 curated "boss" members keep
+ * their fixed numbers. */
+export function crewLiftStandings(
+  liftId: LiftCardId,
+  myCard: LiftRankCard,
+  myRecord: PersonalRecord | undefined,
+  crewMembers: CrewMember[],
+  othersActivity: Record<string, ApiCrewMemberActivity>,
+): CrewLiftStanding[] {
   const me = crewMembers.find((member) => member.id === CURRENT_MEMBER_ID);
 
   const standings: CrewLiftStanding[] = crewMembers
     .filter((member) => member.id !== CURRENT_MEMBER_ID)
     .map((member) => {
-      // Lee Priest is always Legend regardless, by design — everyone else (including Bro) gets a
-      // real computed tier off their (possibly curated) weight.
-      const isLeePriest = member.id === LEE_PRIEST_ID;
-      const weightKg = weightForCrewMember(liftId, member.id, myCard.bestWeightKg);
-      const memberProfile = profileForCrewMember(member.id);
-      const majorLift = majorLiftFor(liftId, member.id);
-      const detail = majorLift ? calculateLiftRankDetail(majorLift, weightKg, memberProfile) : null;
-      const score = Math.round((weightKg / memberProfile.bodyWeightKg) * SCORE_PER_BODYWEIGHT_RATIO);
+      if (isCuratedMember(member.id)) {
+        // Lee Priest is always Legend regardless, by design — everyone else (including Bro) gets a
+        // real computed tier off their curated weight.
+        const isLeePriest = member.id === LEE_PRIEST_ID;
+        const weightKg = curatedWeightForMember(liftId, member.id);
+        const memberProfile = profileForCrewMember(member.id);
+        const majorLift = majorLiftFor(liftId, member.id);
+        const detail = majorLift ? calculateLiftRankDetail(majorLift, weightKg, memberProfile) : null;
+        const score = Math.round((weightKg / memberProfile.bodyWeightKg) * SCORE_PER_BODYWEIGHT_RATIO);
+        return {
+          id: member.id,
+          name: member.name,
+          avatarUrl: member.avatarUrl,
+          isMe: false,
+          weightKg,
+          tier: isLeePriest ? ("legend" as RankTier) : (detail?.tier ?? myCard.tier),
+          percentileInTier: isLeePriest ? 0.99 : (detail?.progressToNextTier ?? myCard.percentileInTier),
+          score,
+          daysSinceLogged: 1 + (hashString(`${liftId}-${member.id}-logged`) % 6),
+        };
+      }
 
+      const theirCard = realCardsFor(member.id, othersActivity).find((card) => card.id === liftId);
+      const theirRecord = theirCard ? othersActivity[member.id]?.records[theirCard.exerciseId] : undefined;
       return {
         id: member.id,
         name: member.name,
         avatarUrl: member.avatarUrl,
         isMe: false,
-        weightKg,
-        // No standard to rank teammates against for a non-curated member's seeded lifts —
-        // approximating at "my" tier keeps the comparison visually sane rather than defaulting
-        // everyone to Rookie.
-        tier: isLeePriest ? "legend" : (detail?.tier ?? myCard.tier),
-        percentileInTier: isLeePriest ? 0.99 : (detail?.progressToNextTier ?? myCard.percentileInTier),
-        score,
-        daysSinceLogged: 1 + (hashString(`${liftId}-${member.id}-logged`) % 6),
+        weightKg: theirCard?.bestWeightKg ?? 0,
+        tier: theirCard?.tier ?? "rookie",
+        percentileInTier: theirCard?.percentileInTier ?? 0,
+        score: theirCard?.score ?? 0,
+        daysSinceLogged: theirRecord ? Math.floor((Date.now() - theirRecord.achievedAt) / 86400000) : null,
       };
     });
 
@@ -210,7 +232,7 @@ export function crewLiftStandings(liftId: LiftCardId, myCard: LiftRankCard, crew
     tier: myCard.tier,
     percentileInTier: myCard.percentileInTier,
     score: myCard.score,
-    daysSinceLogged: 2,
+    daysSinceLogged: myRecord ? Math.floor((Date.now() - myRecord.achievedAt) / 86400000) : null,
   });
 
   return standings.sort((a, b) => b.weightKg - a.weightKg);
@@ -227,17 +249,24 @@ export function nearestRival(standings: CrewLiftStanding[]): CrewLiftStanding | 
   );
 }
 
-/** A full 9-lift card set for any crew member (not "me") — same shape lib/lift-rank-cards.ts builds
+/** A full lift-card set for any crew member (not "me") — same shape lib/lift-rank-cards.ts builds
  * for the current user, so it can feed the same consumers (e.g. computeMuscleGroupRanks) to show
- * another member's own rank overview / body graph. */
-export function memberLiftCards(memberId: string, myCards: LiftRankCard[]): LiftRankCard[] {
+ * another member's own rank overview / body graph. Real crewmates get their real cards; the 3
+ * curated "boss" members keep their fixed numbers. */
+export function memberLiftCards(
+  memberId: string,
+  myCards: LiftRankCard[],
+  othersActivity: Record<string, ApiCrewMemberActivity>,
+): LiftRankCard[] {
+  if (!isCuratedMember(memberId)) return realCardsFor(memberId, othersActivity);
+
   const myCardById = new Map(myCards.map((card) => [card.id, card]));
   const isLeePriest = memberId === LEE_PRIEST_ID;
   const memberProfile = profileForCrewMember(memberId);
 
   return [...MAJOR_LIFT_CARDS, ...SEEDED_LIFT_CARDS].map((def) => {
     const myCard = myCardById.get(def.id);
-    const weightKg = weightForCrewMember(def.id, memberId, myCard?.bestWeightKg ?? 0);
+    const weightKg = curatedWeightForMember(def.id, memberId);
     const majorLift = majorLiftFor(def.id, memberId);
     const detail = majorLift ? calculateLiftRankDetail(majorLift, weightKg, memberProfile) : null;
     const score = Math.round((weightKg / memberProfile.bodyWeightKg) * SCORE_PER_BODYWEIGHT_RATIO);
@@ -255,7 +284,7 @@ export function memberLiftCards(memberId: string, myCards: LiftRankCard[]): Lift
       percentileInTier,
       gymRank,
       gymPoolSize,
-      prDeltaKg: def.prDeltaKg,
+      prDeltaKg: null,
       isWeakPoint: false, // "lagging behind your OWN other lifts" doesn't apply cross-member
       bestWeightKg: weightKg,
       bestReps: 5,
@@ -265,12 +294,17 @@ export function memberLiftCards(memberId: string, myCards: LiftRankCard[]): Lift
 }
 
 /** Muscle-group ranks for any crew member (not "me") — Peach's hard override (see above) if it's
- * her, otherwise the normal weighted-composite formula off her/his lift cards. Exported so every
- * consumer of a crew member's muscle rank (the member profile Stats tab, the full body-graph page)
- * shows the same result instead of each re-deciding whether to special-case her. */
-export function muscleGroupRanksForCrewMember(memberId: string, myCards: LiftRankCard[]): Partial<Record<MuscleGroup, MuscleGroupRank>> {
+ * her, otherwise the normal weighted-composite formula off her/his lift cards (real for a real
+ * crewmate). Exported so every consumer of a crew member's muscle rank (the member profile Stats
+ * tab, the full body-graph page) shows the same result instead of each re-deciding whether to
+ * special-case her. */
+export function muscleGroupRanksForCrewMember(
+  memberId: string,
+  myCards: LiftRankCard[],
+  othersActivity: Record<string, ApiCrewMemberActivity>,
+): Partial<Record<MuscleGroup, MuscleGroupRank>> {
   if (memberId === PEACH_ID) return PEACH_MUSCLE_OVERRIDE;
-  return computeMuscleGroupRanks(memberLiftCards(memberId, myCards));
+  return computeMuscleGroupRanks(memberLiftCards(memberId, myCards, othersActivity));
 }
 
 export type PairedProgressionPoint = { date: string; mineKg: number; theirsKg: number };
@@ -279,11 +313,12 @@ const COMPARE_CHART_POINTS = 6;
 const COMPARE_CHART_SPAN_DAYS = 120; // ~4 months, evenly spaced
 
 /**
- * A deterministic, illustrative pair of growth curves for the compare screen's trend chart, both
- * ending at each person's actual current best — there's no real logged history to plot for most
- * lift/person combinations (the 5 seeded lifts have no strength standard, and other crew members'
- * numbers are mocked or, for Lee Priest, curated constants), so this generates a plausible shared
- * timeline rather than mixing real and fabricated dates.
+ * A pair of growth curves for the compare screen's trend chart, both ending at each person's
+ * actual current best (real for a real crewmate, curated for a "boss" member) — there's no
+ * per-day PR history logged yet (personal-records-store only keeps the current best, not a log of
+ * previous ones — see backend/db/schema.sql's `personal_records` table), so the path leading up to
+ * today is a plausible interpolated curve rather than a real timeline. The endpoints are always
+ * real; only the shape of the climb between "4 months ago" and "now" is illustrative.
  */
 export function pairedProgressionHistory(
   liftId: LiftCardId,

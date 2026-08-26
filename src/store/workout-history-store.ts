@@ -4,7 +4,6 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import type { MuscleGroup } from "@/data/workout-log";
 import { api, isApiConfigured } from "@/lib/api";
-import { DEMO_WORKOUTS } from "@/lib/demo-seed";
 import type { WorkoutPr } from "@/lib/workout-finish";
 import type { LoggedExercise, WeightUnit } from "@/store/active-workout-store";
 
@@ -35,7 +34,7 @@ type WorkoutHistoryStore = {
 export const useWorkoutHistoryStore = create<WorkoutHistoryStore>()(
   persist(
     (set) => ({
-      workouts: DEMO_WORKOUTS,
+      workouts: [],
       addWorkout: (workout) => {
         set((state) => ({ workouts: [workout, ...state.workouts] }));
         if (isApiConfigured) {
@@ -63,10 +62,11 @@ export const useWorkoutHistoryStore = create<WorkoutHistoryStore>()(
     {
       name: "gymcrew-workout-history",
       storage: createJSONStorage(() => AsyncStorage),
-      // A brand new account ships with a year of demo history (see lib/demo-seed.ts) so the app
-      // never looks empty — but the instant a real workout is logged, that persisted (real) array
-      // always wins here. Never overwrite real logged history with the demo set. Once a backend is
-      // configured, `syncFromServer` takes over as the real source of truth.
+      // Bumped once to hard-discard any locally cached demo/seed history from before this app
+      // stopped shipping fake "year of training" data by default — only real logged workouts and
+      // whatever the database actually has (via `syncFromServer`) count from here on.
+      version: 1,
+      migrate: () => ({ workouts: [] }),
       merge: (persistedState, currentState) => {
         const persisted = (persistedState as Partial<WorkoutHistoryStore> | undefined) ?? {};
         return {

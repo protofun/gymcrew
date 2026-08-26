@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Pressable, Text, View } from "react-native";
 
+import { EditableText } from "@/components/EditableText";
 import { images } from "@/constants/images";
 import { colors } from "@/theme";
 
@@ -20,10 +21,12 @@ export function WelcomeWidget({ name, onPressStartWorkout }: WelcomeWidgetProps)
         />
 
         <View className="pr-2">
-          <Text className="body-lg text-text-secondary">Welcome back, {name}! 👋</Text>
-          <Text className="heading-2 mt-1 text-brand-white" style={{ fontStyle: "italic" }}>
-            READY TO{"\n"}BE UNSTOPPABLE?
-          </Text>
+          <EditableText id="home.welcome.greeting" className="body-lg text-text-secondary">
+            {`Welcome back, ${name}! 👋`}
+          </EditableText>
+          <EditableText id="home.welcome.headline" className="heading-2 mt-1 text-brand-white" style={{ fontStyle: "italic" }}>
+            {"READY TO\nBE UNSTOPPABLE?"}
+          </EditableText>
         </View>
       </View>
 

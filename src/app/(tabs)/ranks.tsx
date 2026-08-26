@@ -7,6 +7,7 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { captureRef } from "react-native-view-shot";
 
+import { EditableText } from "@/components/EditableText";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { ProgressBar } from "@/components/ProgressBar";
 import { RankBadge } from "@/components/RankBadge";
@@ -111,9 +112,13 @@ function RanksBanner({ power, tier, scope, onChangeScope, onShare, onOpenHistory
           <View className="flex-row items-center gap-3">
             <RankBadge tier={tier} size={48} />
             <View>
-              <Text style={{ fontFamily: fontFamily.heading, fontSize: 26, lineHeight: 28 }} className="text-text-primary">
+              <EditableText
+                id="ranks.hero.powerScore"
+                style={{ fontFamily: fontFamily.heading, fontSize: 26, lineHeight: 28 }}
+                className="text-text-primary"
+              >
                 {power.toLocaleString("en-US")}
-              </Text>
+              </EditableText>
               <Text className="caption font-body-semibold text-text-secondary">
                 POWER SCORE · {formatRankTier(tier).toUpperCase()}
               </Text>
@@ -223,9 +228,9 @@ function LiftCard({
         </View>
 
         <View className="gap-0.5">
-          <Text className="caption font-body-bold" numberOfLines={1} style={{ color: tint }}>
+          <EditableText id={`ranks.lift.${card.id}.tier`} className="caption font-body-bold" style={{ color: tint }} numberOfLines={1}>
             {formatRankTier(card.tier).toUpperCase()}
-          </Text>
+          </EditableText>
           <Text className="body-sm font-body-semibold text-text-primary" numberOfLines={1}>
             {card.name}
           </Text>
@@ -234,9 +239,9 @@ function LiftCard({
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-1">
             <Ionicons name="barbell-outline" size={11} color={colors.neutral.textSecondary} />
-            <Text className="caption text-text-secondary" numberOfLines={1}>
+            <EditableText id={`ranks.lift.${card.id}.score`} className="caption text-text-secondary" numberOfLines={1}>
               {card.score.toLocaleString("en-US")}
-            </Text>
+            </EditableText>
           </View>
           <Text className="caption font-body-semibold text-text-primary" numberOfLines={1}>
             {scope === "gym" ? `#${card.gymRank}/${card.gymPoolSize}` : `${percent}%`}
@@ -251,9 +256,9 @@ function LiftCard({
             {card.prDeltaKg}kg PR
           </Text>
         ) : (
-          <Text className="caption font-body-semibold text-text-secondary" numberOfLines={1}>
+          <EditableText id={`ranks.lift.${card.id}.best`} className="caption font-body-semibold text-text-secondary" numberOfLines={1}>
             {card.bestWeightKg > 0 ? `Best: ${card.bestWeightKg}kg` : "No PR logged yet"}
-          </Text>
+          </EditableText>
         )}
       </Pressable>
     </Animated.View>

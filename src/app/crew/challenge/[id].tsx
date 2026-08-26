@@ -7,7 +7,6 @@ import { ContributorsList } from "@/components/ContributorsList";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
 import { CHALLENGE_TEMPLATES, CHALLENGE_XP_REWARD, type ChallengeMetric } from "@/data/challenges";
-import { generateMemberWorkoutSessions } from "@/data/workout-log";
 import {
   challengeFeed,
   challengeProgressTrend,
@@ -19,6 +18,7 @@ import {
 import { challengeHeroImage } from "@/lib/challenge-visuals";
 import { fromDateKey, toDateKey } from "@/lib/date";
 import { useChallengeStore } from "@/store/challenge-store";
+import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewStore } from "@/store/crew-store";
 import { colors, fontFamily } from "@/theme";
 
@@ -59,6 +59,8 @@ export default function ChallengeDetailScreen() {
   const members = useCrewStore((state) => state.members);
   const progressMap = useChallengeStore((state) => state.progress);
   const customChallenges = useChallengeStore((state) => state.customChallenges);
+  const membersActivity = useCrewActivityStore((state) => state.membersActivity);
+  const memberActivityLookup = (memberId: string) => membersActivity[memberId] ?? { recentWorkouts: [], records: {} };
 
   const custom = id?.startsWith("custom-") ? customChallenges.find((challenge) => challenge.id === id) : undefined;
   const weekly = !custom && id ? parseWeeklyInstanceId(id) : null;
@@ -96,13 +98,13 @@ export default function ChallengeDetailScreen() {
   }
 
   const myContribution = progressMap[id!] ?? 0;
-  const progress = crewChallengeProgress(metric, members, myContribution, startKey, endKey, generateMemberWorkoutSessions);
+  const progress = crewChallengeProgress(metric, members, myContribution, startKey, endKey, memberActivityLookup);
   const isComplete = progress >= target || Date.now() > endsAt;
   const percent = Math.min(100, Math.round((progress / Math.max(1, target)) * 100));
 
-  const contributors = perMemberContributions(metric, members, myContribution, startKey, endKey, generateMemberWorkoutSessions);
-  const trend = challengeProgressTrend(metric, members, myContribution, startKey, endKey, generateMemberWorkoutSessions);
-  const feed = challengeFeed(metric, unit, members, startKey, endKey, generateMemberWorkoutSessions);
+  const contributors = perMemberContributions(metric, members, myContribution, startKey, endKey, memberActivityLookup);
+  const trend = challengeProgressTrend(metric, members, myContribution, startKey, endKey, memberActivityLookup);
+  const feed = challengeFeed(metric, unit, members, startKey, endKey, memberActivityLookup);
 
   const opponent = custom
     ? { name: custom.opponentCrewName, progress: simulatedOpponentProgress(custom.id, custom.target, custom.startedAt, custom.endsAt) }

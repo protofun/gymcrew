@@ -11,7 +11,6 @@ import { RankBadge } from "@/components/RankBadge";
 import { SegmentedProportionBar } from "@/components/SegmentedProportionBar";
 import { StatTile } from "@/components/StatTile";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
-import { generateMemberWorkoutSessions } from "@/data/workout-log";
 import { perMemberContributions } from "@/lib/challenge-progress";
 import {
   crewExerciseVolume,
@@ -29,6 +28,7 @@ import { DIVISION_COLOR } from "@/lib/division";
 import { tierForExercise } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
 import type { RankProfile } from "@/lib/rank";
+import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
@@ -73,6 +73,8 @@ export function StatsTab() {
   const crewPowerChangePercent = useCrewStore((state) => state.crewPowerChangePercent);
   const divisionHistory = useCrewStore((state) => state.divisionHistory);
   const myWorkouts = useWorkoutHistoryStore((state) => state.workouts);
+  const membersActivity = useCrewActivityStore((state) => state.membersActivity);
+  const memberActivityLookup = (memberId: string) => membersActivity[memberId] ?? { recentWorkouts: [], records: {} };
 
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
@@ -83,21 +85,14 @@ export function StatsTab() {
 
   const { startKey, endKey } = rangeDateKeys(range);
   const powerTrend = crewPowerTrend(range, crewPower);
-  const totals = crewTotals(members, myWorkouts, startKey, endKey);
+  const totals = crewTotals(members, myWorkouts, membersActivity, startKey, endKey);
 
   const topLifts = TOP_LIFTS.map((lift) => ({
     ...lift,
-    volume: crewExerciseVolume(lift.exerciseId, lift.exerciseName, members, myWorkouts, startKey, endKey),
+    volume: crewExerciseVolume(lift.exerciseId, members, myWorkouts, membersActivity, startKey, endKey),
   })).sort((a, b) => b.volume - a.volume);
 
-  const selectedTrend = crewExerciseVolumeTrend(
-    selectedExercise.exerciseId,
-    selectedExercise.exerciseName,
-    members,
-    myWorkouts,
-    startKey,
-    endKey,
-  );
+  const selectedTrend = crewExerciseVolumeTrend(selectedExercise.exerciseId, members, myWorkouts, membersActivity, startKey, endKey);
 
   const myTotalVolume = realTotalVolumeInRange(myWorkouts, startKey, endKey);
   const topContributors = perMemberContributions(
@@ -106,11 +101,11 @@ export function StatsTab() {
     myTotalVolume,
     startKey,
     endKey,
-    generateMemberWorkoutSessions,
+    memberActivityLookup,
   );
 
-  const muscleSplit = crewMuscleSplit(members, myWorkouts);
-  const weeklyActivity = crewWeeklyActivity(members, myWorkouts);
+  const muscleSplit = crewMuscleSplit(members, myWorkouts, membersActivity);
+  const weeklyActivity = crewWeeklyActivity(members, myWorkouts, membersActivity);
   const timeline = divisionHistory.map((entry, index) => {
     const next = divisionHistory[index + 1];
     const endMs = next ? next.reachedAt : Date.now();

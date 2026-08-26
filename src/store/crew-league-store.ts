@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { pullState, pushState } from "@/lib/backend-sync";
 import {
   computeLeagueStandings,
   determineLeagueOutcome,
@@ -48,6 +49,7 @@ type CrewLeagueActions = {
    * week, in which case it finalizes that week from real historical data, applies promotion/relegation
    * to the crew's division, and refreshes `crewPower`/`divisionTopPercentile` on crew-store. */
   syncWeek: (input: SyncWeekInput) => void;
+  syncFromServer: () => Promise<void>;
 };
 
 export const useCrewLeagueStore = create<CrewLeagueState & CrewLeagueActions>()(
@@ -100,8 +102,11 @@ export const useCrewLeagueStore = create<CrewLeagueState & CrewLeagueActions>()(
           ...divisionUpdate,
         });
 
-        set({ weekKey: nowWeekKey, history: [result, ...state.history].slice(0, 12) });
+        const next = { weekKey: nowWeekKey, history: [result, ...state.history].slice(0, 12) };
+        set(next);
+        pushState("crew-league", next);
       },
+      syncFromServer: () => pullState<CrewLeagueState>("crew-league", (data) => set(data)),
     }),
     {
       name: "gymcrew-crew-league",

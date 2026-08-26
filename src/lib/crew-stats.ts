@@ -1,6 +1,6 @@
 import { BARBELL_EXERCISES, BODYWEIGHT_EXERCISES } from "@/data/challenges";
-import { generateMemberWorkoutSessions, type MuscleGroup, type WorkoutSession } from "@/data/workout-log";
-import { mockContributionInRange } from "@/lib/challenge-progress";
+import type { MuscleGroup } from "@/data/workout-log";
+import type { ApiCrewMemberActivity } from "@/lib/api";
 import { fromDateKey, getCurrentWeekDates, toDateKey } from "@/lib/date";
 import { crewMuscleBalance } from "@/lib/crew-muscle-balance";
 import { formatMuscleLabel } from "@/lib/muscle-groups";
@@ -32,8 +32,9 @@ export function rangeDateKeys(range: StatsRange): { startKey: string; endKey: st
   if (range === "month") {
     return { startKey: toDateKey(new Date(today.getFullYear(), today.getMonth(), 1)), endKey };
   }
-  // "All time" mock history only goes back ~3 months (see generateMemberWorkoutSessions), so that's the useful window.
-  return { startKey: toDateKey(new Date(today.getFullYear(), today.getMonth() - 3, today.getDate())), endKey };
+  // "All time" — 2 years back is generous slack for a genuinely new app; there's no real account
+  // old enough for this to actually clip anything yet.
+  return { startKey: toDateKey(new Date(today.getFullYear() - 2, today.getMonth(), today.getDate())), endKey };
 }
 
 function hashString(value: string): number {
@@ -116,30 +117,46 @@ export function realTotalSetsInRange(workouts: CompletedWorkout[], startKey: str
   return total;
 }
 
-function otherMemberSessions(members: CrewMember[]): Record<string, WorkoutSession>[] {
-  return members.filter((member) => member.id !== CURRENT_MEMBER_ID).map((member) => generateMemberWorkoutSessions(member.id));
+/** Every member's real workouts (yours from workout-history-store, everyone else's from
+ * `othersActivity` — see crew-activity-store.ts) combined into one array, so the plain `real*InRange`
+ * functions below can be reused as-is for crew-wide totals instead of a separate mock code path. */
+function allMembersWorkouts(
+  members: CrewMember[],
+  myWorkouts: CompletedWorkout[],
+  othersActivity: Record<string, ApiCrewMemberActivity>,
+): CompletedWorkout[] {
+  const combined: CompletedWorkout[] = [];
+  for (const member of members) {
+    combined.push(...(member.id === CURRENT_MEMBER_ID ? myWorkouts : (othersActivity[member.id]?.recentWorkouts ?? [])));
+  }
+  return combined;
 }
 
 export type CrewTotals = { volumeKg: number; workouts: number; sets: number };
 
-/** Crew-wide totals (real data for the current user, mock for everyone else) for the snapshot row atop the Stats tab. */
-export function crewTotals(members: CrewMember[], myWorkouts: CompletedWorkout[], startKey: string, endKey: string): CrewTotals {
-  let volumeKg = realTotalVolumeInRange(myWorkouts, startKey, endKey);
-  let workouts = realTotalWorkoutsInRange(myWorkouts, startKey, endKey);
-  let sets = realTotalSetsInRange(myWorkouts, startKey, endKey);
-
-  for (const sessions of otherMemberSessions(members)) {
-    volumeKg += mockContributionInRange(sessions, { type: "totalVolume" }, startKey, endKey);
-    workouts += mockContributionInRange(sessions, { type: "totalWorkouts" }, startKey, endKey);
-    sets += mockContributionInRange(sessions, { type: "totalSets" }, startKey, endKey);
-  }
-
-  return { volumeKg: Math.round(volumeKg), workouts, sets };
+/** Crew-wide totals for the snapshot row atop the Stats tab, from every member's real workouts. */
+export function crewTotals(
+  members: CrewMember[],
+  myWorkouts: CompletedWorkout[],
+  othersActivity: Record<string, ApiCrewMemberActivity>,
+  startKey: string,
+  endKey: string,
+): CrewTotals {
+  const allWorkouts = allMembersWorkouts(members, myWorkouts, othersActivity);
+  return {
+    volumeKg: realTotalVolumeInRange(allWorkouts, startKey, endKey),
+    workouts: realTotalWorkoutsInRange(allWorkouts, startKey, endKey),
+    sets: realTotalSetsInRange(allWorkouts, startKey, endKey),
+  };
 }
 
 /** This week's crew-wide training load per muscle group as donut-chart segments — the top 5 groups get their own slice, the rest are folded into "Other" so the chart stays legible. */
-export function crewMuscleSplit(members: CrewMember[], myWorkouts: CompletedWorkout[]): MuscleSplitSegment[] {
-  const intensity = crewMuscleBalance(members, myWorkouts);
+export function crewMuscleSplit(
+  members: CrewMember[],
+  myWorkouts: CompletedWorkout[],
+  othersActivity: Record<string, ApiCrewMemberActivity>,
+): MuscleSplitSegment[] {
+  const intensity = crewMuscleBalance(members, myWorkouts, othersActivity);
   const sorted = (Object.entries(intensity) as [MuscleGroup, number | undefined][])
     .filter((entry): entry is [MuscleGroup, number] => (entry[1] ?? 0) > 0)
     .sort((a, b) => b[1] - a[1]);
@@ -159,46 +176,43 @@ export function crewMuscleSplit(members: CrewMember[], myWorkouts: CompletedWork
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-/** Crew-wide workout count per weekday, this week (real data for the current user, mock for everyone else) — for the Stats tab's weekly-activity bar chart. */
-export function crewWeeklyActivity(members: CrewMember[], myWorkouts: CompletedWorkout[]): { label: string; value: number }[] {
-  const sessionsList = otherMemberSessions(members);
+/** Crew-wide workout count per weekday, this week, from every member's real workouts — for the Stats tab's weekly-activity bar chart. */
+export function crewWeeklyActivity(
+  members: CrewMember[],
+  myWorkouts: CompletedWorkout[],
+  othersActivity: Record<string, ApiCrewMemberActivity>,
+): { label: string; value: number }[] {
+  const allWorkouts = allMembersWorkouts(members, myWorkouts, othersActivity);
 
   return getCurrentWeekDates(new Date()).map((date, index) => {
     const dateKey = toDateKey(date);
-    let count = realTotalWorkoutsInRange(myWorkouts, dateKey, dateKey);
-    for (const sessions of sessionsList) {
-      count += mockContributionInRange(sessions, { type: "totalWorkouts" }, dateKey, dateKey);
-    }
-    return { label: WEEKDAY_LABELS[index], value: count };
+    return { label: WEEKDAY_LABELS[index], value: realTotalWorkoutsInRange(allWorkouts, dateKey, dateKey) };
   });
 }
 
-/** Crew-wide total volume for one named exercise (real data for the current user, mock for everyone else). */
+/** Crew-wide total volume for one exercise, from every member's real workouts. */
 export function crewExerciseVolume(
   exerciseId: string,
-  exerciseName: string,
   members: CrewMember[],
   myWorkouts: CompletedWorkout[],
+  othersActivity: Record<string, ApiCrewMemberActivity>,
   startKey: string,
   endKey: string,
 ): number {
-  let total = realExerciseVolumeInRange(myWorkouts, exerciseId, startKey, endKey);
-  for (const sessions of otherMemberSessions(members)) {
-    total += mockContributionInRange(sessions, { type: "exerciseVolume", exerciseId, exerciseName }, startKey, endKey);
-  }
-  return Math.round(total);
+  const allWorkouts = allMembersWorkouts(members, myWorkouts, othersActivity);
+  return Math.round(realExerciseVolumeInRange(allWorkouts, exerciseId, startKey, endKey));
 }
 
 /** Cumulative crew-wide volume for one exercise, day by day, for the chart in the Stats tab's exercise explorer. */
 export function crewExerciseVolumeTrend(
   exerciseId: string,
-  exerciseName: string,
   members: CrewMember[],
   myWorkouts: CompletedWorkout[],
+  othersActivity: Record<string, ApiCrewMemberActivity>,
   startKey: string,
   endKey: string,
 ): { date: string; value: number }[] {
-  const sessionsList = otherMemberSessions(members);
+  const allWorkouts = allMembersWorkouts(members, myWorkouts, othersActivity);
   const start = fromDateKey(startKey);
   const dayCount = Math.max(1, Math.round((fromDateKey(endKey).getTime() - start.getTime()) / 86400000) + 1);
 
@@ -207,11 +221,7 @@ export function crewExerciseVolumeTrend(
   for (let i = 0; i < dayCount; i++) {
     const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
     const dateKey = toDateKey(day);
-    let dayTotal = realExerciseVolumeInRange(myWorkouts, exerciseId, dateKey, dateKey);
-    for (const sessions of sessionsList) {
-      dayTotal += mockContributionInRange(sessions, { type: "exerciseVolume", exerciseId, exerciseName }, dateKey, dateKey);
-    }
-    cumulative += dayTotal;
+    cumulative += realExerciseVolumeInRange(allWorkouts, exerciseId, dateKey, dateKey);
     points.push({ date: dateKey, value: Math.round(cumulative) });
   }
   return points;
