@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Pressable, View } from "react-native";
 
 import { AddGoalModal } from "@/components/AddGoalModal";
+import { EditableText } from "@/components/EditableText";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
 import { GoalRing } from "@/components/GoalRing";
 import { images } from "@/constants/images";
@@ -29,13 +30,13 @@ function GoalRow({ goal, sessions, onPress }: { goal: Goal; sessions: Record<str
         </View>
       </GoalRing>
 
-      <Text className="body-md font-body-semibold flex-1 text-text-primary" numberOfLines={1}>
+      <EditableText id={`home.goals.${goal.id}.label`} className="body-md font-body-semibold flex-1 text-text-primary" numberOfLines={1}>
         {goal.label}
-      </Text>
+      </EditableText>
 
-      <Text className="body-lg font-body-semibold" style={{ color: goal.color }}>
-        {percent}%
-      </Text>
+      <EditableText id={`home.goals.${goal.id}.percent`} className="body-lg font-body-semibold" style={{ color: goal.color }}>
+        {`${percent}%`}
+      </EditableText>
     </Pressable>
   );
 }
@@ -60,13 +61,19 @@ export function GoalsWidget({ sessions }: GoalsWidgetProps) {
         />
 
         <View className="pr-24">
-          <Text className="body-lg text-text-secondary">Track your progress</Text>
-          <Text className="heading-2 mt-1 text-brand-white">YOUR GOALS</Text>
+          <EditableText id="home.goals.tagline" className="body-lg text-text-secondary">
+            Track your progress
+          </EditableText>
+          <EditableText id="home.goals.headline" className="heading-2 mt-1 text-brand-white">
+            YOUR GOALS
+          </EditableText>
         </View>
       </View>
 
       <View className="mt-5 flex-row items-center justify-between">
-        <Text className="caption text-text-secondary">{goals.length} active goals</Text>
+        <EditableText id="home.goals.activeCount" className="caption text-text-secondary">
+          {`${goals.length} active goals`}
+        </EditableText>
         <Pressable
           onPress={() => setAddModalVisible(true)}
           hitSlop={8}

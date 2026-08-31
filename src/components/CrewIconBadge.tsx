@@ -11,6 +11,12 @@ type CrewIconBadgeProps = {
 };
 
 export function CrewIconBadge({ iconKey, size, tint = colors.brand.yellow }: CrewIconBadgeProps) {
+  // A generated crew photo (see CrewAvatarGeneratorModal) is stored as its own real URL rather than
+  // a preset key — render it directly instead of looking it up in the fixed CREW_ICONS list.
+  if (iconKey.startsWith("http")) {
+    return <Image source={{ uri: iconKey }} resizeMode="cover" style={{ width: size, height: size, borderRadius: size / 2 }} />;
+  }
+
   const icon = crewIconByKey(iconKey);
 
   if (icon.type === "image") {

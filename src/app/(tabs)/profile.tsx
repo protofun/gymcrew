@@ -6,13 +6,18 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View, type ImageSourcePropType } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
+import { AvatarGeneratorModal } from "@/components/AvatarGeneratorModal";
 import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { DivisionBadge } from "@/components/DivisionBadge";
+import { EditableText } from "@/components/EditableText";
 import { ProgressBar } from "@/components/ProgressBar";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { StatTile } from "@/components/StatTile";
+import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
 import { images, navIcons } from "@/constants/images";
 import { FLEX_TAGS } from "@/data/flex-tags";
+import { useTodayWorkout } from "@/hooks/use-today-workout";
+import { applyProfileImage } from "@/lib/avatar";
 import { DIVISION_COLOR, xpRequiredFor } from "@/lib/division";
 import { realMemberStats } from "@/lib/member-real-profile";
 import { computeProfileSnapshot } from "@/lib/profile-snapshot";
@@ -22,6 +27,7 @@ import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
 import { useProfileSnapshotStore } from "@/store/profile-snapshot-store";
+import { useTodayTrainingStore } from "@/store/today-training-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
 
@@ -132,7 +138,7 @@ function ProgressCardsGrid({ cards, captionFor, onPressCard }: { cards: Progress
 const PROGRESS_CARDS: ProgressCard[] = [
   { icon: navIcons.rank, label: "My Ranks", caption: "Every tracked lift, gym & worldwide", route: "/(tabs)/ranks" },
   { icon: navIcons.rankOverTime, label: "Rank Over Time", caption: "Division timeline & rank-up history", route: "/profile/rank-history" },
-  { icon: navIcons.achievements, label: "Achievements", caption: "Your PR history", route: "/profile/achievements" },
+  { icon: navIcons.achievements, label: "Personal Records", caption: "Every PR, newest first", route: "/profile/achievements" },
   { icon: navIcons.trainingHistory, label: "Training History", caption: "Calendar, streaks & charts", route: "/profile/history" },
   { icon: navIcons.bodyLog, label: "Body Log", caption: "Weight & body fat over time", route: "/profile/body-log" },
   { icon: navIcons.allStats, label: "All Stats", caption: "Every number, one place", route: "/profile/all-stats" },
@@ -141,6 +147,12 @@ const PROGRESS_CARDS: ProgressCard[] = [
 export default function ProfileScreen() {
   const { user } = useUser();
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [todayModalOpen, setTodayModalOpen] = useState(false);
+  const [avatarGeneratorOpen, setAvatarGeneratorOpen] = useState(false);
+
+  const today = useTodayWorkout();
+  const setTodayOverride = useTodayTrainingStore((state) => state.setTodayOverride);
+  const clearTodayOverride = useTodayTrainingStore((state) => state.clearTodayOverride);
 
   const onboarding = useOnboardingStore((state) => state.onboarding);
   const weightUnit = useOnboardingStore((state) => state.weightUnit);
@@ -176,6 +188,14 @@ export default function ProfileScreen() {
     router.push(path);
   }
 
+  function handlePressAvatar() {
+    Alert.alert("Change Photo", undefined, [
+      { text: "Choose from Library", onPress: handleChangePhoto },
+      { text: "Generate an Avatar", onPress: () => setAvatarGeneratorOpen(true) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }
+
   async function handleChangePhoto() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -184,12 +204,12 @@ export default function ProfileScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-    if (result.canceled || !result.assets[0]) return;
+    if (result.canceled || !result.assets[0] || !user) return;
 
     setUploadingPhoto(true);
     try {
       const blob = await (await fetch(result.assets[0].uri)).blob();
-      await user?.setProfileImage({ file: blob });
+      await applyProfileImage(user, blob);
     } catch (error) {
       Alert.alert("Couldn't update photo", error instanceof Error ? error.message : "Please try again.");
     } finally {
@@ -204,7 +224,7 @@ export default function ProfileScreen() {
       )}
       <ScrollView className="flex-1" contentContainerClassName="pb-10" showsVerticalScrollIndicator={false}>
       <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="items-center gap-3 px-4 pt-6">
-        <Pressable onPress={handleChangePhoto} disabled={uploadingPhoto} style={PRESSED_STYLE}>
+        <Pressable onPress={handlePressAvatar} disabled={uploadingPhoto} style={PRESSED_STYLE}>
           <DivisionAvatarFrame source={user?.imageUrl ? { uri: user.imageUrl } : images.iconGorilla} division={displayDivision} size={88} />
           <View
             className="absolute bottom-0 right-0 items-center justify-center rounded-full border-2 border-background bg-brand-yellow"
@@ -215,11 +235,28 @@ export default function ProfileScreen() {
         </Pressable>
         <View className="items-center gap-0.5">
           <View className="flex-row items-center gap-1.5">
-            <Text className="heading-4 text-text-primary">{displayName}</Text>
+            <EditableText id="profile.header.name" className="heading-4 text-text-primary">
+              {displayName}
+            </EditableText>
             {equippedTag && <Text style={{ fontSize: 16 }}>{equippedTag.emoji}</Text>}
           </View>
           {email && <Text className="body-sm text-text-secondary">{email}</Text>}
         </View>
+
+        <Pressable
+          onPress={() => setTodayModalOpen(true)}
+          style={PRESSED_STYLE}
+          className="flex-row items-center gap-1.5 rounded-full border border-divider bg-surface px-4 py-2"
+        >
+          <Ionicons
+            name={today.isRestDay ? "moon-outline" : "barbell-outline"}
+            size={14}
+            color={today.isOverridden ? colors.brand.yellow : colors.neutral.textSecondary}
+          />
+          <Text className={`body-sm font-body-semibold ${today.isOverridden ? "text-brand-yellow" : "text-text-primary"}`}>
+            {today.workoutName}
+          </Text>
+        </Pressable>
 
         <Pressable
           onPress={() => goTo("/profile/edit")}
@@ -238,14 +275,14 @@ export default function ProfileScreen() {
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-2.5">
                 <DivisionBadge division={displayDivision} size={36} />
-                <Text style={cardTitleStyle} className="text-text-primary">
+                <EditableText id="profile.division.name" style={cardTitleStyle} className="text-text-primary">
                   {displayDivision.toUpperCase()}
-                </Text>
+                </EditableText>
               </View>
               {snapshot == null && (
-                <Text className="body-sm font-body-bold" style={{ color: DIVISION_COLOR[displayDivision] }}>
-                  {Math.min(100, Math.round((xp / xpToNextLevel) * 100))}%
-                </Text>
+                <EditableText id="profile.division.percent" className="body-sm font-body-bold" style={{ color: DIVISION_COLOR[displayDivision] }}>
+                  {`${Math.min(100, Math.round((xp / xpToNextLevel) * 100))}%`}
+                </EditableText>
               )}
             </View>
 
@@ -254,14 +291,14 @@ export default function ProfileScreen() {
                 <ProgressBar ratio={xp / xpToNextLevel} color={DIVISION_COLOR[displayDivision]} height={7} />
 
                 <View className="flex-row items-center justify-between">
-                  <Text className="caption font-body-semibold text-text-secondary">
-                    {xp.toLocaleString("en-US")} / {xpToNextLevel.toLocaleString("en-US")} XP
-                  </Text>
+                  <EditableText id="profile.division.xpProgress" className="caption font-body-semibold text-text-secondary">
+                    {`${xp.toLocaleString("en-US")} / ${xpToNextLevel.toLocaleString("en-US")} XP`}
+                  </EditableText>
                   <View className="flex-row items-center gap-1">
                     <Ionicons name="flash" size={11} color={colors.brand.yellow} />
-                    <Text className="caption font-body-semibold text-brand-yellow">
-                      {Math.max(0, xpToNextLevel - xp).toLocaleString("en-US")} XP to next
-                    </Text>
+                    <EditableText id="profile.division.xpToNext" className="caption font-body-semibold text-brand-yellow">
+                      {`${Math.max(0, xpToNextLevel - xp).toLocaleString("en-US")} XP to next`}
+                    </EditableText>
                   </View>
                 </View>
               </>
@@ -273,9 +310,9 @@ export default function ProfileScreen() {
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)} className="mx-4 mt-3 flex-row gap-3">
-        <StatTile icon="barbell" label="Workouts" value={String(displayWorkoutsCount)} />
-        <StatTile icon="ribbon" label="PRs" value={String(displayPrCount)} />
-        <StatTile icon="trending-up" label="Volume" value={`${(displayVolumeKg / 1000).toFixed(1)}t`} />
+        <StatTile id="profile.stats.workouts" icon="barbell" label="Workouts" value={String(displayWorkoutsCount)} />
+        <StatTile id="profile.stats.prs" icon="ribbon" label="PRs" value={String(displayPrCount)} />
+        <StatTile id="profile.stats.volume" icon="trending-up" label="Volume" value={`${(displayVolumeKg / 1000).toFixed(1)}t`} />
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(160).springify().damping(16).mass(0.6)} className="mx-4 mt-6 gap-3">
@@ -284,7 +321,7 @@ export default function ProfileScreen() {
         </Text>
         <ProgressCardsGrid
           cards={PROGRESS_CARDS}
-          captionFor={(card) => (card.label === "Achievements" ? `${displayPrCount} PRs logged` : card.caption)}
+          captionFor={(card) => (card.label === "Personal Records" ? `${displayPrCount} PRs logged` : card.caption)}
           onPressCard={(card) => router.push(card.route)}
         />
       </Animated.View>
@@ -304,6 +341,16 @@ export default function ProfileScreen() {
         </View>
       </Animated.View>
       </ScrollView>
+
+      <TodayWorkoutModal
+        visible={todayModalOpen}
+        onClose={() => setTodayModalOpen(false)}
+        isOverridden={today.isOverridden}
+        onSave={(name) => setTodayOverride(name)}
+        onClearOverride={clearTodayOverride}
+      />
+
+      <AvatarGeneratorModal visible={avatarGeneratorOpen} onClose={() => setAvatarGeneratorOpen(false)} />
     </View>
   );
 }

@@ -5,6 +5,7 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { ContributorsList } from "@/components/ContributorsList";
 import { DivisionBadge } from "@/components/DivisionBadge";
+import { EditableText } from "@/components/EditableText";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { HorizontalBarChart } from "@/components/HorizontalBarChart";
 import { RankBadge } from "@/components/RankBadge";
@@ -116,12 +117,14 @@ export function StatsTab() {
   return (
     <View className="mx-4 mt-4 gap-4">
       <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-1">
-        <Text style={headerStyle} className="text-brand-white">
+        <EditableText id="crew.stats.headline" style={headerStyle} className="text-brand-white">
           THE NUMBERS
-        </Text>
+        </EditableText>
         <View className="flex-row items-center gap-1.5">
           <Ionicons name="stats-chart" size={13} color={colors.brand.yellow} />
-          <Text className="caption font-body-semibold text-text-secondary">Every rep, tracked. No hiding from the grind.</Text>
+          <EditableText id="crew.stats.tagline" className="caption font-body-semibold text-text-secondary">
+            Every rep, tracked. No hiding from the grind.
+          </EditableText>
         </View>
       </Animated.View>
 
@@ -141,7 +144,7 @@ export function StatsTab() {
 
       <Animated.View entering={FadeInUp.delay(140).springify().damping(16).mass(0.6)} className="flex-row gap-3">
         {TOTAL_STATS.map(({ key, label, icon, suffix }) => (
-          <StatTile key={key} icon={icon} value={`${totals[key].toLocaleString("en-US")}${suffix}`} label={label} />
+          <StatTile key={key} id={`crew.stats.${key}`} icon={icon} value={`${totals[key].toLocaleString("en-US")}${suffix}`} label={label} />
         ))}
       </Animated.View>
 
@@ -154,14 +157,14 @@ export function StatsTab() {
             CREW POWER
           </Text>
           <View className="flex-row items-end gap-2">
-            <Text style={{ fontFamily: fontFamily.heading, fontSize: 36, lineHeight: 38 }} className="text-text-primary">
+            <EditableText id="crew.stats.power.value" style={{ fontFamily: fontFamily.heading, fontSize: 36, lineHeight: 38 }} className="text-text-primary">
               {crewPower.toLocaleString("en-US")}
-            </Text>
+            </EditableText>
             <View className="mb-1.5 flex-row items-center gap-1">
               <Ionicons name="trending-up" size={13} color={colors.semantic.success} />
-              <Text className="caption font-body-semibold" style={{ color: colors.semantic.success }}>
-                {crewPowerChangePercent}% vs last week
-              </Text>
+              <EditableText id="crew.stats.power.changePercent" className="caption font-body-semibold" style={{ color: colors.semantic.success }}>
+                {`${crewPowerChangePercent}% vs last week`}
+              </EditableText>
             </View>
           </View>
         </View>

@@ -1,3 +1,4 @@
+import { useAuth } from "@clerk/expo";
 import { router } from "expo-router";
 import { Pressable, SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInUp, ZoomIn } from "react-native-reanimated";
@@ -7,6 +8,8 @@ import { images } from "@/constants/images";
 import { colors, typography } from "@/theme";
 
 export default function OnboardingIntroScreen() {
+  const { isSignedIn } = useAuth();
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.neutral.background }}
@@ -55,15 +58,21 @@ export default function OnboardingIntroScreen() {
         <OnboardingFooter
           label="Get Started"
           activeIndex={0}
-          onPress={() => router.push("/onboarding/welcome")}
+          // An account comes first — creating it before collecting any answers means every wizard
+          // step below can save straight to the real backend as you go, instead of being collected
+          // locally with nowhere to save to yet. A signed-in visitor here (e.g. resuming mid-wizard
+          // after closing the app) skips straight back into it instead of being asked to sign up again.
+          onPress={() => router.push(isSignedIn ? "/onboarding/welcome" : "/sign-up")}
         />
 
-        <View className="flex-row justify-center gap-1 pt-4">
-          <Text className="body-md text-text-secondary">Already have an account?</Text>
-          <Pressable hitSlop={8} onPress={() => router.push("/sign-in")}>
-            <Text className="body-md text-brand-yellow">Log in</Text>
-          </Pressable>
-        </View>
+        {!isSignedIn && (
+          <View className="flex-row justify-center gap-1 pt-4">
+            <Text className="body-md text-text-secondary">Already have an account?</Text>
+            <Pressable hitSlop={8} onPress={() => router.push("/sign-in")}>
+              <Text className="body-md text-brand-yellow">Log in</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );

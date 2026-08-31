@@ -5,7 +5,9 @@ import { Image, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { EditableText } from "@/components/EditableText";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
+import { MuscleRankRow } from "@/components/MuscleRankRow";
 import { RankBadge } from "@/components/RankBadge";
 import { muscleGroupImages } from "@/constants/images";
 import { ALL_MUSCLE_GROUPS, type MuscleGroup } from "@/data/workout-log";
@@ -30,59 +32,7 @@ const sectionHeaderStyle = {
   transform: [{ skewX: "-8deg" }],
 };
 
-const rowTitleStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 18,
-  lineHeight: 20,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
-
 const PRESSED_STYLE = ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.85 : 1 });
-
-function GroupRow({ group, rank, index, onPress }: { group: MuscleGroup; rank: MuscleGroupRank; index: number; onPress: () => void }) {
-  const ranked = rank.status === "ranked";
-  const accent = ranked ? RANK_TIER_COLOR[rank.tier] : colors.neutral.divider;
-
-  return (
-    <Animated.View entering={FadeInUp.delay(180 + index * 50).springify().damping(16).mass(0.6)}>
-      <Pressable
-        onPress={onPress}
-        style={PRESSED_STYLE}
-        className="flex-row items-stretch overflow-hidden rounded-2xl border border-divider bg-surface"
-      >
-        <View style={{ width: 4, backgroundColor: accent }} />
-
-        <View className="flex-1 flex-row items-center gap-3 p-3">
-          {ranked ? (
-            <RankBadge tier={rank.tier} size={40} />
-          ) : (
-            <View className="h-10 w-10 items-center justify-center rounded-full border border-dashed border-divider">
-              <Ionicons name="help" size={16} color={colors.neutral.textSecondary} />
-            </View>
-          )}
-
-          <View className="flex-1 gap-0.5">
-            <Text style={rowTitleStyle} className="text-text-primary">
-              {formatMuscleLabel(group).toUpperCase()}
-            </Text>
-            {ranked ? (
-              <Text className="caption font-body-bold" style={{ color: accent }}>
-                {formatRankTier(rank.tier).toUpperCase()}
-              </Text>
-            ) : (
-              <Text className="caption font-body-semibold text-text-secondary">No data yet</Text>
-            )}
-          </View>
-        </View>
-
-        <View className="items-center justify-center pr-3">
-          <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
-        </View>
-      </Pressable>
-    </Animated.View>
-  );
-}
 
 function GroupDetailSheet({
   group,
@@ -248,7 +198,9 @@ export default function MuscleRankScreen() {
               {viewedMember ? `${viewedMember.name.toUpperCase()}'S OVERVIEW` : "BODY OVERVIEW"}
             </Text>
             <View className="rounded-full border border-divider px-2.5 py-1">
-              <Text className="caption font-body-bold text-text-primary">{rankedCount}/{ALL_MUSCLE_GROUPS.length} RANKED</Text>
+              <EditableText id="ranks.bodyGraph.rankedCount" className="caption font-body-bold text-text-primary">
+                {`${rankedCount}/${ALL_MUSCLE_GROUPS.length} RANKED`}
+              </EditableText>
             </View>
           </View>
 
@@ -295,7 +247,15 @@ export default function MuscleRankScreen() {
           {ALL_MUSCLE_GROUPS.map((group, index) => {
             const rank = ranksByGroup[group];
             if (!rank) return null;
-            return <GroupRow key={group} group={group} rank={rank} index={index} onPress={() => setSelectedGroup(group)} />;
+            return (
+              <MuscleRankRow
+                key={group}
+                group={group}
+                tier={rank.status === "ranked" ? rank.tier : null}
+                index={index}
+                onPress={() => setSelectedGroup(group)}
+              />
+            );
           })}
         </View>
       </ScrollView>

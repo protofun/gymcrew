@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 
+import { EditableText } from "@/components/EditableText";
 import { formatMuscleLabel, MuscleHeatmap } from "@/components/MuscleHeatmap";
 import type { MuscleGroup, WorkoutSession } from "@/data/workout-log";
 import { getMuscleSuggestions, type SuggestionPriority } from "@/lib/muscle-suggestions";
@@ -42,8 +43,12 @@ export function MuscleSuggestions({ sessions }: MuscleSuggestionsProps) {
     <View className="mx-4 mt-8 gap-4">
       <View className="gap-4 rounded-3xl border border-divider bg-surface p-4">
         <View>
-          <Text className="heading-4 text-text-primary">Muscle Suggestions</Text>
-          <Text className="caption text-text-secondary">Based on your training this week</Text>
+          <EditableText id="home.muscleSuggestions.headline" className="heading-4 text-text-primary">
+            Muscle Suggestions
+          </EditableText>
+          <EditableText id="home.muscleSuggestions.tagline" className="caption text-text-secondary">
+            Based on your training this week
+          </EditableText>
         </View>
 
         <View className="flex-row items-center gap-4">
@@ -59,15 +64,16 @@ export function MuscleSuggestions({ sessions }: MuscleSuggestionsProps) {
                   <Ionicons name="alert-circle-outline" size={18} color={PRIORITY_COLOR[suggestion.priority]} />
                 </View>
                 <View>
-                  <Text className="body-md font-body-semibold text-text-primary">
+                  <EditableText id={`home.muscleSuggestions.${suggestion.group}.label`} className="body-md font-body-semibold text-text-primary">
                     {formatMuscleLabel(suggestion.group)}
-                  </Text>
-                  <Text
+                  </EditableText>
+                  <EditableText
+                    id={`home.muscleSuggestions.${suggestion.group}.priority`}
                     className="caption font-body-semibold"
                     style={{ color: PRIORITY_COLOR[suggestion.priority] }}
                   >
-                    {suggestion.priority} Priority
-                  </Text>
+                    {`${suggestion.priority} Priority`}
+                  </EditableText>
                 </View>
               </View>
             ))}

@@ -1,17 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
+import { type DuelMetric, DuelChallengeSheet } from "@/components/DuelChallengeSheet";
+import { EditableText } from "@/components/EditableText";
 import { InviteMembersModal } from "@/components/InviteMembersModal";
 import { MemberActionsSheet } from "@/components/MemberActionsSheet";
 import { FLEX_TAGS } from "@/data/flex-tags";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
+import { toDateKey } from "@/lib/date";
 import type { Division } from "@/lib/division";
 import { useCosmeticsStore } from "@/store/cosmetics-store";
 import { CURRENT_MEMBER_ID, useCrewStore, type CrewMember } from "@/store/crew-store";
+import { useCrewDuelStore } from "@/store/crew-duel-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
 import { colors } from "@/theme";
 
@@ -32,7 +36,9 @@ function MemberRow({
   flexTagEmoji,
   trainingLabel,
   canManage,
+  canChallenge,
   onManage,
+  onChallenge,
   onPress,
 }: {
   member: CrewMember;
@@ -40,7 +46,9 @@ function MemberRow({
   flexTagEmoji?: string;
   trainingLabel: string | null;
   canManage: boolean;
+  canChallenge: boolean;
   onManage: () => void;
+  onChallenge: () => void;
   onPress: () => void;
 }) {
   const roleLabel = ROLE_LABEL[member.role];
@@ -63,7 +71,9 @@ function MemberRow({
 
       <View className="flex-1 gap-0.5">
         <View className="flex-row items-center gap-2">
-          <Text className="body-md font-body-semibold text-text-primary">{member.name}</Text>
+          <EditableText id={`crew.members.${member.id}.name`} className="body-md font-body-semibold text-text-primary">
+            {member.name}
+          </EditableText>
           {flexTagEmoji && <Text style={{ fontSize: 13 }}>{flexTagEmoji}</Text>}
           {roleLabel && (
             <View className="rounded-full bg-background px-2 py-0.5">
@@ -71,18 +81,30 @@ function MemberRow({
             </View>
           )}
         </View>
-        <Text className="caption text-text-secondary">@{member.username}</Text>
+        <EditableText id={`crew.members.${member.id}.username`} className="caption text-text-secondary">
+          {`@${member.username}`}
+        </EditableText>
         {trainingLabel ? (
           <View className="mt-0.5 flex-row items-center gap-1">
             <Ionicons name="barbell" size={11} color={colors.brand.yellow} />
-            <Text className="caption text-brand-yellow">{trainingLabel}</Text>
+            <EditableText id={`crew.members.${member.id}.trainingLabel`} className="caption text-brand-yellow">
+              {trainingLabel}
+            </EditableText>
           </View>
         ) : (
           <Text className="caption mt-0.5 text-text-secondary">Resting today</Text>
         )}
       </View>
 
-      <Text className="body-md font-body-bold text-brand-yellow">LVL {member.level}</Text>
+      <EditableText id={`crew.members.${member.id}.level`} className="body-md font-body-bold text-brand-yellow">
+        {`LVL ${member.level}`}
+      </EditableText>
+
+      {canChallenge && (
+        <Pressable onPress={onChallenge} hitSlop={8} className="pl-1">
+          <Ionicons name="flag-outline" size={16} color={colors.brand.yellow} />
+        </Pressable>
+      )}
 
       {canManage && (
         <Pressable onPress={onManage} hitSlop={8} className="pl-1">
@@ -108,6 +130,7 @@ export default function CrewMembersScreen() {
   const [query, setQuery] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [managingId, setManagingId] = useState<string | null>(null);
+  const [challengingId, setChallengingId] = useState<string | null>(null);
 
   const myDivision = useProfileLevelStore((state) => state.division);
   const equippedTagId = useCosmeticsStore((state) => state.equippedTagId);
@@ -115,6 +138,15 @@ export default function CrewMembersScreen() {
   const me = members.find((member) => member.id === CURRENT_MEMBER_ID);
   const iAmAdmin = me?.isAdmin ?? false;
   const managingMember = members.find((member) => member.id === managingId) ?? null;
+  const challengingMember = members.find((member) => member.id === challengingId) ?? null;
+  const proposeDuel = useCrewDuelStore((state) => state.propose);
+
+  async function handleChallenge(metric: DuelMetric) {
+    if (!challengingId) return;
+    setChallengingId(null);
+    const result = await proposeDuel(challengingId, metric, toDateKey(new Date()));
+    if (!result.ok) Alert.alert("Couldn't send challenge", result.error);
+  }
 
   function divisionFor(member: CrewMember): Division {
     return member.id === CURRENT_MEMBER_ID ? myDivision : member.division;
@@ -202,7 +234,9 @@ export default function CrewMembersScreen() {
               flexTagEmoji={member.id === CURRENT_MEMBER_ID ? equippedFlexTag?.emoji : undefined}
               trainingLabel={trainingLabelFor(member)}
               canManage={iAmAdmin && member.id !== CURRENT_MEMBER_ID && member.role !== "leader"}
+              canChallenge={member.id !== CURRENT_MEMBER_ID}
               onManage={() => setManagingId(member.id)}
+              onChallenge={() => setChallengingId(member.id)}
               onPress={() => router.push(`/crew/member/${member.id}`)}
             />
           ))
@@ -237,6 +271,13 @@ export default function CrewMembersScreen() {
           if (managingId) removeMember(managingId);
           setManagingId(null);
         }}
+      />
+
+      <DuelChallengeSheet
+        visible={challengingId !== null}
+        memberName={challengingMember?.name ?? null}
+        onClose={() => setChallengingId(null)}
+        onChallenge={handleChallenge}
       />
     </View>
   );

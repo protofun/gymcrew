@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { DivisionBadge } from "@/components/DivisionBadge";
+import { EditableText } from "@/components/EditableText";
 import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
 import { MY_GYM_NAME, PLAYER_LEADERBOARD, type LeaderboardPlayer } from "@/data/player-leaderboard";
 import { DIVISION_COLOR, divisionForCrewPower, divisionForPlayerPower, type Division } from "@/lib/division";
@@ -74,11 +75,17 @@ function LeaderboardRow({ rank, entry }: { rank: number; entry: Entry }) {
         <EntryAvatar avatar={entry.avatar} size={36} />
       </View>
 
-      <Text className={`body-sm flex-1 font-body-semibold ${entry.isMe ? "text-brand-yellow" : "text-text-primary"}`} numberOfLines={1}>
+      <EditableText
+        id={`crew.leaderboard.${entry.id}.name`}
+        className={`body-sm flex-1 font-body-semibold ${entry.isMe ? "text-brand-yellow" : "text-text-primary"}`}
+        numberOfLines={1}
+      >
         {entry.isMe ? "You" : entry.name}
-      </Text>
+      </EditableText>
 
-      <Text className="body-sm font-body-bold text-brand-yellow">{entry.score.toLocaleString("en-US")}</Text>
+      <EditableText id={`crew.leaderboard.${entry.id}.score`} className="body-sm font-body-bold text-brand-yellow">
+        {entry.score.toLocaleString("en-US")}
+      </EditableText>
     </View>
   );
 }

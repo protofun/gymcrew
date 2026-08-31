@@ -56,8 +56,8 @@ export default function RewardsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="flex-row gap-3">
-          <StatTile icon="diamond" value={String(tokens)} label="Tokens" />
-          <StatTile icon="flame" value={String(currentStreak)} label="Day Streak" iconColor={colors.semantic.streak} />
+          <StatTile id="profile.rewards.tokens" icon="diamond" value={String(tokens)} label="Tokens" />
+          <StatTile id="profile.rewards.streak" icon="flame" value={String(currentStreak)} label="Day Streak" iconColor={colors.semantic.streak} />
         </View>
 
         <View className="gap-3">

@@ -6,7 +6,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { CrewAvatarGeneratorModal } from "@/components/CrewAvatarGeneratorModal";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
+import { EditableText } from "@/components/EditableText";
 import { InviteMembersModal } from "@/components/InviteMembersModal";
 import { SearchableSelectField } from "@/components/SearchableSelectField";
 import { CREW_ICONS } from "@/data/crew-icons";
@@ -112,6 +114,8 @@ export default function CrewSettingsScreen() {
   const [leaveConfirmVisible, setLeaveConfirmVisible] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [generatorOpen, setGeneratorOpen] = useState(false);
+  const isGeneratedIcon = !CREW_ICONS.some((item) => item.key === icon);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
@@ -122,15 +126,25 @@ export default function CrewSettingsScreen() {
 
   const [editName, setEditName] = useState(name);
   const [editTagline, setEditTagline] = useState(tagline);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   function openEdit() {
     setEditName(name);
     setEditTagline(tagline);
+    setEditError(null);
     setEditOpen(true);
   }
 
-  function saveEdit() {
-    updateInfo({ name: editName, tagline: editTagline });
+  async function saveEdit() {
+    setSaving(true);
+    const result = await updateInfo({ name: editName, tagline: editTagline });
+    setSaving(false);
+    if (!result.ok) {
+      setEditError(result.error);
+      return;
+    }
+    setEditError(null);
     setEditOpen(false);
   }
 
@@ -162,10 +176,12 @@ export default function CrewSettingsScreen() {
         <View className="flex-row items-center gap-3">
           <CrewIconBadge iconKey={icon} size={56} />
           <View className="flex-1 gap-0.5">
-            <Text className="body-lg font-body-bold text-text-primary">{name.toUpperCase()}</Text>
-            <Text className="caption text-text-secondary">
-              Est. {new Date(createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
-            </Text>
+            <EditableText id="crew.settings.name" className="body-lg font-body-bold text-text-primary">
+              {name.toUpperCase()}
+            </EditableText>
+            <EditableText id="crew.settings.establishedDate" className="caption text-text-secondary">
+              {`Est. ${new Date(createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`}
+            </EditableText>
           </View>
           <Pressable onPress={() => setIconPickerOpen(true)} hitSlop={8}>
             <Text className="body-sm font-body-bold text-brand-yellow">Change</Text>
@@ -198,12 +214,16 @@ export default function CrewSettingsScreen() {
             <Text className="body-sm text-text-secondary">Crew Name</Text>
             <TextInput
               value={editName}
-              onChangeText={setEditName}
+              onChangeText={(text) => {
+                setEditName(text);
+                setEditError(null);
+              }}
               placeholder="Crew name"
               placeholderTextColor={colors.neutral.textSecondary}
-              className="rounded-xl border border-divider bg-background px-4 py-3 body-md text-text-primary"
+              className={`rounded-xl border bg-background px-4 py-3 body-md text-text-primary ${editError ? "border-error" : "border-divider"}`}
               style={{ outlineWidth: 0, outlineColor: "transparent" }}
             />
+            {editError && <Text className="body-sm text-error">{editError}</Text>}
           </View>
           <View className="gap-1.5">
             <Text className="body-sm text-text-secondary">Tagline</Text>
@@ -216,8 +236,8 @@ export default function CrewSettingsScreen() {
               style={{ outlineWidth: 0, outlineColor: "transparent" }}
             />
           </View>
-          <Pressable onPress={saveEdit} className="items-center rounded-full bg-brand-yellow py-3.5">
-            <Text className="body-md font-body-bold text-brand-iron">Save Changes</Text>
+          <Pressable onPress={saveEdit} disabled={saving} className="items-center rounded-full bg-brand-yellow py-3.5" style={{ opacity: saving ? 0.7 : 1 }}>
+            <Text className="body-md font-body-bold text-brand-iron">{saving ? "Saving…" : "Save Changes"}</Text>
           </Pressable>
         </View>
       </SheetModal>
@@ -241,8 +261,25 @@ export default function CrewSettingsScreen() {
               </Pressable>
             );
           })}
+          <Pressable
+            onPress={() => {
+              setIconPickerOpen(false);
+              setGeneratorOpen(true);
+            }}
+            className={`h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 ${
+              isGeneratedIcon ? "border-brand-yellow" : "border-dashed border-divider"
+            }`}
+          >
+            {isGeneratedIcon ? (
+              <CrewIconBadge iconKey={icon} size={60} />
+            ) : (
+              <Ionicons name="sparkles-outline" size={22} color={colors.neutral.textSecondary} />
+            )}
+          </Pressable>
         </View>
       </SheetModal>
+
+      <CrewAvatarGeneratorModal visible={generatorOpen} onClose={() => setGeneratorOpen(false)} onPick={setIcon} />
 
       <SheetModal visible={preferencesOpen} onClose={() => setPreferencesOpen(false)} title="Crew Preferences">
         <View className="gap-4">

@@ -1,5 +1,6 @@
 import { getClerkInstance } from "@clerk/expo";
 
+import type { ChallengeMetric } from "@/data/challenges";
 import type { BodyLogEntry } from "@/store/body-log-store";
 import type { PersonalRecord } from "@/store/personal-records-store";
 import type { CompletedWorkout } from "@/store/workout-history-store";
@@ -46,11 +47,38 @@ async function request<T>(path: string, options: { method?: string; body?: unkno
   });
 
   if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText);
-    throw new Error(`API ${options.method ?? "GET"} ${path} failed (${response.status}): ${message}`);
+    const raw = await response.text().catch(() => response.statusText);
+    throw new Error(errorMessageFromResponseBody(raw, response.status));
   }
 
   if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+/** Every backend error body is `{"error": "..."}` (see backend/response.php's errorResponse) — pull
+ * that message out so callers/UI show the actual "That username is already taken." text instead of
+ * the raw `{"error":"..."}` JSON. Falls back to the raw body if it's ever not JSON (e.g. a host-level
+ * 502 HTML page). */
+function errorMessageFromResponseBody(raw: string, status: number): string {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.error === "string") return parsed.error;
+  } catch {
+    // not JSON — fall through to the raw text below
+  }
+  return raw || `Request failed (${status})`;
+}
+
+/** Same as `request`, but never attaches/requires a Clerk session — for the handful of routes that
+ * are deliberately public (see backend/index.php's auth gate and its one exemption). */
+async function requestPublic<T>(path: string): Promise<T> {
+  if (!isApiConfigured) throw new Error("EXPO_PUBLIC_API_BASE_URL is not set");
+
+  const response = await fetch(`${API_BASE_URL}${path}`);
+  if (!response.ok) {
+    const raw = await response.text().catch(() => response.statusText);
+    throw new Error(errorMessageFromResponseBody(raw, response.status));
+  }
   return (await response.json()) as T;
 }
 
@@ -58,6 +86,8 @@ export type ApiProfile = {
   id: string;
   email?: string | null;
   fullName?: string | null;
+  username?: string | null;
+  avatarUrl?: string | null;
   gender?: "male" | "female" | null;
   heightCm?: number | null;
   weightKg?: number | null;
@@ -85,6 +115,7 @@ export type ApiCrewMember = {
   id: string;
   name: string;
   username: string;
+  avatarUrl: string;
   level: number;
   division: string;
   role: "leader" | "co-leader" | "member";
@@ -127,9 +158,84 @@ export type ApiCrewMemberActivity = {
   profile: { gender: "male" | "female" | null; weightKg: number | null };
 };
 
+export type ApiWarContributor = { userId: string; name: string; volumeKg: number };
+
+export type ApiCrewWar = {
+  id: string;
+  status: "active" | "completed";
+  startedAt: number;
+  endsAt: number;
+  myScore: number;
+  opponentScore: number;
+  /** Only meaningful once `status` is "completed" — `null` means the War ended in a draw. */
+  won: boolean | null;
+  opponent: { id: string; name: string; icon: string; division: string };
+  topContributors: ApiWarContributor[];
+};
+
+export type ApiActiveWarResponse = { war: ApiCrewWar | null; queued: boolean };
+
+export type CrewActivityEventType = "pr" | "streak" | "long_session" | "division_up";
+
+export type ApiCrewActivityEvent = {
+  id: number;
+  userId: string;
+  userName: string;
+  eventType: CrewActivityEventType;
+  payload: Record<string, unknown>;
+  createdAt: number;
+};
+
+export type ApiCrewDuel = {
+  id: string;
+  challengerId: string;
+  challengerName: string;
+  opponentId: string;
+  opponentName: string;
+  metric: "volume" | "sets";
+  targetDateKey: string;
+  status: "pending" | "accepted" | "declined" | "completed";
+  winnerId: string | null;
+  createdAt: number;
+};
+
+/** App-wide, admin-curated challenges (see backend/routes/admin-challenges.php) — same shape as a
+ * weekly ChallengeTemplate (data/challenges.ts), just hand-authored and persisted server-side
+ * instead of procedurally picked. Write access is gated server-side to one admin account. */
+export type ApiAdminChallenge = {
+  id: string;
+  name: string;
+  description: string;
+  metric: ChallengeMetric;
+  unit: string;
+  perMemberTarget: number;
+  icon: string;
+  isActive: boolean;
+  /** Part of the GymCrew Summer Challenge event (see ChallengesTab) — shown in its own section,
+   * locked/read-only until the app's real release instead of counting progress. */
+  isSummerChallenge: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type AdminChallengeInput = {
+  name: string;
+  description?: string;
+  metric: ChallengeMetric;
+  unit: string;
+  perMemberTarget: number;
+  icon?: string;
+  isActive?: boolean;
+  isSummerChallenge?: boolean;
+};
+
 export const api = {
   getProfile: () => request<ApiProfile>("/profile"),
   updateProfile: (data: Partial<Omit<ApiProfile, "id">>) => request<ApiProfile>("/profile", { method: "PUT", body: data }),
+  /** Public (no auth) — see backend/routes/profile.php's handleUsernameAvailability. Used during
+   * onboarding, before an account (and therefore a session) exists yet. */
+  checkUsernameAvailable: (username: string) =>
+    requestPublic<{ available: boolean }>(`/username-available?username=${encodeURIComponent(username)}`),
 
   /** Deletes this user's row and, via ON DELETE CASCADE, every other table's rows for them (see
    * backend/routes/account.php). Call before deleting the Clerk account — this endpoint's auth
@@ -173,4 +279,35 @@ export const api = {
     request<{ ok: true }>(`/crews/${crewId}/members/${memberId}`, { method: "DELETE" }),
   /** Every crewmate's real recent workouts/PRs/profile — see backend/routes/crews.php. */
   getCrewActivity: (crewId: string) => request<{ members: Record<string, ApiCrewMemberActivity> }>(`/crews/${crewId}/activity`),
+
+  /** Real crew-vs-crew Wars via automatic matchmaking (see backend/routes/crew-wars.php) — unlike
+   * the old "Challenge Another Crew" flow, the opponent here is a genuine other crew. */
+  getActiveWar: () => request<ApiActiveWarResponse>("/crew-wars/active"),
+  queueForWar: () => request<{ status: "queued" | "matched"; war?: ApiCrewWar }>("/crew-wars/queue", { method: "POST" }),
+  leaveWarQueue: () => request<{ ok: true }>("/crew-wars/queue", { method: "DELETE" }),
+  contributeToWar: (volumeKg: number) =>
+    request<{ ok: true; contributed: boolean }>("/crew-wars/contribute", { method: "POST", body: { volumeKg } }),
+
+  /** The crew-internal motivation feed (see backend/routes/crew-activity-events.php) — real
+   * timestamped crewmate moments (PRs, streaks, long sessions, division ups), not fabricated. */
+  logCrewActivityEvent: (eventType: CrewActivityEventType, payload: Record<string, unknown>) =>
+    request<{ ok: true; recorded: boolean }>("/crew-activity-events", { method: "POST", body: { eventType, payload } }),
+  getCrewActivityEvents: (sinceMs?: number) =>
+    request<ApiCrewActivityEvent[]>(sinceMs ? `/crew-activity-events?since=${sinceMs}` : "/crew-activity-events"),
+
+  /** 1-on-1 "who does more today" crewmate challenges (see backend/routes/crew-duels.php). */
+  getCrewDuels: () => request<ApiCrewDuel[]>("/crew-duels"),
+  createDuel: (data: { opponentUserId: string; metric: "volume" | "sets"; targetDateKey: string }) =>
+    request<ApiCrewDuel>("/crew-duels", { method: "POST", body: data }),
+  respondToDuel: (duelId: string, accept: boolean) =>
+    request<ApiCrewDuel>(`/crew-duels/${duelId}/respond`, { method: "POST", body: { accept } }),
+
+  /** App-wide admin-curated challenges (see backend/routes/admin-challenges.php). GET returns every
+   * challenge for the admin account, active-only for everyone else — create/update/delete 403 for
+   * anyone but the admin, enforced server-side regardless of what the client shows. */
+  getAdminChallenges: () => request<ApiAdminChallenge[]>("/admin-challenges"),
+  createAdminChallenge: (data: AdminChallengeInput) => request<ApiAdminChallenge>("/admin-challenges", { method: "POST", body: data }),
+  updateAdminChallenge: (id: string, data: Partial<AdminChallengeInput>) =>
+    request<ApiAdminChallenge>(`/admin-challenges/${id}`, { method: "PUT", body: data }),
+  deleteAdminChallenge: (id: string) => request<{ ok: true }>(`/admin-challenges/${id}`, { method: "DELETE" }),
 };

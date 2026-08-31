@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { EditableText } from "@/components/EditableText";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { RankBadge } from "@/components/RankBadge";
 import { EXERCISE_BY_ID, type Exercise } from "@/data/exercises";
@@ -124,7 +125,9 @@ export default function RankHistoryScreen() {
         >
           <View className="flex-row items-center gap-2.5">
             <RankBadge tier={lift.tier} size={26} />
-            <Text className="body-md font-body-semibold text-text-primary">{lift.name}</Text>
+            <EditableText id="ranks.history.selectedLiftName" className="body-md font-body-semibold text-text-primary">
+              {lift.name}
+            </EditableText>
           </View>
           <Ionicons name="chevron-down" size={16} color={colors.neutral.textSecondary} />
         </Pressable>
@@ -157,12 +160,16 @@ export default function RankHistoryScreen() {
 
                 <View className={`flex-1 flex-row items-center justify-between ${isLast ? "" : "border-b border-divider"} pb-4 pt-1`}>
                   <View className="gap-0.5">
-                    <Text className="body-md font-body-bold" style={{ color: tint }}>
+                    <EditableText id={`ranks.history.${index}.tier`} className="body-md font-body-bold" style={{ color: tint }}>
                       {formatRankTier(entry.tier).toUpperCase()}
-                    </Text>
-                    <Text className="caption text-text-secondary">{formatHistoryDate(entry.achievedAt)}</Text>
+                    </EditableText>
+                    <EditableText id={`ranks.history.${index}.date`} className="caption text-text-secondary">
+                      {formatHistoryDate(entry.achievedAt)}
+                    </EditableText>
                   </View>
-                  <Text className="body-md font-body-bold text-text-primary">{entry.weightKg} kg</Text>
+                  <EditableText id={`ranks.history.${index}.weight`} className="body-md font-body-bold text-text-primary">
+                    {`${entry.weightKg} kg`}
+                  </EditableText>
                 </View>
               </View>
             );

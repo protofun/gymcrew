@@ -25,13 +25,15 @@ export function CrewCard() {
         <Text className="caption font-body-bold text-text-secondary">CREW</Text>
         {memberCount > 0 ? (
           <>
-            <EditableText id="home.crewCard.name" className="heading-4 text-text-primary">
+            <EditableText id="home.crewCard.name" className="heading-4 text-text-primary" numberOfLines={1}>
               {name}
             </EditableText>
-            <Text className="body-md">
-              <Text className="font-body-bold text-brand-yellow">{memberCount}</Text>
-              <Text className="text-text-secondary"> / {maxMembers} Members</Text>
-            </Text>
+            <View className="flex-row items-baseline">
+              <EditableText id="home.crewCard.memberCount" className="body-md font-body-bold text-brand-yellow">
+                {String(memberCount)}
+              </EditableText>
+              <Text className="body-md text-text-secondary"> / {maxMembers} Members</Text>
+            </View>
             <Text className="caption font-body-semibold mt-1 text-brand-yellow">View crew</Text>
           </>
         ) : (

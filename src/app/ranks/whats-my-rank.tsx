@@ -8,12 +8,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Line, Path } from "react-native-svg";
 import { captureRef } from "react-native-view-shot";
 
-import { BadgeRevealFx } from "@/components/BadgeRevealFx";
 import { DatePickerModal } from "@/components/DatePickerModal";
 import { ExerciseInstructionsModal } from "@/components/ExerciseInstructionsModal";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
-import { ProgressBar } from "@/components/ProgressBar";
 import { RankBadge } from "@/components/RankBadge";
+import { RankRevealCard } from "@/components/RankRevealCard";
 import type { Exercise } from "@/data/exercises";
 import { genericExerciseRankDetail, tierForExercise } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards, type LiftRankCard } from "@/lib/lift-rank-cards";
@@ -52,40 +51,6 @@ const headerTitleStyle = {
   lineHeight: 22,
   fontStyle: "italic" as const,
   transform: [{ skewX: "-8deg" }],
-};
-
-// Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native when
-// combined with a sibling className (see TopBar's wordmarkStyle for the same constraint).
-const wordmarkStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 20,
-  lineHeight: 22,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-10deg" }],
-};
-
-const tierNameStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 38,
-  lineHeight: 40,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
-
-const exerciseNameStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 24,
-  lineHeight: 26,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
-
-const metricPillTextStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 20,
-  lineHeight: 22,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "8deg" }],
 };
 
 /**
@@ -237,49 +202,28 @@ function RevealStep({
 
   return (
     <View className="items-center gap-4 px-6 pt-6">
-      <View ref={shareCardRef} collapsable={false} className="w-full items-center gap-4 rounded-3xl border border-divider bg-surface p-5">
-        <View className="w-full flex-row items-center justify-between">
-          <Text style={wordmarkStyle}>
-            <Text className="text-text-primary">GYM</Text>
-            <Text className="text-brand-yellow">CREW</Text>
-          </Text>
-          <View className="flex-row items-center gap-3">
-            <Pressable onPress={onInfo} hitSlop={8}>
-              <Ionicons name="information-circle-outline" size={18} color={colors.neutral.textSecondary} />
-            </Pressable>
-            <Pressable onPress={onShare} hitSlop={8} disabled={sharing}>
-              <Ionicons name={sharing ? "hourglass-outline" : "share-outline"} size={18} color={colors.neutral.textSecondary} />
-            </Pressable>
-          </View>
-        </View>
-
-        <Text style={exerciseNameStyle} className="text-text-primary" numberOfLines={1}>
-          {lift.name}
-        </Text>
-
-        <BadgeRevealFx tier={tier} triggerKey={`${lift.exercise.id}-${weightKg}-${reps}`} size={170} />
-
-        <View className="items-center gap-1.5">
-          <Text style={[tierNameStyle, { color: RANK_TIER_COLOR[tier] }]} numberOfLines={1}>
-            {formatRankTier(tier).toUpperCase()}
-          </Text>
-          <View className="flex-row items-center gap-1.5 rounded-full border px-3 py-1" style={{ borderColor: RANK_TIER_COLOR[tier] }}>
-            <Ionicons name="flame" size={12} color={RANK_TIER_COLOR[tier]} />
-            <Text className="caption font-body-semibold" style={{ color: RANK_TIER_COLOR[tier] }}>
-              Top {topPercent}% for your bodyweight
-            </Text>
-          </View>
-        </View>
-
-        <View style={{ transform: [{ skewX: "-8deg" }] }} className="border border-divider bg-background px-6 py-2.5">
-          <Text style={metricPillTextStyle} className="text-text-primary">
-            {weightKg}kg × {reps} {reps === 1 ? "rep" : "reps"}
-          </Text>
-        </View>
-
-        <View className="w-full">
-          <ProgressBar ratio={progressToNextTier} color={RANK_TIER_COLOR[tier]} height={6} />
-        </View>
+      <View ref={shareCardRef} collapsable={false} className="w-full">
+        <RankRevealCard
+          id={`ranks.whatsMyRank.${lift.exercise.id}`}
+          name={lift.name}
+          tier={tier}
+          weightKg={weightKg}
+          reps={reps}
+          unit="kg"
+          topPercent={topPercent}
+          progressToNextTier={progressToNextTier}
+          triggerKey={`${lift.exercise.id}-${weightKg}-${reps}`}
+          headerRight={
+            <View className="flex-row items-center gap-3">
+              <Pressable onPress={onInfo} hitSlop={8}>
+                <Ionicons name="information-circle-outline" size={18} color={colors.neutral.textSecondary} />
+              </Pressable>
+              <Pressable onPress={onShare} hitSlop={8} disabled={sharing}>
+                <Ionicons name={sharing ? "hourglass-outline" : "share-outline"} size={18} color={colors.neutral.textSecondary} />
+              </Pressable>
+            </View>
+          }
+        />
       </View>
 
       {decision === "pending" && (

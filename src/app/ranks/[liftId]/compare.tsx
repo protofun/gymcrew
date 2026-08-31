@@ -5,6 +5,7 @@ import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Line, Path, Text as SvgText } from "react-native-svg";
 
+import { EditableText } from "@/components/EditableText";
 import { RankBadge } from "@/components/RankBadge";
 import { fromDateKey } from "@/lib/date";
 import {
@@ -41,16 +42,20 @@ function CompareColumn({ standing }: { standing: CrewLiftStanding }) {
           <Ionicons name="person" size={18} color={colors.neutral.textSecondary} />
         </View>
       )}
-      <Text className="body-sm font-body-semibold text-text-primary" numberOfLines={1}>
+      <EditableText id={`ranks.compare.${standing.id}.name`} className="body-sm font-body-semibold text-text-primary" numberOfLines={1}>
         {standing.isMe ? "You" : standing.name}
-      </Text>
+      </EditableText>
 
       <RankBadge tier={standing.tier} size={80} />
-      <Text className="heading-4" style={{ color: tint }}>
+      <EditableText id={`ranks.compare.${standing.id}.tier`} className="heading-4" style={{ color: tint }}>
         {formatRankTier(standing.tier)}
-      </Text>
-      <Text className="body-md font-body-bold text-text-primary">{standing.weightKg} kg</Text>
-      <Text className="caption text-text-secondary">{percent}%</Text>
+      </EditableText>
+      <EditableText id={`ranks.compare.${standing.id}.weight`} className="body-md font-body-bold text-text-primary">
+        {`${standing.weightKg} kg`}
+      </EditableText>
+      <EditableText id={`ranks.compare.${standing.id}.percent`} className="caption text-text-secondary">
+        {`${percent}%`}
+      </EditableText>
     </View>
   );
 }

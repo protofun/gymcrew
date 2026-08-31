@@ -450,9 +450,10 @@ export default function WorkoutSplitScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInUp.delay(60).springify().damping(16).mass(0.6)} className="flex-row gap-3">
-          <StatTile icon="barbell" value={String(trainingDays)} label="Training" />
-          <StatTile icon="moon" value={String(restDays)} label="Rest" />
+          <StatTile id="profile.workoutSplit.trainingDays" icon="barbell" value={String(trainingDays)} label="Training" />
+          <StatTile id="profile.workoutSplit.restDays" icon="moon" value={String(restDays)} label="Rest" />
           <StatTile
+            id="profile.workoutSplit.coverage"
             icon="body"
             value={`${coveredCount}/${ALL_MUSCLE_GROUPS.length}`}
             label="Coverage"

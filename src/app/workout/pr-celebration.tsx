@@ -7,41 +7,12 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { captureRef } from "react-native-view-shot";
 
-import { BadgeRevealFx } from "@/components/BadgeRevealFx";
-import { useDecimalCountUp } from "@/hooks/use-decimal-count-up";
-import { calculateLiftRank, formatRankTier, majorLiftForExerciseId } from "@/lib/rank";
+import { RankRevealCard } from "@/components/RankRevealCard";
+import { calculateLiftRankDetail, majorLiftForExerciseId } from "@/lib/rank";
 import { formatTimeSince } from "@/lib/time-since";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
-import { colors, fontFamily } from "@/theme";
-
-const MEDAL_WIDTH = 180;
-
-// Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native
-// when combined with a sibling className — see theme/typography.ts.
-const wordmarkStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 22,
-  lineHeight: 22,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-10deg" }],
-};
-
-const exerciseNameStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 28,
-  lineHeight: 30,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
-
-const metricPillTextStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 20,
-  lineHeight: 22,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "8deg" }],
-};
+import { colors } from "@/theme";
 
 export default function PrCelebrationScreen() {
   const insets = useSafeAreaInsets();
@@ -57,24 +28,23 @@ export default function PrCelebrationScreen() {
 
   // Only the four major lifts have established strength standards to rank against, and the
   // calculation needs bodyweight + gender from onboarding — anything else falls back to Gold
-  // rather than presenting a tier we can't actually justify.
+  // rather than presenting a tier we can't actually justify (and skips the percentile/progress
+  // bar on the card, same as `RankRevealCard` does for any exercise it can't rank precisely).
   const majorLift = pr ? majorLiftForExerciseId(pr.exerciseId) : null;
   const canCalculateRank = majorLift !== null && !!onboarding.weightKg && !!onboarding.gender;
-  const rankTier =
+  const rankDetail =
     canCalculateRank && pr
-      ? calculateLiftRank(majorLift!, pr.weightKg, {
+      ? calculateLiftRankDetail(majorLift!, pr.weightKg, {
           bodyWeightKg: onboarding.weightKg!,
           gender: onboarding.gender!,
           age: onboarding.age,
         })
-      : "gold";
-
-  // Hooks must run unconditionally on every render, so this runs even while `pr` is briefly null
-  // (before the redirect below takes effect) — 0 is a harmless placeholder in that case.
-  const animatedWeight = useDecimalCountUp(pr?.weightKg ?? 0);
+      : null;
+  const rankTier = rankDetail?.tier ?? "gold";
+  const topPercent = rankDetail ? Math.max(1, 100 - Math.round(rankDetail.progressToNextTier * 100)) : null;
 
   if (!workout || !pr) {
-    router.replace({ pathname: "/workout/summary", params: { id: id ?? "" } });
+    router.replace({ pathname: "/workout/summary", params: { id: id ?? "", justFinished: "1" } });
     return null;
   }
 
@@ -82,7 +52,6 @@ export default function PrCelebrationScreen() {
   const percentIncrease =
     pr.previousBestKg && pr.previousBestKg > 0 ? ((pr.weightKg - pr.previousBestKg) / pr.previousBestKg) * 100 : null;
   const timeSince = pr.previousAchievedAt ? formatTimeSince(pr.previousAchievedAt, Date.now()) : null;
-  const displayWeight = Number.isInteger(animatedWeight) ? animatedWeight.toString() : animatedWeight.toFixed(1);
 
   function shareAsText() {
     // Share.share returns a rejected promise on web when the browser has no native share sheet
@@ -122,7 +91,7 @@ export default function PrCelebrationScreen() {
 
   function handleNext() {
     if (isLast) {
-      router.replace({ pathname: "/workout/summary", params: { id: workout!.id } });
+      router.replace({ pathname: "/workout/summary", params: { id: workout!.id, justFinished: "1" } });
     } else {
       setIndex((current) => current + 1);
     }
@@ -130,68 +99,42 @@ export default function PrCelebrationScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#000000", paddingTop: insets.top }}>
-      {/* Everything the shared screenshot should include — the header, medal, and PR details,
-          not the Next/Back navigation controls below. Kept as its own flex:1 wrapper so the
-          medal/details still center in the available space exactly as before. */}
-      <View ref={shareCardRef} collapsable={false} style={{ flex: 1, backgroundColor: "#000000" }}>
-        <Animated.View
-          key={`header-${pr.exerciseId}`}
-          entering={FadeIn.duration(400)}
-          className="flex-row items-center justify-between px-4 pb-2"
-        >
-          <View style={{ width: 22 }} />
-          <Text style={wordmarkStyle}>
-            <Text className="text-text-primary">GYM</Text>
-            <Text className="text-brand-yellow">CREW</Text>
-          </Text>
-          <Pressable onPress={handleShare} hitSlop={10} disabled={sharing}>
-            <Ionicons name={sharing ? "hourglass-outline" : "share-outline"} size={22} color={colors.neutral.textPrimary} />
-          </Pressable>
+      {/* Everything the shared screenshot should include — the label, card, and PR details, not
+          the Next/Back navigation controls below. Kept as its own flex:1 wrapper so it still
+          centers in the available space exactly as before. The card itself is `RankRevealCard` —
+          the same canonical medal-reveal card "What's my rank?" uses — with only the screen-
+          specific extras (the "NEW PERSONAL RECORD" label, the %-increase, time-since-last-PR)
+          added around it, so this never grows its own, different-looking version of that card. */}
+      <View ref={shareCardRef} collapsable={false} style={{ flex: 1 }} className="items-center justify-center gap-4 px-6">
+        <Animated.View key={`label-${pr.exerciseId}`} entering={FadeInDown.delay(100).duration(350)} className="items-center gap-1">
+          <Text className="body-md font-body-semibold tracking-wide text-brand-yellow">NEW PERSONAL RECORD</Text>
         </Animated.View>
 
-        <View className="flex-1 items-center justify-center gap-6 px-8">
-          <Animated.View
-            key={`label-${pr.exerciseId}`}
-            entering={FadeInDown.delay(100).duration(350)}
-            className="items-center gap-1"
-          >
-            <Text className="body-md font-body-semibold tracking-wide text-brand-yellow">NEW PERSONAL RECORD</Text>
-            {canCalculateRank && (
-              <Text className="caption text-text-secondary">{formatRankTier(rankTier)} Tier</Text>
-            )}
-          </Animated.View>
+        <Animated.View key={`card-${pr.exerciseId}`} entering={FadeInUp.delay(250).springify().damping(16)} className="w-full">
+          <RankRevealCard
+            id={`workout.prCelebration.${pr.exerciseId}`}
+            name={pr.exerciseName}
+            tier={rankTier}
+            weightKg={pr.weightKg}
+            reps={pr.reps}
+            unit={workout.unit}
+            topPercent={topPercent}
+            progressToNextTier={rankDetail?.progressToNextTier ?? null}
+            triggerKey={pr.exerciseId}
+            headerRight={
+              <Pressable onPress={handleShare} hitSlop={10} disabled={sharing}>
+                <Ionicons name={sharing ? "hourglass-outline" : "share-outline"} size={18} color={colors.neutral.textSecondary} />
+              </Pressable>
+            }
+          />
+        </Animated.View>
 
-          <BadgeRevealFx tier={rankTier} triggerKey={pr.exerciseId} size={MEDAL_WIDTH} />
-
-          <Animated.View
-            key={`details-${pr.exerciseId}`}
-            entering={FadeInUp.delay(550).springify().damping(16)}
-            className="items-center gap-2"
-          >
-            <Text style={exerciseNameStyle} className="text-center text-text-primary">
-              {pr.exerciseName}
-            </Text>
-            <View style={{ transform: [{ skewX: "-8deg" }] }} className="mt-1 border border-divider bg-surface px-6 py-2.5">
-              <Text style={metricPillTextStyle} className="text-text-primary">
-                {displayWeight}
-                {workout.unit} × {pr.reps} {pr.reps === 1 ? "rep" : "reps"}
-              </Text>
-            </View>
-
-            {percentIncrease !== null && (
-              <Animated.Text
-                entering={FadeIn.delay(900).duration(350)}
-                className="body-lg font-body-semibold text-success"
-              >
-                +{percentIncrease.toFixed(1)}% from last time
-              </Animated.Text>
-            )}
-
-            <Animated.Text entering={FadeIn.delay(1050).duration(350)} className="body-sm mt-1 text-text-secondary">
-              {timeSince ? `${timeSince} since your last PR` : "First time logging this lift"}
-            </Animated.Text>
-          </Animated.View>
-        </View>
+        <Animated.View key={`details-${pr.exerciseId}`} entering={FadeIn.delay(900).duration(350)} className="items-center gap-1">
+          {percentIncrease !== null && (
+            <Text className="body-lg font-body-semibold text-success">+{percentIncrease.toFixed(1)}% from last time</Text>
+          )}
+          <Text className="body-sm text-text-secondary">{timeSince ? `${timeSince} since your last PR` : "First time logging this lift"}</Text>
+        </Animated.View>
       </View>
 
       <Animated.View

@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DivisionBadge } from "@/components/DivisionBadge";
+import { EditableText } from "@/components/EditableText";
 import { ProgressBar } from "@/components/ProgressBar";
 import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
 import { sameDivisionRivals } from "@/lib/crew-league";
@@ -42,18 +43,20 @@ export default function DivisionInfoScreen() {
       >
         <View className="items-center gap-3">
           <DivisionBadge division={division} size={140} />
-          <Text className="heading-2 text-text-primary">{division}</Text>
-          <Text className="body-md text-center text-text-secondary">
-            You are in the top {divisionTopPercentile}% of crews{"\n"}in your division.
-          </Text>
+          <EditableText id="crew.division.name" className="heading-2 text-text-primary">
+            {division}
+          </EditableText>
+          <EditableText id="crew.division.percentileNote" className="body-md text-center text-text-secondary">
+            {`You are in the top ${divisionTopPercentile}% of crews\nin your division.`}
+          </EditableText>
         </View>
 
         <View className="gap-2">
           <Text className="caption text-text-secondary">DIVISION PROGRESS</Text>
           <ProgressBar ratio={next ? xp / xpNeeded : 1} color={colors.brand.yellow} height={8} />
-          <Text className="caption text-right text-text-secondary">
+          <EditableText id="crew.division.progressXp" className="caption text-right text-text-secondary">
             {next ? `${xp.toLocaleString("en-US")} / ${xpNeeded.toLocaleString("en-US")} XP` : "Top division reached"}
-          </Text>
+          </EditableText>
         </View>
 
         <View className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface p-4">

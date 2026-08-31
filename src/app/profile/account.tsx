@@ -11,6 +11,10 @@ import { resetLocalStateForAccountSwitch } from "@/lib/reset-local-state";
 import { DEVELOPER_MODE_USER_ID, useDeveloperModeStore } from "@/store/developer-mode-store";
 import { colors } from "@/theme";
 
+/** The only account allowed to create/edit/delete app-wide challenges (see profile/admin-challenges.tsx
+ * and backend/routes/admin-challenges.php, which re-checks this same email server-side). */
+const ADMIN_CHALLENGE_EMAIL = "jaimy.mathon@gmail.com";
+
 function PasswordField({ label, value, onChangeText }: { label: string; value: string; onChangeText: (value: string) => void }) {
   return (
     <View className="gap-1.5">
@@ -43,6 +47,7 @@ export default function AccountScreen() {
   const [signOutConfirmVisible, setSignOutConfirmVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const isDeveloper = user?.id === DEVELOPER_MODE_USER_ID;
+  const isChallengeAdmin = user?.primaryEmailAddress?.emailAddress?.toLowerCase() === ADMIN_CHALLENGE_EMAIL;
   const developerModeEnabled = useDeveloperModeStore((state) => state.enabled);
   const toggleDeveloperMode = useDeveloperModeStore((state) => state.toggleEnabled);
   const clearAllOverrides = useDeveloperModeStore((state) => state.clearAllOverrides);
@@ -158,6 +163,20 @@ export default function AccountScreen() {
         <Pressable onPress={() => setSignOutConfirmVisible(true)} className="items-center rounded-full border border-divider py-4">
           <Text className="body-md font-body-bold text-text-primary">Sign Out</Text>
         </Pressable>
+
+        {isChallengeAdmin && (
+          <Pressable
+            onPress={() => router.push("/profile/admin-challenges")}
+            className="flex-row items-center gap-3 rounded-2xl border border-brand-yellow/40 bg-surface p-4"
+          >
+            <Ionicons name="flag" size={18} color={colors.brand.yellow} />
+            <View className="flex-1">
+              <Text className="body-sm font-body-semibold text-text-primary">Manage Challenges</Text>
+              <Text className="body-sm text-text-secondary">Create, edit, and start/stop app-wide challenges.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.neutral.textSecondary} />
+          </Pressable>
+        )}
 
         {isDeveloper && (
           <View className="gap-2 rounded-2xl border border-brand-yellow/40 bg-surface p-4">

@@ -5,6 +5,7 @@ import { Keyboard, Modal, Pressable, ScrollView, Text, TextInput, View } from "r
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BmiGauge, calculateBmi } from "@/components/BmiGauge";
+import { EditableText } from "@/components/EditableText";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { StatCard, StatRow, StatSectionHeader } from "@/components/StatRow";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
@@ -252,14 +253,17 @@ export default function BodyLogScreen() {
             <StatSectionHeader label="Summary" />
             <StatCard>
               <StatRow
+                id="profile.bodyLog.startingWeight"
                 label="Starting Weight"
                 value={startingWeightKg != null ? `${displayWeight(startingWeightKg, weightUnit)} ${weightUnit}` : "—"}
               />
               <StatRow
+                id="profile.bodyLog.currentWeight"
                 label="Current Weight"
                 value={currentWeightKg != null ? `${displayWeight(currentWeightKg, weightUnit)} ${weightUnit}` : "—"}
               />
               <StatRow
+                id="profile.bodyLog.netChange"
                 label="Net Change"
                 value={
                   startingWeightKg != null && currentWeightKg != null
@@ -271,14 +275,16 @@ export default function BodyLogScreen() {
                 valueColor={weightChangeKg == null || weightChangeKg === 0 ? undefined : weightChangeKg > 0 ? colors.semantic.success : colors.semantic.error}
               />
               <StatRow
+                id="profile.bodyLog.highest"
                 label="Highest Recorded"
                 value={highestWeightKg != null ? `${displayWeight(highestWeightKg, weightUnit)} ${weightUnit}` : "—"}
               />
               <StatRow
+                id="profile.bodyLog.lowest"
                 label="Lowest Recorded"
                 value={lowestWeightKg != null ? `${displayWeight(lowestWeightKg, weightUnit)} ${weightUnit}` : "—"}
               />
-              <StatRow label="Avg Body Fat %" value={avgBodyFat != null ? `${avgBodyFat.toFixed(1)}%` : "—"} isLast />
+              <StatRow id="profile.bodyLog.avgBodyFat" label="Avg Body Fat %" value={avgBodyFat != null ? `${avgBodyFat.toFixed(1)}%` : "—"} isLast />
             </StatCard>
           </View>
         )}
@@ -303,19 +309,19 @@ export default function BodyLogScreen() {
                   <View style={{ width: 4, backgroundColor: colors.brand.yellow }} />
 
                   <View className="items-center justify-center gap-0.5 px-4 py-3">
-                    <Text style={weightStatStyle} className="text-brand-white" numberOfLines={1}>
-                      {Math.round(displayWeight(entry.weightKg, weightUnit))}
-                    </Text>
+                    <EditableText id={`profile.bodyLog.entry.${entry.id}.weight`} style={weightStatStyle} className="text-brand-white" numberOfLines={1}>
+                      {String(Math.round(displayWeight(entry.weightKg, weightUnit)))}
+                    </EditableText>
                     <Text className="caption font-body-semibold text-text-secondary">{weightUnit.toUpperCase()}</Text>
                   </View>
 
                   <View className="flex-1 justify-center gap-1 border-l border-divider py-3 pl-3 pr-2">
-                    <Text className="body-md font-body-semibold text-text-primary">
+                    <EditableText id={`profile.bodyLog.entry.${entry.id}.bodyFat`} className="body-md font-body-semibold text-text-primary" numberOfLines={1}>
                       {entry.bodyFatPercent ? `${entry.bodyFatPercent}% Body Fat` : "No body fat logged"}
-                    </Text>
+                    </EditableText>
                     <View className="flex-row items-center gap-1">
                       <Ionicons name="calendar-outline" size={11} color={colors.neutral.textSecondary} />
-                      <Text className="caption font-body-semibold text-text-secondary">
+                      <Text className="caption font-body-semibold text-text-secondary" numberOfLines={1}>
                         {new Date(entry.loggedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                       </Text>
                     </View>

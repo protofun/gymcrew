@@ -56,8 +56,10 @@ export function ExerciseSetRow({ index, set, unit, previousSet, onUpdate, onRemo
     <View
       className={`flex-row items-center gap-2.5 rounded-xl px-2.5 py-2.5 ${set.completed ? "bg-success/25" : ""}`}
     >
-      {/* Tap toggles warm-up, long-press removes the set — same badge doubles as both controls. */}
-      <Pressable onPress={() => onUpdate({ isWarmup: !set.isWarmup })} onLongPress={onRemove} hitSlop={6}>
+      {/* Tap toggles warm-up. Removing a set is the separate, explicit ⊗ icon at the end of the
+          row — this badge used to also remove on long-press, which was undocumented and an easy
+          way to accidentally delete a set while adjusting warm-up state. */}
+      <Pressable onPress={() => onUpdate({ isWarmup: !set.isWarmup })} hitSlop={6}>
         <View
           className={`h-8 w-8 items-center justify-center rounded-full ${
             set.completed ? "bg-success" : set.isWarmup ? "bg-transparent" : "bg-background"

@@ -38,6 +38,7 @@ type OnboardingData = {
   crewChallengeAlerts: boolean;
   progressUpdates: boolean;
   marketingTips: boolean;
+  creatineReminders: boolean;
 };
 
 /** The subset of OnboardingData that's also broken out into real columns on the backend `users`
@@ -45,7 +46,7 @@ type OnboardingData = {
  * profiles directly (e.g. via phpMyAdmin). The *complete* onboarding answers (every field on
  * OnboardingData, not just this subset) are separately synced wholesale as one JSON blob — see
  * `setOnboardingData`/`syncProfileFromServer` below and backend/routes/state.php. */
-const PROFILE_SYNC_KEYS = ["fullName", "gender", "heightCm", "weightKg", "age", "gymName", "goal", "experienceLevel"] as const;
+const PROFILE_SYNC_KEYS = ["fullName", "username", "gender", "heightCm", "weightKg", "age", "gymName", "goal", "experienceLevel"] as const;
 
 function pickDefined<T extends object, K extends keyof T>(obj: T, keys: readonly K[]): Partial<Pick<T, K>> {
   const result: Partial<Pick<T, K>> = {};

@@ -15,8 +15,12 @@ import { recordChallengeContributions } from "@/lib/challenge-progress";
 import { tierForExercise } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
 import type { RankProfile } from "@/lib/rank";
+import { computeCurrentStreak } from "@/lib/streak";
 import { checkPersonalRecords, computeCompletedSets, computeMuscleIntensity, computeVolumeKg } from "@/lib/workout-finish";
+import { workoutXpEarned } from "@/lib/xp";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
+import { useCrewFeedStore } from "@/store/crew-feed-store";
+import { useCrewWarStore } from "@/store/crew-war-store";
 import { TOKENS_PER_PR, TOKENS_PER_WORKOUT, useCurrencyStore } from "@/store/currency-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
@@ -24,8 +28,11 @@ import { useProfileLevelStore } from "@/store/profile-level-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors } from "@/theme";
 
-const WORKOUT_XP_REWARD = 40;
-const PR_XP_BONUS = 20;
+/** Streak lengths worth a crew-feed nudge — only fires the moment one is first crossed, not on
+ * every workout past it (see handleFinish's streakBefore/streakAfter comparison). */
+const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100];
+/** A session this long is genuinely notable, not just a normal workout — see crew-feed-store.ts. */
+const LONG_SESSION_MINUTES = 75;
 
 export default function ActiveWorkoutScreen() {
   const insets = useSafeAreaInsets();
@@ -83,6 +90,12 @@ export default function ActiveWorkoutScreen() {
     const completedSets = computeCompletedSets(exercises);
     recordChallengeContributions(exercises, recordsBeforeThisWorkout);
 
+    // Snapshot the streak before this workout lands, so crossing a milestone (3/7/14/... days) can
+    // be detected and nudged to the crew feed exactly once — not on every workout past it.
+    const freezeDateKeys = useCurrencyStore.getState().freezeDateKeys;
+    const workoutsBeforeThis = useWorkoutHistoryStore.getState().workouts;
+    const streakBefore = computeCurrentStreak(workoutsBeforeThis, new Date(), freezeDateKeys);
+
     useWorkoutHistoryStore.getState().addWorkout({
       id,
       name: name.trim() || "Workout",
@@ -108,13 +121,34 @@ export default function ActiveWorkoutScreen() {
     });
 
     const currency = useCurrencyStore.getState();
-    const xpEarned = WORKOUT_XP_REWARD + prs.length * PR_XP_BONUS;
+    const xpEarned = workoutXpEarned(prs.length);
     useProfileLevelStore.getState().addXp(currency.xpBoostActive ? xpEarned * 2 : xpEarned);
     currency.grantTokens(TOKENS_PER_WORKOUT + prs.length * TOKENS_PER_PR);
     if (currency.xpBoostActive) currency.consumeXpBoost();
 
+    // Real crew-vs-crew War contribution + the crew-internal motivation feed — all best-effort,
+    // no-ops if there's no crew or no active War (see crew-war-store.ts / crew-feed-store.ts).
+    const crewFeed = useCrewFeedStore.getState();
+    useCrewWarStore.getState().recordContribution(volumeKg);
+    for (const pr of prs) {
+      crewFeed.logEvent("pr", { exerciseName: pr.exerciseName, weightKg: pr.weightKg, reps: pr.reps });
+    }
+    const streakAfter = computeCurrentStreak(useWorkoutHistoryStore.getState().workouts, new Date(), freezeDateKeys);
+    if (STREAK_MILESTONES.some((milestone) => streakBefore < milestone && streakAfter >= milestone)) {
+      crewFeed.logEvent("streak", { days: streakAfter });
+    }
+    if (elapsedSeconds >= LONG_SESSION_MINUTES * 60) {
+      crewFeed.logEvent("long_session", { durationMinutes: Math.round(elapsedSeconds / 60), workoutName: name.trim() || "Workout" });
+    }
+
     finishWorkout();
-    router.replace({ pathname: "/workout/complete", params: { id } });
+    // PR or not, this always lands on the results screen — `workout/complete` no longer exists as
+    // its own stop; `justFinished` tells the results screen to show its "just finished" hero.
+    if (prs.length > 0) {
+      router.replace({ pathname: "/workout/pr-celebration", params: { id } });
+    } else {
+      router.replace({ pathname: "/workout/summary", params: { id, justFinished: "1" } });
+    }
   }
 
   function confirmDiscard(onConfirm: () => void) {

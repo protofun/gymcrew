@@ -13,14 +13,16 @@ import { isApiConfigured, waitForAuthToken } from "@/lib/api";
 import { computeCrewWeeklyPower, sameDivisionRivals } from "@/lib/crew-league";
 import { flushLocalStateToServer } from "@/lib/flush-local-state";
 import { xpRequiredFor } from "@/lib/division";
-import { buildNotifications } from "@/lib/notifications";
+import { buildCreatineReminderNotification, buildCrewNotifications, buildNotifications, NOTIFICATIONS_LIMIT } from "@/lib/notifications";
 import { getPostAuthRedirect } from "@/lib/onboarding-gate";
 import { computeCurrentStreak, computeTrainedDaysThisWeek } from "@/lib/streak";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
+import { useAdminChallengeStore } from "@/store/admin-challenge-store";
 import { useBodyLogStore } from "@/store/body-log-store";
 import { useChallengeStore } from "@/store/challenge-store";
 import { useCosmeticsStore } from "@/store/cosmetics-store";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
+import { useCrewFeedStore } from "@/store/crew-feed-store";
 import { useCrewLeagueStore } from "@/store/crew-league-store";
 import { useCrewStore } from "@/store/crew-store";
 import { useCurrencyStore } from "@/store/currency-store";
@@ -53,10 +55,13 @@ export default function TabsLayout() {
   const streakDays = computeCurrentStreak(workouts, new Date(), useCurrencyStore.getState().freezeDateKeys);
   const trainedDaysThisWeek = computeTrainedDaysThisWeek(workouts);
   const onboarding = useOnboardingStore((state) => state.onboarding);
-  const notifications = useMemo(
-    () => buildNotifications(workouts, streakDays, { weightKg: onboarding.weightKg, gender: onboarding.gender, age: onboarding.age }),
-    [workouts, streakDays, onboarding.weightKg, onboarding.gender, onboarding.age],
-  );
+  const crewFeedEvents = useCrewFeedStore((state) => state.events);
+  const notifications = useMemo(() => {
+    const personal = buildNotifications(workouts, streakDays, { weightKg: onboarding.weightKg, gender: onboarding.gender, age: onboarding.age });
+    const crew = buildCrewNotifications(crewFeedEvents, user?.id);
+    const creatine = buildCreatineReminderNotification(onboarding.creatineReminders ?? true);
+    return [...personal, ...crew, ...creatine].sort((a, b) => b.timestamp - a.timestamp).slice(0, NOTIFICATIONS_LIMIT);
+  }, [workouts, streakDays, onboarding.weightKg, onboarding.gender, onboarding.age, onboarding.creatineReminders, crewFeedEvents, user?.id]);
   const profileXp = useProfileLevelStore((state) => state.xp);
   const profileDivision = useProfileLevelStore((state) => state.division);
   const crewXp = useCrewStore((state) => state.xp);
@@ -87,6 +92,23 @@ export default function TabsLayout() {
   useEffect(() => {
     if (crewId) fetchCrewActivity(crewId);
   }, [crewId, fetchCrewActivity]);
+
+  // The crew-internal motivation feed (see crew-feed-store.ts) — fetched here too, not just when
+  // the Crew tab is open, so a crewmate's PR/streak/long-session shows up in the bell notifications
+  // even if the user never visits that tab.
+  const fetchCrewFeed = useCrewFeedStore((state) => state.fetch);
+  useEffect(() => {
+    if (crewId) fetchCrewFeed();
+  }, [crewId, fetchCrewFeed]);
+
+  // App-wide admin challenges (see admin-challenge-store.ts) — fetched here too, not just when the
+  // Challenges tab is open, so `lib/challenge-progress.ts`'s recordChallengeContributions (called the
+  // moment any workout finishes, well before that tab might ever be opened) always has the current
+  // active list to award progress against.
+  const fetchAdminChallenges = useAdminChallengeStore((state) => state.fetch);
+  useEffect(() => {
+    if (isSignedIn) fetchAdminChallenges();
+  }, [isSignedIn, fetchAdminChallenges]);
 
   // Once per sign-in: pull the real backend state for every backend-synced store — see lib/api.ts
   // and lib/backend-sync.ts. A no-op until EXPO_PUBLIC_API_BASE_URL is actually configured. Crew,

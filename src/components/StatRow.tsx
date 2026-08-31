@@ -1,5 +1,6 @@
 import { Text, View } from "react-native";
 
+import { EditableText } from "@/components/EditableText";
 import { colors } from "@/theme";
 
 /** Uppercase, letter-spaced category label above a `StatCard` — the "LIVE TRADING ACCOUNT" style
@@ -18,13 +19,32 @@ export function StatCard({ children }: { children: React.ReactNode }) {
 }
 
 /** Plain "label ... value" row, divided from the next — the reference screenshot's core unit. */
-export function StatRow({ label, value, valueColor, isLast }: { label: string; value: string; valueColor?: string; isLast?: boolean }) {
+export function StatRow({
+  label,
+  value,
+  valueColor,
+  isLast,
+  id,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+  isLast?: boolean;
+  /** Dev Mode override id (see EditableText) — omit to render the value as plain, non-editable text. */
+  id?: string;
+}) {
   return (
     <View className={`flex-row items-center justify-between px-4 py-3 ${!isLast ? "border-b border-divider" : ""}`}>
       <Text className="body-sm text-text-secondary">{label}</Text>
-      <Text className="body-sm font-body-bold" style={{ color: valueColor ?? colors.neutral.textPrimary }}>
-        {value}
-      </Text>
+      {id ? (
+        <EditableText id={id} className="body-sm font-body-bold" style={{ color: valueColor ?? colors.neutral.textPrimary }}>
+          {value}
+        </EditableText>
+      ) : (
+        <Text className="body-sm font-body-bold" style={{ color: valueColor ?? colors.neutral.textPrimary }}>
+          {value}
+        </Text>
+      )}
     </View>
   );
 }

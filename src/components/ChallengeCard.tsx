@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Pressable, Text, View } from "react-native";
 
+import { EditableText } from "@/components/EditableText";
 import { ProgressBar } from "@/components/ProgressBar";
 import type { ChallengeMetric } from "@/data/challenges";
 import { challengeHeroImage } from "@/lib/challenge-visuals";
@@ -17,6 +18,8 @@ const titleStyle = {
 };
 
 type ChallengeCardProps = {
+  /** Dev Mode override id prefix (see EditableText) — e.g. "crew.challenges.weekly-volume-2024w12". */
+  id: string;
   metric: ChallengeMetric;
   name: string;
   progress: number;
@@ -27,19 +30,38 @@ type ChallengeCardProps = {
   xpReward: number;
   /** Only set for crew Battles (custom challenges with a real rival opponent) — whether the crew is currently ahead. */
   battleStatus?: "winning" | "losing";
+  /** Not playable yet (see the Summer Challenge section in ChallengesTab) — dims the card, swaps the
+   * usual percent/time readout for a lock notice, and disables the tap-through. */
+  locked?: boolean;
+  lockedLabel?: string;
   onPress: () => void;
 };
 
-export function ChallengeCard({ metric, name, progress, target, unit, timeLabel, isComplete, xpReward, battleStatus, onPress }: ChallengeCardProps) {
+export function ChallengeCard({
+  id,
+  metric,
+  name,
+  progress,
+  target,
+  unit,
+  timeLabel,
+  isComplete,
+  xpReward,
+  battleStatus,
+  locked = false,
+  lockedLabel = "Locked",
+  onPress,
+}: ChallengeCardProps) {
   const ratio = target > 0 ? progress / target : 0;
   const percent = Math.min(100, Math.round(ratio * 100));
-  const accent = isComplete ? colors.semantic.success : colors.brand.yellow;
+  const accent = locked ? colors.neutral.textSecondary : isComplete ? colors.semantic.success : colors.brand.yellow;
 
   return (
     <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
-      className={`flex-row items-stretch overflow-hidden rounded-2xl border ${isComplete ? "border-success" : "border-divider"} bg-surface`}
+      onPress={locked ? undefined : onPress}
+      disabled={locked}
+      style={({ pressed }) => ({ opacity: pressed && !locked ? 0.85 : locked ? 0.7 : 1 })}
+      className={`flex-row items-stretch overflow-hidden rounded-2xl border ${isComplete && !locked ? "border-success" : "border-divider"} bg-surface`}
     >
       <View style={{ width: 4, backgroundColor: accent }} />
 
@@ -47,10 +69,15 @@ export function ChallengeCard({ metric, name, progress, target, unit, timeLabel,
 
       <View className="flex-1 gap-1.5 p-3">
         <View className="flex-row items-center justify-between">
-          <Text style={titleStyle} className="flex-1 text-text-primary" numberOfLines={1}>
+          <EditableText id={`${id}.name`} style={titleStyle} className="flex-1 text-text-primary" numberOfLines={1}>
             {name.toUpperCase()}
-          </Text>
-          {isComplete ? (
+          </EditableText>
+          {locked ? (
+            <View className="flex-row items-center gap-1 rounded-full bg-background px-2 py-0.5">
+              <Ionicons name="lock-closed" size={10} color={colors.neutral.textSecondary} />
+              <Text className="caption font-body-bold text-text-secondary">LOCKED</Text>
+            </View>
+          ) : isComplete ? (
             <View className="flex-row items-center gap-1 rounded-full bg-success px-2 py-0.5">
               <Ionicons name="checkmark" size={11} color={colors.brand.iron} />
               <Text className="caption font-body-bold text-brand-iron">DONE</Text>
@@ -61,10 +88,17 @@ export function ChallengeCard({ metric, name, progress, target, unit, timeLabel,
         </View>
 
         <View className="flex-row items-center gap-2">
-          <View className="flex-row items-center gap-1">
-            <Ionicons name="flash" size={11} color={colors.brand.yellow} />
-            <Text className="caption font-body-semibold text-brand-yellow">+{xpReward.toLocaleString("en-US")} XP</Text>
-          </View>
+          {locked ? (
+            <View className="flex-row items-center gap-1">
+              <Ionicons name="time-outline" size={11} color={colors.neutral.textSecondary} />
+              <Text className="caption font-body-semibold text-text-secondary">{lockedLabel}</Text>
+            </View>
+          ) : (
+            <View className="flex-row items-center gap-1">
+              <Ionicons name="flash" size={11} color={colors.brand.yellow} />
+              <Text className="caption font-body-semibold text-brand-yellow">+{xpReward.toLocaleString("en-US")} XP</Text>
+            </View>
+          )}
           {battleStatus && !isComplete && (
             <View className="flex-row items-center gap-1">
               <Ionicons
@@ -82,21 +116,23 @@ export function ChallengeCard({ metric, name, progress, target, unit, timeLabel,
           )}
         </View>
 
-        <ProgressBar ratio={ratio} color={accent} height={7} />
+        <ProgressBar ratio={locked ? 0 : ratio} color={accent} height={7} />
 
         <View className="flex-row items-center justify-between">
           <Text className="caption font-body-semibold text-text-secondary">
-            {progress.toLocaleString("en-US")} / {target.toLocaleString("en-US")} {unit}
+            {locked ? `${target.toLocaleString("en-US")} ${unit} / member` : `${progress.toLocaleString("en-US")} / ${target.toLocaleString("en-US")} ${unit}`}
           </Text>
-          <View className="flex-row items-center gap-1">
-            <Ionicons name={isComplete ? "trophy" : "flame"} size={12} color={isComplete ? colors.semantic.success : colors.semantic.streak} />
-            <Text className="caption font-body-semibold text-text-secondary">{timeLabel}</Text>
-          </View>
+          {!locked && (
+            <View className="flex-row items-center gap-1">
+              <Ionicons name={isComplete ? "trophy" : "flame"} size={12} color={isComplete ? colors.semantic.success : colors.semantic.streak} />
+              <Text className="caption font-body-semibold text-text-secondary">{timeLabel}</Text>
+            </View>
+          )}
         </View>
       </View>
 
       <View className="items-center justify-center pr-3">
-        <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
+        <Ionicons name={locked ? "lock-closed" : "chevron-forward"} size={16} color={colors.neutral.textSecondary} />
       </View>
     </Pressable>
   );

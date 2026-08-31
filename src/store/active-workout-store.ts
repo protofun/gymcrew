@@ -4,7 +4,9 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import type { Exercise } from "@/data/exercises";
 import { pullState, pushState } from "@/lib/backend-sync";
+import { getLastPerformance } from "@/lib/exercise-history";
 import { useOnboardingStore } from "@/store/onboarding-store";
+import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 
 export type WeightUnit = "kg" | "lbs";
 
@@ -159,7 +161,15 @@ export const useActiveWorkoutStore = create<ActiveWorkoutStore>()(
       },
 
       addExercise: (exercise) => {
-        set((state) => ({ exercises: [...state.exercises, toLoggedExercise(exercise, [makeSet()])] }));
+        // Prefills set #1 from the last time this exercise was logged (not just the same-session
+        // "set above" auto-fill `addSet` already does below) — so repeating last week's numbers
+        // doesn't mean retyping them. Skips warmup sets when picking what to copy; falls back to
+        // the first logged set if every set that session was a warmup.
+        const lastSets = get().autoFillPreviousSet
+          ? getLastPerformance(useWorkoutHistoryStore.getState().workouts, exercise.id)
+          : null;
+        const prefillFrom = lastSets ? (lastSets.find((loggedSet) => !loggedSet.isWarmup) ?? lastSets[0]) : undefined;
+        set((state) => ({ exercises: [...state.exercises, toLoggedExercise(exercise, [makeSet(prefillFrom)])] }));
         syncPush(get);
       },
 

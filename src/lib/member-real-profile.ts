@@ -25,6 +25,41 @@ export function realMemberAchievements(records: Record<string, PersonalRecord>, 
     }));
 }
 
+export type PrTimelineEntry = {
+  exerciseId: string;
+  exerciseName: string;
+  weightKg: number;
+  reps: number;
+  previousBestKg: number | null;
+  achievedAt: number;
+  workoutId: string;
+  workoutName: string;
+};
+
+/** Every individual PR *event*, newest first — unlike `realMemberAchievements` above (current
+ * bests only, one row per exercise), this surfaces every time a record was broken, even ones
+ * since beaten again. `CompletedWorkout.prs` already captures each event as it happened (with
+ * `previousBestKg`); this just flattens every workout's list and re-sorts by real time — a
+ * workout's own `prs` array is ordered by weight-jump size, not chronologically, so a genuine
+ * sort here (not a shortcut) is what keeps entries in true newest-first order. */
+export function realMemberPrTimeline(workouts: CompletedWorkout[], limit = 50): PrTimelineEntry[] {
+  return workouts
+    .flatMap((workout) =>
+      workout.prs.map((pr) => ({
+        exerciseId: pr.exerciseId,
+        exerciseName: pr.exerciseName,
+        weightKg: pr.weightKg,
+        reps: pr.reps,
+        previousBestKg: pr.previousBestKg,
+        achievedAt: workout.completedAt,
+        workoutId: workout.id,
+        workoutName: workout.name,
+      })),
+    )
+    .sort((a, b) => b.achievedAt - a.achievedAt)
+    .slice(0, limit);
+}
+
 /** Per-exercise history of the heaviest completed set that day, across every logged workout. */
 export function realStrengthProgress(workouts: CompletedWorkout[]): Record<string, StrengthPoint[]> {
   const chronological = [...workouts].reverse(); // stored newest-first

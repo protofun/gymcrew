@@ -94,12 +94,11 @@ export default function SignUpScreen() {
 
     posthog.capture("user_signed_up", { auth_method: "email" });
     await finishAccountSetup();
-    // The normal path here is wizard -> sign-up, so `hasCompletedOnboarding` is already true
-    // locally and this lands on /build-crew as before. But sign-up is also reachable directly
-    // (e.g. from sign-in's "Don't have an account?" link) without ever doing the wizard — routing
-    // through "/" lets the central gate (lib/onboarding-gate.ts) send that case to /onboarding
-    // instead, rather than skipping straight to crew selection with no profile data collected.
-    router.replace("/");
+    // Account exists now, but there's no profile data yet — straight into the wizard so it can save
+    // each answer to this real account as you go, instead of back through "/" (which would just
+    // land here again anyway, since the central gate sends a signed-in-but-not-onboarded account to
+    // /onboarding — this skips that redundant hop and its hero screen).
+    router.replace("/onboarding/welcome");
   }
 
   async function handleSocialAuth(strategy: "oauth_google" | "oauth_facebook" | "oauth_apple") {
@@ -110,7 +109,7 @@ export default function SignUpScreen() {
         const provider = strategy.replace("oauth_", "");
         posthog.capture("user_signed_up", { auth_method: provider });
         await finishAccountSetup();
-        router.replace("/");
+        router.replace("/onboarding/welcome");
       }
     } catch (error) {
       setFormError(getClerkErrorMessage(error));
@@ -119,8 +118,11 @@ export default function SignUpScreen() {
 
   if (!authLoaded || isSignedIn) {
     return (
-      <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.neutral.background }}>
+      <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.neutral.background, gap: 12 }}>
         <ActivityIndicator size="large" color={colors.brand.yellow} />
+        {authLoaded && isSignedIn && (
+          <Text className="body-sm text-text-secondary">Signing you out to start a new account…</Text>
+        )}
       </SafeAreaView>
     );
   }

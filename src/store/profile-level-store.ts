@@ -5,6 +5,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { api, isApiConfigured } from "@/lib/api";
 import { advanceDivision, divisionIndex, type Division } from "@/lib/division";
 import type { DivisionCelebration, DivisionHistoryEntry } from "@/store/crew-store";
+import { useCrewFeedStore } from "@/store/crew-feed-store";
 import { TOKENS_PER_DIVISION, useCurrencyStore } from "@/store/currency-store";
 
 type ProfileLevelSyncedData = {
@@ -52,6 +53,7 @@ export const useProfileLevelStore = create<ProfileLevelState & ProfileLevelActio
 
           const tiersGained = Math.max(1, divisionIndex(result.to) - divisionIndex(result.from));
           useCurrencyStore.getState().grantTokens(TOKENS_PER_DIVISION * tiersGained);
+          useCrewFeedStore.getState().logEvent("division_up", { division: result.to });
 
           return {
             xp: result.xp,

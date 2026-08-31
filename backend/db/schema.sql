@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS users (
   id VARCHAR(64) NOT NULL PRIMARY KEY,   -- Clerk user id (the JWT `sub` claim)
   email VARCHAR(255) NULL,
   full_name VARCHAR(255) NULL,
+  username VARCHAR(32) NULL,             -- lowercase, unique when set — see routes/profile.php
+  avatar_url VARCHAR(512) NULL,          -- Clerk-hosted photo (own upload or generated) — see routes/profile.php
   gender ENUM('male', 'female') NULL,
   height_cm INT NULL,
   weight_kg DECIMAL(5,2) NULL,
@@ -13,8 +15,19 @@ CREATE TABLE IF NOT EXISTS users (
   goal VARCHAR(255) NULL,
   experience_level VARCHAR(255) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_users_username (username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Upgrades a database created before `username`/`avatar_url` existed on `users` — CREATE TABLE IF
+-- NOT EXISTS above only fires on a brand-new database, it doesn't add a column to a table that
+-- already exists. These are no-ops (via IF NOT EXISTS) on both a fresh install (already created
+-- above) and an already-upgraded one, so it's safe for this whole file to keep being re-imported as
+-- one script, same as the README promises. Needs MySQL 8.0.29+ for `ADD ... IF NOT EXISTS`; on an
+-- older server, run these by hand once instead (phpMyAdmin -> SQL tab) with that clause removed.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(32) NULL AFTER full_name;
+ALTER TABLE users ADD UNIQUE KEY IF NOT EXISTS uniq_users_username (username);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(512) NULL AFTER username;
 
 -- One row per completed workout. `exercises_json` / `muscle_intensity_json` / `prs_json` mirror the
 -- app's CompletedWorkout shape exactly (LoggedExercise[], Partial<Record<MuscleGroup,number>>,
@@ -97,7 +110,9 @@ CREATE TABLE IF NOT EXISTS crews (
   id VARCHAR(64) NOT NULL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   tagline VARCHAR(255) NOT NULL DEFAULT '',
-  icon VARCHAR(64) NOT NULL DEFAULT 'gorilla',
+  -- Either a preset key (see data/crew-icons.ts's CREW_ICONS) or a full DiceBear URL from the
+  -- in-app generator (see CrewAvatarGeneratorModal) — wide enough for either.
+  icon VARCHAR(512) NOT NULL DEFAULT 'gorilla',
   training_type VARCHAR(255) NOT NULL DEFAULT '',
   privacy ENUM('invite-only', 'open', 'public') NOT NULL DEFAULT 'invite-only',
   join_requests_enabled TINYINT(1) NOT NULL DEFAULT 1,
@@ -109,8 +124,20 @@ CREATE TABLE IF NOT EXISTS crews (
   created_by VARCHAR(64) NOT NULL,
   created_at BIGINT NOT NULL,
   UNIQUE KEY uniq_crews_invite_code (invite_code),
+  UNIQUE KEY uniq_crews_name (name),
   CONSTRAINT fk_crews_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Upgrades a database created before crew names were required to be unique — see the `username`
+-- upgrade note above `users` for why CREATE TABLE IF NOT EXISTS alone doesn't cover this, and why
+-- re-running this whole file is still always safe. If this specific line ever fails on an existing
+-- database, it means two crews already share a name (case-insensitively) — rename one manually first.
+ALTER TABLE crews ADD UNIQUE KEY IF NOT EXISTS uniq_crews_name (name);
+
+-- Widens `icon` on a database created before it needed to fit a DiceBear URL, not just a short
+-- preset key — MODIFY COLUMN has no IF NOT EXISTS form, but re-running the same target width is
+-- always a harmless no-op, so this is safe to keep in this always-safe-to-re-import file too.
+ALTER TABLE crews MODIFY COLUMN icon VARCHAR(512) NOT NULL DEFAULT 'gorilla';
 
 -- Membership rows linking real accounts to a crew. A real account can only be in one crew at a
 -- time (uniq_crewmembers_user below) — matches the app's UI, which only ever shows "your crew"
@@ -126,6 +153,114 @@ CREATE TABLE IF NOT EXISTS crew_members (
   CONSTRAINT fk_crewmembers_crew FOREIGN KEY (crew_id) REFERENCES crews(id) ON DELETE CASCADE,
   CONSTRAINT fk_crewmembers_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Crews waiting to be matched into a War. A row here means "looking for an opponent" — matching
+-- happens synchronously in backend/routes/crew-wars.php right when a crew joins (no cron job in
+-- this setup), so a row's lifetime is normally seconds, not the "queue" you might expect.
+CREATE TABLE IF NOT EXISTS crew_war_queue (
+  crew_id VARCHAR(64) NOT NULL PRIMARY KEY,
+  crew_power INT NOT NULL,           -- snapshot at queue time, for pairing similarly-strong crews
+  queued_at BIGINT NOT NULL,
+  CONSTRAINT fk_warqueue_crew FOREIGN KEY (crew_id) REFERENCES crews(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- A real crew-vs-crew battle: two genuinely different crews, real member contributions, resolved
+-- by total volume once `ends_at` passes. Unlike the old fake "Challenge Another Crew" flow (whose
+-- opponent numbers were a deterministic hash, see src/lib/challenge-progress.ts), both sides here
+-- are real crews with real scores. Resolution is lazy — checked and applied the next time either
+-- side's app reads /crew-wars/active, same "resolve on next read" pattern as everything else here.
+CREATE TABLE IF NOT EXISTS crew_wars (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  crew_a_id VARCHAR(64) NOT NULL,
+  crew_b_id VARCHAR(64) NOT NULL,
+  crew_a_score DECIMAL(12,2) NOT NULL DEFAULT 0,   -- total kg volume contributed
+  crew_b_score DECIMAL(12,2) NOT NULL DEFAULT 0,
+  started_at BIGINT NOT NULL,
+  ends_at BIGINT NOT NULL,
+  status ENUM('active', 'completed') NOT NULL DEFAULT 'active',
+  winner_crew_id VARCHAR(64) NULL,
+  created_at BIGINT NOT NULL,
+  CONSTRAINT fk_wars_crew_a FOREIGN KEY (crew_a_id) REFERENCES crews(id) ON DELETE CASCADE,
+  CONSTRAINT fk_wars_crew_b FOREIGN KEY (crew_b_id) REFERENCES crews(id) ON DELETE CASCADE,
+  INDEX idx_wars_crew_a (crew_a_id, status),
+  INDEX idx_wars_crew_b (crew_b_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Append-only per-workout contribution toward a War, so the leaderboard of "who's carrying the
+-- crew this war" can be shown, not just the aggregate score on crew_wars itself.
+CREATE TABLE IF NOT EXISTS crew_war_contributions (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  war_id VARCHAR(64) NOT NULL,
+  crew_id VARCHAR(64) NOT NULL,
+  user_id VARCHAR(64) NOT NULL,
+  volume_kg DECIMAL(10,2) NOT NULL,
+  contributed_at BIGINT NOT NULL,
+  CONSTRAINT fk_warcontrib_war FOREIGN KEY (war_id) REFERENCES crew_wars(id) ON DELETE CASCADE,
+  INDEX idx_warcontrib_war_user (war_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Append-only feed of crewmate motivational moments (PR / streak milestone / long session /
+-- division up). `payload_json` shape depends on event_type — see backend/routes/crew-activity-events.php.
+-- This is the real, timestamped activity feed src/lib/notifications.ts explicitly said didn't
+-- exist yet ("No fabricated crew/social events, since there's no real timestamped activity feed
+-- to draw those from yet") — this table is that feed.
+CREATE TABLE IF NOT EXISTS crew_activity_events (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  crew_id VARCHAR(64) NOT NULL,
+  user_id VARCHAR(64) NOT NULL,
+  event_type ENUM('pr', 'streak', 'long_session', 'division_up') NOT NULL,
+  payload_json JSON NOT NULL,
+  created_at BIGINT NOT NULL,
+  CONSTRAINT fk_crewevents_crew FOREIGN KEY (crew_id) REFERENCES crews(id) ON DELETE CASCADE,
+  INDEX idx_crewevents_crew_date (crew_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- A lightweight 1-on-1 "who does more today" challenge between two crewmates. Resolved lazily
+-- (same pattern as crew_wars) by comparing each side's real workouts for target_date_key once
+-- that date has passed.
+CREATE TABLE IF NOT EXISTS crew_duels (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  crew_id VARCHAR(64) NOT NULL,
+  challenger_id VARCHAR(64) NOT NULL,
+  opponent_id VARCHAR(64) NOT NULL,
+  metric ENUM('volume', 'sets') NOT NULL,
+  target_date_key VARCHAR(10) NOT NULL,   -- yyyy-mm-dd
+  status ENUM('pending', 'accepted', 'declined', 'completed') NOT NULL DEFAULT 'pending',
+  winner_id VARCHAR(64) NULL,
+  created_at BIGINT NOT NULL,
+  CONSTRAINT fk_duels_crew FOREIGN KEY (crew_id) REFERENCES crews(id) ON DELETE CASCADE,
+  CONSTRAINT fk_duels_challenger FOREIGN KEY (challenger_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_duels_opponent FOREIGN KEY (opponent_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_duels_crew_date (crew_id, target_date_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- App-wide challenges curated by hand (see routes/admin-challenges.php — write access is gated to
+-- one hardcoded admin email, not a real roles system) instead of the procedurally-picked weekly pool
+-- (data/challenges.ts). Visible to every crew once `is_active`, same shape/behavior as a weekly
+-- challenge (progress tracked, XP/token reward on completion) — just admin-authored and left running
+-- until manually stopped instead of rotating weekly.
+CREATE TABLE IF NOT EXISTS admin_challenges (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description VARCHAR(500) NOT NULL DEFAULT '',
+  metric_json JSON NOT NULL,
+  unit VARCHAR(32) NOT NULL,
+  per_member_target INT NOT NULL,
+  icon VARCHAR(64) NOT NULL DEFAULT 'flag-outline',
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  -- Marks a challenge as part of the GymCrew Summer Challenge event (see ChallengesTab) — shown in
+  -- its own section, locked/read-only until the app's real release instead of counting progress.
+  is_summer_challenge TINYINT(1) NOT NULL DEFAULT 0,
+  created_by VARCHAR(64) NOT NULL,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  CONSTRAINT fk_adminchallenges_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Upgrades a database created before `is_summer_challenge` existed — see the `username` upgrade note
+-- above `users` for why this is needed alongside CREATE TABLE IF NOT EXISTS, and why it's safe to
+-- keep re-running this whole file.
+ALTER TABLE admin_challenges ADD COLUMN IF NOT EXISTS is_summer_challenge TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active;
 
 -- Generic per-user JSON blob storage: ONE table that holds several smaller features' worth of
 -- data, one ROW per (user, state_key) pair — not one row total. In phpMyAdmin, browse this table

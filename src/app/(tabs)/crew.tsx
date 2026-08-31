@@ -16,10 +16,15 @@ import { AvatarStack } from "@/components/AvatarStack";
 import { ChallengesTab } from "@/components/ChallengesTab";
 import { CrewActivitySheet } from "@/components/CrewActivitySheet";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
+import { CrewFeedList } from "@/components/CrewFeedList";
 import { CrewLeagueTab } from "@/components/CrewLeagueTab";
+import { CrewRivalsTab } from "@/components/CrewRivalsTab";
+import { CrewWarTab } from "@/components/CrewWarTab";
 import { DivisionBadge } from "@/components/DivisionBadge";
+import { EditableText } from "@/components/EditableText";
 import { GoalRing } from "@/components/GoalRing";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
+import { PeerDuelsCard } from "@/components/PeerDuelsCard";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatsTab } from "@/components/StatsTab";
 import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
@@ -43,8 +48,18 @@ import { useTodayTrainingStore } from "@/store/today-training-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
 
-const TABS = ["Overview", "League", "Challenges", "Stats", "Settings"] as const;
+const TABS = ["Overview", "War", "League", "Challenges", "Rivals", "Stats", "Settings"] as const;
 type CrewTab = (typeof TABS)[number];
+
+const TAB_ICON: Record<CrewTab, keyof typeof Ionicons.glyphMap> = {
+  Overview: "home",
+  War: "shield-half",
+  League: "podium",
+  Challenges: "flag",
+  Rivals: "people",
+  Stats: "stats-chart",
+  Settings: "settings-outline",
+};
 
 const PRESSED_STYLE = ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.7 : 1 });
 
@@ -76,13 +91,13 @@ const avatarGlow = Platform.select({
   default: { elevation: 10 },
 });
 
-function InfoChip({ icon, label, tint }: { icon: keyof typeof Ionicons.glyphMap; label: string; tint: string }) {
+function InfoChip({ icon, label, tint, id }: { icon: keyof typeof Ionicons.glyphMap; label: string; tint: string; id: string }) {
   return (
     <View className="flex-row items-center gap-1 rounded-full bg-surface px-2.5 py-1">
       <Ionicons name={icon} size={11} color={tint} />
-      <Text className="caption font-body-semibold" style={{ color: tint }}>
+      <EditableText id={id} className="caption font-body-semibold" style={{ color: tint }}>
         {label}
-      </Text>
+      </EditableText>
     </View>
   );
 }
@@ -121,19 +136,21 @@ function CrewBanner() {
         </Animated.View>
 
         <Animated.View entering={FadeInUp.delay(100).springify().damping(14).mass(0.6)} className="flex-1 gap-2">
-          <Text style={crewNameStyle} className="text-brand-white" numberOfLines={2}>
+          <EditableText id="crew.banner.name" style={crewNameStyle} className="text-brand-white" numberOfLines={2}>
             {name.toUpperCase()}
-          </Text>
+          </EditableText>
 
           <View className="flex-row flex-wrap items-center gap-2">
-            <InfoChip icon="shield" label={division} tint={colors.brand.yellow} />
-            <InfoChip icon="people" label={`${members.length}/${maxMembers}`} tint={colors.neutral.textSecondary} />
+            <InfoChip id="crew.banner.division" icon="shield" label={division} tint={colors.brand.yellow} />
+            <InfoChip id="crew.banner.memberCount" icon="people" label={`${members.length}/${maxMembers}`} tint={colors.neutral.textSecondary} />
           </View>
         </Animated.View>
       </View>
 
       <View className="mt-4 flex-row items-center justify-between">
-        <Text className="body-md text-text-secondary">{tagline}</Text>
+        <EditableText id="crew.banner.tagline" className="body-md text-text-secondary">
+          {tagline}
+        </EditableText>
 
         <Pressable
           onPress={() => router.push("/crew/settings")}
@@ -148,36 +165,49 @@ function CrewBanner() {
   );
 }
 
+// Chips are sized to their own content and sit in a single horizontally scrollable row instead of
+// being squeezed flex-1-even into one bar — with 7 tabs that bar had no room left to breathe, and
+// wrapping to a second row isn't allowed (see FILTERS chips on crew/members.tsx for the same pattern).
 function CrewTopTabs({ active, onChange }: { active: CrewTab; onChange: (tab: CrewTab) => void }) {
   return (
-    <View className="mx-4 mt-4 flex-row rounded-full border border-divider bg-surface p-1">
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      className="mt-4"
+      contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+    >
       {TABS.map((tab) => {
         const isActive = tab === active;
         return (
           <Pressable
             key={tab}
             onPress={() => (tab === "Settings" ? router.push("/crew/settings") : onChange(tab))}
-            className={`flex-1 items-center rounded-full py-2 ${isActive ? "bg-brand-yellow" : ""}`}
+            className={`flex-row items-center gap-1.5 rounded-full border px-4 py-2 ${
+              isActive ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"
+            }`}
           >
+            <Ionicons name={TAB_ICON[tab]} size={13} color={isActive ? colors.brand.iron : colors.neutral.textSecondary} />
             <Text className={`caption font-body-semibold ${isActive ? "text-brand-iron" : "text-text-secondary"}`}>
               {tab}
             </Text>
           </Pressable>
         );
       })}
-    </View>
+    </ScrollView>
   );
 }
 
 function OverviewHeader() {
   return (
     <View className="mx-4 mt-4 gap-1">
-      <Text style={overviewHeaderStyle} className="text-brand-white">
+      <EditableText id="crew.overview.headline" style={overviewHeaderStyle} className="text-brand-white">
         CREW HQ
-      </Text>
+      </EditableText>
       <View className="flex-row items-center gap-1.5">
         <Ionicons name="flash" size={13} color={colors.brand.yellow} />
-        <Text className="caption font-body-semibold text-text-secondary">Where the crew&apos;s grind adds up.</Text>
+        <EditableText id="crew.overview.tagline" className="caption font-body-semibold text-text-secondary">
+          Where the crew&apos;s grind adds up.
+        </EditableText>
       </View>
     </View>
   );
@@ -247,13 +277,19 @@ function DivisionRankCard() {
               <Text className="caption text-text-secondary">DIVISION</Text>
               <Ionicons name="chevron-forward" size={11} color={colors.neutral.textSecondary} />
             </View>
-            <Text className="heading-3 text-brand-yellow">{division}</Text>
+            <EditableText id="crew.division.current" className="heading-3 text-brand-yellow">
+              {division}
+            </EditableText>
           </Pressable>
 
           <Pressable onPress={() => router.push("/crew/leaderboard")} style={PRESSED_STYLE} className="flex-row items-center gap-1">
             <Ionicons name="podium-outline" size={13} color={colors.neutral.textSecondary} />
-            <Text className="caption font-body-semibold text-text-primary">#{globalRank}</Text>
-            <Text className="caption text-text-secondary">in {region}</Text>
+            <EditableText id="crew.division.globalRank" className="caption font-body-semibold text-text-primary">
+              {`#${globalRank}`}
+            </EditableText>
+            <EditableText id="crew.division.region" className="caption text-text-secondary">
+              {`in ${region}`}
+            </EditableText>
             <Ionicons name="chevron-forward" size={11} color={colors.neutral.textSecondary} />
           </Pressable>
         </View>
@@ -263,9 +299,9 @@ function DivisionRankCard() {
         <View className="flex-row items-center justify-between">
           <Text className="caption text-text-secondary">{next ? `Progress to ${next}` : "Top division reached"}</Text>
           {next && (
-            <Text className="caption font-body-semibold text-text-primary">
-              {xp.toLocaleString("en-US")} / {xpNeeded.toLocaleString("en-US")} XP
-            </Text>
+            <EditableText id="crew.division.xpProgress" className="caption font-body-semibold text-text-primary">
+              {`${xp.toLocaleString("en-US")} / ${xpNeeded.toLocaleString("en-US")} XP`}
+            </EditableText>
           )}
         </View>
         <ProgressBar ratio={ratio} color={colors.brand.yellow} height={8} />
@@ -291,12 +327,14 @@ function CrewPowerCard() {
         </View>
 
         <Text className="caption font-body-semibold text-text-secondary">CREW POWER</Text>
-        <Text className="heading-3 text-text-primary">{crewPower.toLocaleString("en-US")}</Text>
+        <EditableText id="crew.power.value" className="heading-3 text-text-primary">
+          {crewPower.toLocaleString("en-US")}
+        </EditableText>
         <View className="flex-row items-center gap-1">
           <Ionicons name="trending-up" size={13} color={colors.semantic.success} />
-          <Text className="caption font-body-semibold" style={{ color: colors.semantic.success }}>
-            {crewPowerChangePercent}% vs last week
-          </Text>
+          <EditableText id="crew.power.changePercent" className="caption font-body-semibold" style={{ color: colors.semantic.success }}>
+            {`${crewPowerChangePercent}% vs last week`}
+          </EditableText>
         </View>
       </Pressable>
     </Animated.View>
@@ -320,9 +358,9 @@ function MembersCard() {
         </View>
 
         <Text className="caption font-body-semibold text-text-secondary">MEMBERS</Text>
-        <Text className="heading-3 text-text-primary">
-          {members.length}/{maxMembers}
-        </Text>
+        <EditableText id="crew.members.count" className="heading-3 text-text-primary">
+          {`${members.length}/${maxMembers}`}
+        </EditableText>
         <AvatarStack avatarUrls={members.map((member) => member.avatarUrl)} />
       </Pressable>
     </Animated.View>
@@ -351,11 +389,15 @@ function TodayPlanCard({ onPress }: { onPress: () => void }) {
 
         <View className="flex-1 gap-1">
           <Text className="caption font-body-semibold text-text-secondary">TODAY&apos;S PLAN</Text>
-          <Text className="heading-4 text-text-primary">{workoutName}</Text>
+          <EditableText id="crew.todayPlan.workoutName" className="heading-4 text-text-primary">
+            {workoutName}
+          </EditableText>
           {trainingCount > 0 && (
             <View className="flex-row items-center gap-1.5">
               <LiveDot />
-              <Text className="body-sm text-text-secondary">{trainingCount} members training now</Text>
+              <EditableText id="crew.todayPlan.trainingCount" className="body-sm text-text-secondary">
+                {`${trainingCount} members training now`}
+              </EditableText>
             </View>
           )}
         </View>
@@ -384,7 +426,9 @@ function MuscleBalanceCard() {
         <Text className="caption font-body-semibold text-text-secondary" style={{ letterSpacing: 1 }}>
           MUSCLE BALANCE (CREW)
         </Text>
-        <Text className="caption text-text-secondary">This week, across all {members.length} members</Text>
+        <EditableText id="crew.muscleBalance.subtitle" className="caption text-text-secondary">
+          {`This week, across all ${members.length} members`}
+        </EditableText>
       </View>
 
       <MuscleHeatmap muscleIntensity={muscleIntensity} height={220} showLegend={false} colorForIntensity={intensityToRedGreenColor} />
@@ -435,17 +479,21 @@ function RecentAchievementCard() {
       <View className="flex-row items-center gap-3">
         <View className="items-center gap-1">
           <Image source={rankTierImages[rankTier]} resizeMode="contain" style={{ width: 44, height: 44 }} />
-          <Text className="caption font-body-bold text-brand-yellow">{formatRankTier(rankTier)}</Text>
+          <EditableText id="crew.achievement.tier" className="caption font-body-bold text-brand-yellow">
+            {formatRankTier(rankTier)}
+          </EditableText>
         </View>
 
         <View className="flex-1 gap-0.5">
-          <Text className="body-md font-body-bold text-text-primary">{isMe ? "You" : member.name}</Text>
-          <Text className="body-sm text-text-secondary">
-            {achievement.exerciseName} PR · {achievement.weightKg} kg × {achievement.reps} reps
-          </Text>
-          <Text className="caption text-text-secondary">
-            {achievedDate} · {formatShortAgo(achievement.achievedAt)}
-          </Text>
+          <EditableText id="crew.achievement.memberName" className="body-md font-body-bold text-text-primary">
+            {isMe ? "You" : member.name}
+          </EditableText>
+          <EditableText id="crew.achievement.detail" className="body-sm text-text-secondary">
+            {`${achievement.exerciseName} PR · ${achievement.weightKg} kg × ${achievement.reps} reps`}
+          </EditableText>
+          <EditableText id="crew.achievement.date" className="caption text-text-secondary">
+            {`${achievedDate} · ${formatShortAgo(achievement.achievedAt)}`}
+          </EditableText>
         </View>
       </View>
     </Animated.View>
@@ -529,13 +577,19 @@ export default function CrewScreen() {
             <MembersCard />
           </View>
           <TodayPlanCard onPress={() => setActivitySheetOpen(true)} />
+          <CrewFeedList />
+          <PeerDuelsCard />
           <RecentAchievementCard />
           <MuscleBalanceCard />
         </>
+      ) : activeTab === "War" ? (
+        <CrewWarTab />
       ) : activeTab === "League" ? (
         <CrewLeagueTab />
       ) : activeTab === "Challenges" ? (
         <ChallengesTab />
+      ) : activeTab === "Rivals" ? (
+        <CrewRivalsTab />
       ) : activeTab === "Stats" ? (
         <StatsTab />
       ) : (

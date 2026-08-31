@@ -3,6 +3,7 @@ import type { ChallengeMetric } from "@/data/challenges";
 import { currentWeekKey, fromDateKey, toDateKey } from "@/lib/date";
 import { toMuscleGroup } from "@/lib/muscle-groups";
 import type { LoggedExercise } from "@/store/active-workout-store";
+import { useAdminChallengeStore } from "@/store/admin-challenge-store";
 import { useChallengeStore } from "@/store/challenge-store";
 import { CURRENT_MEMBER_ID, type CrewMember } from "@/store/crew-store";
 import type { PersonalRecord } from "@/store/personal-records-store";
@@ -237,6 +238,14 @@ export function recordChallengeContributions(exercises: LoggedExercise[], record
 
   for (const challenge of customChallenges) {
     if (challenge.endsAt <= now) continue;
+    const amount = challengeContribution(challenge.metric, exercises, recordsBeforeThisWorkout);
+    if (amount > 0) addProgress(challenge.id, amount);
+  }
+
+  // App-wide admin-curated challenges (see admin-challenge-store.ts) — same progress mechanism as
+  // the weekly/custom ones above, just sourced from the admin's hand-picked list instead.
+  for (const challenge of useAdminChallengeStore.getState().challenges) {
+    if (!challenge.isActive) continue;
     const amount = challengeContribution(challenge.metric, exercises, recordsBeforeThisWorkout);
     if (amount > 0) addProgress(challenge.id, amount);
   }

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AchievementRow } from "@/components/AchievementRow";
 import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
+import { EditableText } from "@/components/EditableText";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -100,8 +101,12 @@ function OverviewTab({
     <View className="gap-5 p-4">
       <View className="items-center gap-2">
         <DivisionAvatarFrame source={{ uri: member.avatarUrl }} division={division} size={88} />
-        <Text className="heading-4 text-text-primary">{member.name}</Text>
-        <Text className="body-sm text-text-secondary">@{member.username}</Text>
+        <EditableText id={`crew.member.${member.id}.name`} className="heading-4 text-text-primary">
+          {member.name}
+        </EditableText>
+        <EditableText id={`crew.member.${member.id}.username`} className="body-sm text-text-secondary">
+          {`@${member.username}`}
+        </EditableText>
         {roleLabel && (
           <View className="rounded-full bg-surface px-2.5 py-1">
             <Text className="caption font-body-semibold text-brand-yellow">{roleLabel}</Text>
@@ -111,18 +116,20 @@ function OverviewTab({
 
       <View className="gap-1.5">
         <View className="flex-row items-center justify-between">
-          <Text className="caption font-body-semibold text-text-secondary">LVL {member.level}</Text>
-          <Text className="caption text-text-secondary">
-            {xp.toLocaleString("en-US")} / {xpToNextLevel.toLocaleString("en-US")} XP
-          </Text>
+          <EditableText id={`crew.member.${member.id}.level`} className="caption font-body-semibold text-text-secondary">
+            {`LVL ${member.level}`}
+          </EditableText>
+          <EditableText id={`crew.member.${member.id}.xpProgress`} className="caption text-text-secondary">
+            {`${xp.toLocaleString("en-US")} / ${xpToNextLevel.toLocaleString("en-US")} XP`}
+          </EditableText>
         </View>
         <ProgressBar ratio={xp / xpToNextLevel} color={colors.brand.yellow} height={8} />
       </View>
 
       <View className="flex-row gap-3">
-        <StatTile icon="barbell" label="Workouts" value={String(stats.workoutsCount)} />
-        <StatTile icon="trending-up" label="Volume" value={`${stats.volumeKg.toLocaleString("en-US")} kg`} />
-        <StatTile icon="ribbon" label="PRs" value={String(stats.prsCount)} />
+        <StatTile id={`crew.member.${member.id}.stats.workouts`} icon="barbell" label="Workouts" value={String(stats.workoutsCount)} />
+        <StatTile id={`crew.member.${member.id}.stats.volume`} icon="trending-up" label="Volume" value={`${stats.volumeKg.toLocaleString("en-US")} kg`} />
+        <StatTile id={`crew.member.${member.id}.stats.prs`} icon="ribbon" label="PRs" value={String(stats.prsCount)} />
       </View>
 
       <View className="gap-3">
@@ -401,9 +408,9 @@ export default function MemberProfileScreen() {
         <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
-        <Text className="heading-4 text-text-primary" numberOfLines={1}>
-          {member.name}&apos;s Profile
-        </Text>
+        <EditableText id={`crew.member.${member.id}.headerTitle`} className="heading-4 text-text-primary" numberOfLines={1}>
+          {`${member.name}'s Profile`}
+        </EditableText>
       </View>
 
       <TabBar active={tab} onChange={setTab} />

@@ -26,6 +26,7 @@ import {
 } from "@/lib/lift-rank-cards";
 import { buildSnapshotRecords } from "@/lib/profile-snapshot";
 import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
+import { useDeveloperModeStore } from "@/store/developer-mode-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useProfileSnapshotStore } from "@/store/profile-snapshot-store";
@@ -93,10 +94,13 @@ type RanksBannerProps = {
   onShare: () => void;
   onOpenHistory: () => void;
   onOpenMuscleRank: () => void;
+  /** Only passed when Developer Mode is on (see (tabs)/ranks.tsx's `isDeveloper` check) — omitting
+   * it hides the button entirely rather than rendering it disabled. */
+  onOpenBuildYourGraph?: () => void;
   sharing: boolean;
 };
 
-function RanksBanner({ power, tier, scope, onChangeScope, onShare, onOpenHistory, onOpenMuscleRank, sharing }: RanksBannerProps) {
+function RanksBanner({ power, tier, scope, onChangeScope, onShare, onOpenHistory, onOpenMuscleRank, onOpenBuildYourGraph, sharing }: RanksBannerProps) {
   return (
     <View className="gap-4 rounded-3xl border border-divider bg-surface p-5">
       <View className="flex-row items-start justify-between">
@@ -136,6 +140,17 @@ function RanksBanner({ power, tier, scope, onChangeScope, onShare, onOpenHistory
             >
               <Ionicons name="body-outline" size={14} color={colors.neutral.textSecondary} />
             </Pressable>
+
+            {onOpenBuildYourGraph && (
+              <Pressable
+                onPress={onOpenBuildYourGraph}
+                hitSlop={8}
+                style={PRESSED_STYLE}
+                className="h-8 w-8 items-center justify-center rounded-full border border-brand-yellow"
+              >
+                <Ionicons name="color-palette-outline" size={14} color={colors.brand.yellow} />
+              </Pressable>
+            )}
 
             <Pressable
               onPress={onOpenHistory}
@@ -231,9 +246,9 @@ function LiftCard({
           <EditableText id={`ranks.lift.${card.id}.tier`} className="caption font-body-bold" style={{ color: tint }} numberOfLines={1}>
             {formatRankTier(card.tier).toUpperCase()}
           </EditableText>
-          <Text className="body-sm font-body-semibold text-text-primary" numberOfLines={1}>
+          <EditableText id={`ranks.lift.${card.id}.name`} className="body-sm font-body-semibold text-text-primary" numberOfLines={1}>
             {card.name}
-          </Text>
+          </EditableText>
         </View>
 
         <View className="flex-row items-center justify-between">
@@ -243,18 +258,17 @@ function LiftCard({
               {card.score.toLocaleString("en-US")}
             </EditableText>
           </View>
-          <Text className="caption font-body-semibold text-text-primary" numberOfLines={1}>
+          <EditableText id={`ranks.lift.${card.id}.percentile`} className="caption font-body-semibold text-text-primary" numberOfLines={1}>
             {scope === "gym" ? `#${card.gymRank}/${card.gymPoolSize}` : `${percent}%`}
-          </Text>
+          </EditableText>
         </View>
 
         <ProgressBar ratio={card.percentileInTier} color={tint} height={6} />
 
         {card.prDeltaKg !== null ? (
-          <Text className="caption font-body-semibold" style={{ color: positivePr ? colors.semantic.success : colors.semantic.error }}>
-            {positivePr ? "+" : ""}
-            {card.prDeltaKg}kg PR
-          </Text>
+          <EditableText id={`ranks.lift.${card.id}.prDelta`} className="caption font-body-semibold" style={{ color: positivePr ? colors.semantic.success : colors.semantic.error }}>
+            {`${positivePr ? "+" : ""}${card.prDeltaKg}kg PR`}
+          </EditableText>
         ) : (
           <EditableText id={`ranks.lift.${card.id}.best`} className="caption font-body-semibold text-text-secondary" numberOfLines={1}>
             {card.bestWeightKg > 0 ? `Best: ${card.bestWeightKg}kg` : "No PR logged yet"}
@@ -361,6 +375,7 @@ export default function RanksScreen() {
   const snapshotAsOfMs = useProfileSnapshotStore((state) => state.asOfMs);
   const snapshotWeightKg = useProfileSnapshotStore((state) => state.weightKg);
   const clearSnapshot = useProfileSnapshotStore((state) => state.clearSnapshot);
+  const developerModeEnabled = useDeveloperModeStore((state) => state.enabled);
 
   const records = useMemo(
     () => (snapshotAsOfMs != null ? buildSnapshotRecords(workouts.filter((workout) => workout.completedAt <= snapshotAsOfMs)) : liveRecords),
@@ -513,6 +528,7 @@ export default function RanksScreen() {
             onShare={handleShare}
             onOpenHistory={() => router.push("/ranks/history")}
             onOpenMuscleRank={() => router.push("/ranks/body-graph")}
+            onOpenBuildYourGraph={developerModeEnabled ? () => router.push("/ranks/build-your-graph") : undefined}
             sharing={sharing}
           />
         </View>

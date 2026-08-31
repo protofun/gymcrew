@@ -1,4 +1,4 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Modal, Pressable, SafeAreaView, ScrollView, Switch, Text, View } from "react-native";
@@ -24,10 +24,14 @@ function SettingsSelectRow({ label, value, options, onChange }: SettingsSelectRo
 
   return (
     <View className="rounded-xl border border-divider bg-surface px-4 py-4">
-      <Pressable onPress={() => setOpen(true)} className="flex-row items-center justify-between">
-        <Text className="body-md text-text-primary">{label}</Text>
+      <Pressable onPress={() => setOpen(true)} className="flex-row items-center justify-between gap-2">
+        <Text className="body-md flex-1 text-text-primary" numberOfLines={1}>
+          {label}
+        </Text>
         <View className="flex-row items-center gap-1">
-          <Text className="body-md text-text-secondary">{value}</Text>
+          <Text className="body-md text-text-secondary" numberOfLines={1}>
+            {value}
+          </Text>
           <MaterialCommunityIcons name="chevron-down" size={20} color={colors.neutral.textSecondary} />
         </View>
       </Pressable>
@@ -110,6 +114,14 @@ export default function CrewSettingsScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
       <ScrollView className="flex-1" contentContainerClassName="px-6 pb-6 pt-4" showsVerticalScrollIndicator={false}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          className="mb-2 h-9 w-9 items-center justify-center rounded-full border border-divider"
+        >
+          <Ionicons name="chevron-back" size={20} color={colors.neutral.textPrimary} />
+        </Pressable>
+
         <View className="items-center gap-2">
           <Animated.Text
             entering={FadeInDown.springify().damping(14).mass(0.6)}

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { EditableText } from "@/components/EditableText";
 import { ProgressBar } from "@/components/ProgressBar";
 import { RankBadge } from "@/components/RankBadge";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
@@ -161,9 +162,9 @@ export default function LiftRankDetailScreen() {
         <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
-        <Text className="heading-4 text-text-primary" numberOfLines={1}>
+        <EditableText id={`ranks.liftDetail.${card.id}.name`} className="heading-4 text-text-primary" numberOfLines={1}>
           {card.name}
-        </Text>
+        </EditableText>
         <Pressable
           onPress={() => router.push(`/ranks/history?liftId=${card.id}`)}
           hitSlop={8}
@@ -182,10 +183,12 @@ export default function LiftRankDetailScreen() {
       >
         <View className="items-center gap-2">
           <RankBadge tier={card.tier} size={140} />
-          <Text className="heading-2" style={{ color: tint }}>
+          <EditableText id={`ranks.liftDetail.${card.id}.tier`} className="heading-2" style={{ color: tint }}>
             {formatRankTier(card.tier)}
-          </Text>
-          <Text className="body-sm text-text-secondary">Top {topPercent}%</Text>
+          </EditableText>
+          <EditableText id={`ranks.liftDetail.${card.id}.topPercent`} className="body-sm text-text-secondary">
+            {`Top ${topPercent}%`}
+          </EditableText>
 
           {card.isWeakPoint && (
             <View className="mt-1 flex-row items-center gap-1.5 rounded-full border border-error/40 bg-error/10 px-3 py-1.5">
@@ -211,15 +214,21 @@ export default function LiftRankDetailScreen() {
         <View className="flex-row gap-3">
           <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
             <Text className="caption text-text-secondary">BEST SET (1RM)</Text>
-            <Text className="heading-4 text-text-primary">{card.bestWeightKg} KG</Text>
+            <EditableText id={`ranks.liftDetail.${card.id}.bestSet`} className="heading-4 text-text-primary">
+              {`${card.bestWeightKg} KG`}
+            </EditableText>
           </View>
           <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
             <Text className="caption text-text-secondary">POWER SCORE</Text>
-            <Text className="heading-4 text-text-primary">{card.score.toLocaleString("en-US")}</Text>
+            <EditableText id={`ranks.liftDetail.${card.id}.powerScore`} className="heading-4 text-text-primary">
+              {card.score.toLocaleString("en-US")}
+            </EditableText>
           </View>
           <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
             <Text className="caption text-text-secondary">PERCENTILE</Text>
-            <Text className="heading-4 text-text-primary">{percent}%</Text>
+            <EditableText id={`ranks.liftDetail.${card.id}.percentile`} className="heading-4 text-text-primary">
+              {`${percent}%`}
+            </EditableText>
           </View>
         </View>
 

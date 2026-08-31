@@ -6,12 +6,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
-type ToggleKey = "workoutReminders" | "crewChallengeAlerts" | "progressUpdates" | "marketingTips";
+type ToggleKey = "workoutReminders" | "crewChallengeAlerts" | "progressUpdates" | "marketingTips" | "creatineReminders";
 
 const TOGGLES: { key: ToggleKey; label: string; description: string }[] = [
   { key: "workoutReminders", label: "Workout Reminders", description: "Nudges to keep your streak going" },
   { key: "crewChallengeAlerts", label: "Crew & Challenge Alerts", description: "PRs from teammates and new challenges" },
   { key: "progressUpdates", label: "Progress Updates", description: "\"You're X% stronger this month\" style updates" },
+  { key: "creatineReminders", label: "Creatine Reminder", description: "A daily nudge to take your creatine" },
   { key: "marketingTips", label: "Tips & Product News", description: "Occasional training tips and app updates" },
 ];
 

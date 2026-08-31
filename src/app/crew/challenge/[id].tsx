@@ -4,6 +4,7 @@ import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ContributorsList } from "@/components/ContributorsList";
+import { EditableText } from "@/components/EditableText";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
 import { CHALLENGE_TEMPLATES, CHALLENGE_XP_REWARD, type ChallengeMetric } from "@/data/challenges";
@@ -17,6 +18,7 @@ import {
 } from "@/lib/challenge-progress";
 import { challengeHeroImage } from "@/lib/challenge-visuals";
 import { fromDateKey, toDateKey } from "@/lib/date";
+import { useAdminChallengeStore } from "@/store/admin-challenge-store";
 import { useChallengeStore } from "@/store/challenge-store";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewStore } from "@/store/crew-store";
@@ -45,6 +47,7 @@ function parseWeeklyInstanceId(instanceId: string): { templateId: string; weekKe
 
 function formatTimeLeft(endsAt: number, isComplete: boolean): string {
   if (isComplete) return "CRUSHED IT";
+  if (!Number.isFinite(endsAt)) return "Admin Event";
   const remainingMs = Math.max(0, endsAt - Date.now());
   const days = Math.floor(remainingMs / DAY_MS);
   const hours = Math.floor((remainingMs % DAY_MS) / (60 * 60 * 1000));
@@ -59,14 +62,16 @@ export default function ChallengeDetailScreen() {
   const members = useCrewStore((state) => state.members);
   const progressMap = useChallengeStore((state) => state.progress);
   const customChallenges = useChallengeStore((state) => state.customChallenges);
+  const adminChallenges = useAdminChallengeStore((state) => state.challenges);
   const membersActivity = useCrewActivityStore((state) => state.membersActivity);
   const memberActivityLookup = (memberId: string) => membersActivity[memberId] ?? { recentWorkouts: [], records: {} };
 
   const custom = id?.startsWith("custom-") ? customChallenges.find((challenge) => challenge.id === id) : undefined;
-  const weekly = !custom && id ? parseWeeklyInstanceId(id) : null;
+  const admin = !custom && id?.startsWith("admin-challenge-") ? adminChallenges.find((challenge) => challenge.id === id) : undefined;
+  const weekly = !custom && !admin && id ? parseWeeklyInstanceId(id) : null;
   const template = weekly ? CHALLENGE_TEMPLATES.find((item) => item.id === weekly.templateId) : null;
 
-  if (!custom && !(weekly && template)) {
+  if (!custom && !admin && !(weekly && template)) {
     return (
       <View style={{ flex: 1, paddingTop: insets.top }} className="items-center justify-center bg-background px-6">
         <Text className="body-md text-text-secondary">This challenge could not be found.</Text>
@@ -77,11 +82,11 @@ export default function ChallengeDetailScreen() {
     );
   }
 
-  const name = custom ? custom.name : template!.name;
-  const description = custom ? custom.description : template!.description;
-  const unit = custom ? custom.unit : template!.unit;
-  const metric: ChallengeMetric = custom ? custom.metric : template!.metric;
-  const target = custom ? custom.target : template!.perMemberTarget * members.length;
+  const name = custom ? custom.name : admin ? admin.name : template!.name;
+  const description = custom ? custom.description : admin ? admin.description : template!.description;
+  const unit = custom ? custom.unit : admin ? admin.unit : template!.unit;
+  const metric: ChallengeMetric = custom ? custom.metric : admin ? admin.metric : template!.metric;
+  const target = custom ? custom.target : admin ? admin.perMemberTarget * members.length : template!.perMemberTarget * members.length;
 
   let startKey: string;
   let endKey: string;
@@ -90,6 +95,12 @@ export default function ChallengeDetailScreen() {
     startKey = toDateKey(new Date(custom.startedAt));
     endKey = toDateKey(new Date(custom.endsAt));
     endsAt = custom.endsAt;
+  } else if (admin) {
+    // Admin challenges run until manually stopped (see admin-challenge-store.ts) — no fixed end
+    // date, so completion is target-only (Date.now() > Infinity is never true).
+    startKey = toDateKey(new Date(admin.createdAt));
+    endKey = toDateKey(new Date());
+    endsAt = Number.POSITIVE_INFINITY;
   } else {
     const range = weekKeyRange(weekly!.weekKey);
     startKey = range.startKey;
@@ -138,10 +149,12 @@ export default function ChallengeDetailScreen() {
                 <Text className="caption font-body-bold text-brand-iron">CREW CHALLENGE</Text>
               </View>
             )}
-            <Text style={titleStyle} className="text-brand-white">
+            <EditableText id={`crew.challenge.${id}.name`} style={titleStyle} className="text-brand-white">
               {name.toUpperCase()}
-            </Text>
-            <Text className="body-md text-text-secondary">{description}</Text>
+            </EditableText>
+            <EditableText id={`crew.challenge.${id}.description`} className="body-md text-text-secondary">
+              {description}
+            </EditableText>
           </View>
         </View>
 
@@ -152,13 +165,17 @@ export default function ChallengeDetailScreen() {
                 <Text className="caption font-body-bold text-text-secondary" style={{ letterSpacing: 1 }}>
                   CREW PROGRESS
                 </Text>
-                <Text style={{ fontFamily: fontFamily.heading, fontSize: 40, lineHeight: 42 }} className={isComplete ? "text-success" : "text-brand-yellow"}>
-                  {percent}%
-                </Text>
+                <EditableText
+                  id={`crew.challenge.${id}.percent`}
+                  style={{ fontFamily: fontFamily.heading, fontSize: 40, lineHeight: 42 }}
+                  className={isComplete ? "text-success" : "text-brand-yellow"}
+                >
+                  {`${percent}%`}
+                </EditableText>
               </View>
-              <Text className="body-md font-body-semibold text-text-primary">
-                {progress.toLocaleString("en-US")} / {target.toLocaleString("en-US")} {unit}
-              </Text>
+              <EditableText id={`crew.challenge.${id}.progressValue`} className="body-md font-body-semibold text-text-primary">
+                {`${progress.toLocaleString("en-US")} / ${target.toLocaleString("en-US")} ${unit}`}
+              </EditableText>
             </View>
             <ProgressBar ratio={target > 0 ? progress / target : 0} color={isComplete ? colors.semantic.success : colors.brand.yellow} height={12} />
           </View>

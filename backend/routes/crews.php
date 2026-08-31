@@ -20,6 +20,16 @@
  *                                          `workouts`/`personal_records`/`users` filtered to the
  *                                          crew's real membership.
  */
+
+/** A stable, decent-looking placeholder avatar for a member who hasn't uploaded/generated a real
+ * photo yet (see routes/profile.php's avatarUrl) — deterministic on user id so the same person
+ * always gets the same one, unlike the random picsum.photos placeholder this replaces. DiceBear's
+ * API needs no key and is free to hotlink directly. */
+function defaultAvatarUrl(string $userId): string
+{
+    return 'https://api.dicebear.com/9.x/avataaars/png?seed=' . urlencode($userId) . '&size=200';
+}
+
 function handleCrews(PDO $pdo, string $userId, string $method, ?array $body, array $segments): void
 {
     // segments[0] is always "crews" (that's how we got routed here) — everything after is ours.
@@ -158,6 +168,16 @@ function myRoleInCrew(PDO $pdo, string $userId, string $crewId): ?string
     return $row ? $row['role'] : null;
 }
 
+/** True if `$name` is free to take — either no crew has it (case-insensitively), or `$excludeCrewId`
+ * already does (so renaming a crew to its own current name never trips the check). */
+function isCrewNameAvailable(PDO $pdo, string $name, ?string $excludeCrewId = null): bool
+{
+    $stmt = $pdo->prepare('SELECT id FROM crews WHERE LOWER(name) = LOWER(?)');
+    $stmt->execute([$name]);
+    $row = $stmt->fetch();
+    return !$row || $row['id'] === $excludeCrewId;
+}
+
 function crewWithMembersJson(PDO $pdo, string $crewId): ?array
 {
     $stmt = $pdo->prepare('SELECT * FROM crews WHERE id = ?');
@@ -166,7 +186,7 @@ function crewWithMembersJson(PDO $pdo, string $crewId): ?array
     if (!$crew) return null;
 
     $membersStmt = $pdo->prepare(
-        'SELECT cm.user_id, cm.role, cm.joined_at, u.full_name,
+        'SELECT cm.user_id, cm.role, cm.joined_at, u.full_name, u.username, u.avatar_url,
                 COALESCE(pl.xp, 0) AS xp, COALESCE(pl.division, "Rookie") AS division
          FROM crew_members cm
          JOIN users u ON u.id = cm.user_id
@@ -178,11 +198,14 @@ function crewWithMembersJson(PDO $pdo, string $crewId): ?array
 
     $members = array_map(function (array $row) {
         $name = $row['full_name'] ?: 'Member';
-        $username = strtolower(preg_replace('/[^a-z0-9]/i', '', $name)) ?: 'member';
+        // Real, unique usernames only exist going forward (see routes/profile.php) — an account that
+        // onboarded before that falls back to a slug of their name, same as every account used to get.
+        $username = $row['username'] ?: (strtolower(preg_replace('/[^a-z0-9]/i', '', $name)) ?: 'member');
         return [
             'id' => $row['user_id'],
             'name' => $name,
             'username' => $username,
+            'avatarUrl' => $row['avatar_url'] ?: defaultAvatarUrl($row['user_id']),
             'level' => (int) $row['xp'],
             'division' => $row['division'],
             'role' => $row['role'],
@@ -216,12 +239,17 @@ function respondWithMyCrew(PDO $pdo, string $userId): void
 
 function createCrew(PDO $pdo, string $userId, array $data): void
 {
-    if (!isset($data['name']) || trim((string) $data['name']) === '') {
+    $name = trim((string) ($data['name'] ?? ''));
+    if ($name === '') {
         errorResponse('name is required');
         return;
     }
     if (findMyCrewId($pdo, $userId) !== null) {
         errorResponse('Already in a crew — leave it first', 409);
+        return;
+    }
+    if (!isCrewNameAvailable($pdo, $name)) {
+        errorResponse('That crew name is already taken.', 409);
         return;
     }
 
@@ -247,7 +275,7 @@ function createCrew(PDO $pdo, string $userId, array $data): void
                 (:id, :name, :tagline, :icon, :training_type, :privacy, :join_requests_enabled, :max_members, :invite_code, :division_history_json, :created_by, :created_at)'
         )->execute([
             ':id' => $crewId,
-            ':name' => trim((string) $data['name']),
+            ':name' => $name,
             ':tagline' => $data['tagline'] ?? '',
             ':icon' => $data['icon'] ?? 'gorilla',
             ':training_type' => $data['trainingType'] ?? '',
@@ -311,6 +339,18 @@ function updateCrew(PDO $pdo, string $userId, string $crewId, array $data): void
     if ($role !== 'leader' && $role !== 'co-leader') {
         errorResponse('Only the crew leader or co-leader can change settings', 403);
         return;
+    }
+
+    if (array_key_exists('name', $data)) {
+        $data['name'] = trim((string) $data['name']);
+        if ($data['name'] === '') {
+            errorResponse('name is required');
+            return;
+        }
+        if (!isCrewNameAvailable($pdo, $data['name'], $crewId)) {
+            errorResponse('That crew name is already taken.', 409);
+            return;
+        }
     }
 
     $columnMap = [

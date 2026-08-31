@@ -4,14 +4,16 @@ import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { EditableText } from "@/components/EditableText";
 import { RankBadge } from "@/components/RankBadge";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { EXERCISE_BY_ID } from "@/data/exercises";
 import { tierForExercise } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
-import { realMemberAchievements } from "@/lib/member-real-profile";
+import { realMemberPrTimeline } from "@/lib/member-real-profile";
 import { buildSnapshotRecords } from "@/lib/profile-snapshot";
 import type { RankTier } from "@/lib/rank";
+import { formatShortAgo } from "@/lib/time-since";
 import { useCustomExercisesStore } from "@/store/custom-exercises-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
@@ -37,12 +39,19 @@ export default function AchievementsScreen() {
   const snapshotWeightKg = useProfileSnapshotStore((state) => state.weightKg);
   const clearSnapshot = useProfileSnapshotStore((state) => state.clearSnapshot);
 
-  const records = useMemo(
-    () => (snapshotAsOfMs != null ? buildSnapshotRecords(workouts.filter((workout) => workout.completedAt <= snapshotAsOfMs)) : liveRecords),
-    [snapshotAsOfMs, workouts, liveRecords],
+  // Same "as of that moment" snapshot rule as `records` below — a workout logged after the viewed
+  // date hasn't happened yet from that vantage point, so its PRs shouldn't appear in the timeline.
+  const snapshotWorkouts = useMemo(
+    () => (snapshotAsOfMs != null ? workouts.filter((workout) => workout.completedAt <= snapshotAsOfMs) : workouts),
+    [snapshotAsOfMs, workouts],
   );
 
-  const achievements = useMemo(() => realMemberAchievements(records, 100), [records]);
+  const records = useMemo(
+    () => (snapshotAsOfMs != null ? buildSnapshotRecords(snapshotWorkouts) : liveRecords),
+    [snapshotAsOfMs, snapshotWorkouts, liveRecords],
+  );
+
+  const prTimeline = useMemo(() => realMemberPrTimeline(snapshotWorkouts, 100), [snapshotWorkouts]);
 
   const bodyWeightKg = snapshotAsOfMs != null && snapshotWeightKg != null ? snapshotWeightKg : (onboarding.weightKg ?? 85);
   const cards = useMemo(
@@ -65,7 +74,7 @@ export default function AchievementsScreen() {
         <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
-        <Text className="heading-4 text-text-primary">Achievements</Text>
+        <Text className="heading-4 text-text-primary">Personal Records</Text>
       </View>
 
       {snapshotAsOfMs != null && snapshotWeightKg != null && (
@@ -73,18 +82,21 @@ export default function AchievementsScreen() {
       )}
 
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
-        {achievements.length === 0 ? (
+        {prTimeline.length === 0 ? (
           <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-14">
             <Ionicons name="trophy-outline" size={28} color={colors.neutral.textSecondary} />
             <Text className="body-md text-text-secondary">No PRs logged yet.</Text>
             <Text className="body-sm text-text-secondary">Log a set to start building your history.</Text>
           </View>
         ) : (
-          achievements.map((achievement, index) => {
-            const isLast = index === achievements.length - 1;
-            const tier = tierForAchievementExercise(achievement.id);
+          prTimeline.map((entry, index) => {
+            const isLast = index === prTimeline.length - 1;
+            const tier = tierForAchievementExercise(entry.exerciseId);
+            const agoLabel = formatShortAgo(entry.achievedAt);
+            const isNew = agoLabel === "today" || agoLabel.endsWith("d ago");
+            const deltaKg = entry.previousBestKg !== null ? Math.round((entry.weightKg - entry.previousBestKg) * 10) / 10 : null;
             return (
-              <View key={achievement.id} className="flex-row gap-3">
+              <View key={`${entry.workoutId}-${entry.exerciseId}`} className="flex-row gap-3">
                 <View className="items-center">
                   {tier ? (
                     <RankBadge tier={tier} size={BADGE_SIZE} />
@@ -98,12 +110,29 @@ export default function AchievementsScreen() {
 
                 <View className={`flex-1 flex-row items-center justify-between gap-2 ${isLast ? "" : "border-b border-divider"} pb-4 pt-1`}>
                   <View className="flex-1 gap-0.5">
-                    <Text className="body-md font-body-bold text-text-primary">{achievement.exerciseName}</Text>
-                    <Text className="caption text-text-secondary">{formatDate(achievement.achievedAt)}</Text>
+                    <View className="flex-row items-center gap-1.5">
+                      <EditableText id={`profile.achievements.${entry.workoutId}-${entry.exerciseId}.name`} className="body-md font-body-bold text-text-primary">
+                        {entry.exerciseName}
+                      </EditableText>
+                      {isNew && (
+                        <View className="rounded-full bg-brand-yellow px-1.5 py-0.5">
+                          <Text className="text-brand-iron" style={{ fontSize: 9, fontWeight: "700" }}>
+                            NEW
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <EditableText id={`profile.achievements.${entry.workoutId}-${entry.exerciseId}.date`} className="caption text-text-secondary">
+                      {`${formatDate(entry.achievedAt)}${deltaKg !== null && deltaKg > 0 ? ` · +${deltaKg} kg` : ""}`}
+                    </EditableText>
                   </View>
-                  <Text className="body-md font-body-bold text-text-primary" style={{ flexShrink: 0 }}>
-                    {achievement.weightKg} kg × {achievement.reps}
-                  </Text>
+                  <EditableText
+                    id={`profile.achievements.${entry.workoutId}-${entry.exerciseId}.metric`}
+                    className="body-md font-body-bold text-text-primary"
+                    style={{ flexShrink: 0 }}
+                  >
+                    {`${entry.weightKg} kg × ${entry.reps}`}
+                  </EditableText>
                 </View>
               </View>
             );

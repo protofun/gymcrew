@@ -190,11 +190,11 @@ export default function CrewReadyScreen() {
           className="gap-2 rounded-2xl border border-brand-yellow bg-surface p-4"
         >
           <Text className="body-sm text-text-secondary">Invite Code</Text>
-          <View className="flex-row items-center justify-between">
+          <View className="flex-row items-center justify-between gap-3">
             {creating ? (
               <ActivityIndicator color={colors.brand.yellow} />
             ) : createError ? (
-              <Text className="body-sm text-error">Couldn&apos;t create your crew — {createError}</Text>
+              <Text className="body-sm flex-1 text-error">Couldn&apos;t create your crew — {createError}</Text>
             ) : (
               <Text className="font-body-bold text-2xl tracking-widest text-brand-yellow">{inviteCode}</Text>
             )}

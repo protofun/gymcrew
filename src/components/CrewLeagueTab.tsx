@@ -3,6 +3,7 @@ import { Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { CrewIconBadge } from "@/components/CrewIconBadge";
+import { EditableText } from "@/components/EditableText";
 import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
 import {
   computeCrewWeeklyPower,
@@ -54,6 +55,7 @@ function StandingIcon({ isMine, myCrewIcon, rivalIcon, rivalTint }: { isMine: bo
 }
 
 function StandingRow({
+  id,
   rank,
   name,
   myCrewIcon,
@@ -63,6 +65,7 @@ function StandingRow({
   isMine,
   zone,
 }: {
+  id: string;
   rank: number;
   name: string;
   myCrewIcon: string;
@@ -84,10 +87,16 @@ function StandingRow({
       <View className="flex-1 flex-row items-center gap-3 p-3">
         <Text className="body-sm w-5 text-center font-body-semibold text-text-secondary">{rank}</Text>
         <StandingIcon isMine={isMine} myCrewIcon={myCrewIcon} rivalIcon={rivalIcon} rivalTint={rivalTint} />
-        <Text className={`body-sm flex-1 font-body-semibold ${isMine ? "text-brand-yellow" : "text-text-primary"}`} numberOfLines={1}>
+        <EditableText
+          id={`crew.league.${id}.name`}
+          className={`body-sm flex-1 font-body-semibold ${isMine ? "text-brand-yellow" : "text-text-primary"}`}
+          numberOfLines={1}
+        >
           {isMine ? "Your Crew" : name}
-        </Text>
-        <Text className="body-sm font-body-bold text-text-primary">{weeklyPower.toLocaleString("en-US")}</Text>
+        </EditableText>
+        <EditableText id={`crew.league.${id}.power`} className="body-sm font-body-bold text-text-primary">
+          {weeklyPower.toLocaleString("en-US")}
+        </EditableText>
       </View>
     </View>
   );
@@ -134,9 +143,9 @@ export function CrewLeagueTab() {
   return (
     <View className="mx-4 mt-4 gap-4">
       <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-1">
-        <Text style={headerStyle} className="text-brand-white">
+        <EditableText id="crew.league.headline" style={headerStyle} className="text-brand-white">
           WEEKLY LEAGUE
-        </Text>
+        </EditableText>
         <View className="flex-row items-center gap-1.5">
           <Ionicons name="shield" size={13} color={DIVISION_COLOR[crewDivision]} />
           <Text className="caption font-body-semibold text-text-secondary">
@@ -175,6 +184,7 @@ export function CrewLeagueTab() {
             return (
               <Animated.View key={standing.id} entering={FadeInUp.delay(140 + index * 50).springify().damping(16).mass(0.6)}>
                 <StandingRow
+                  id={standing.id}
                   rank={rank}
                   name={standing.name}
                   myCrewIcon={crewIcon}

@@ -1,5 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Dimensions, SafeAreaView, Text, View } from "react-native";
+import { Dimensions, Pressable, SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
@@ -14,6 +15,14 @@ export default function BuildCrewStartScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
       <View className="flex-1 pb-6 pt-4">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          className="ml-6 mb-2 h-9 w-9 items-center justify-center rounded-full border border-divider"
+        >
+          <Ionicons name="chevron-back" size={20} color={colors.neutral.textPrimary} />
+        </Pressable>
+
         <View className="items-center gap-2 px-6">
           <Animated.Text
             entering={FadeInDown.springify().damping(14).mass(0.6)}

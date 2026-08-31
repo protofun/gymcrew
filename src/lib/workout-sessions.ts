@@ -4,7 +4,7 @@ import { estimateOneRepMax } from "@/lib/workout-metrics";
 import type { CompletedWorkout } from "@/store/workout-history-store";
 
 /** ~MET 6 (moderate-intensity resistance training), scaled off an 80kg reference bodyweight. */
-function estimateCalories(durationMin: number, bodyWeightKg: number): number {
+export function estimateCalories(durationMin: number, bodyWeightKg: number): number {
   return Math.round(durationMin * 6 * (bodyWeightKg / 80));
 }
 

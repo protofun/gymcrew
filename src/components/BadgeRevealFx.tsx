@@ -1,56 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect } from "react";
 import { Image, View } from "react-native";
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
-  withTiming,
-  ZoomIn,
-} from "react-native-reanimated";
-import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming, ZoomIn } from "react-native-reanimated";
 
 import { rankTierImages } from "@/constants/images";
 import type { RankTier } from "@/lib/rank";
 import { colors } from "@/theme";
 
 const MEDAL_ASPECT_RATIO = 199 / 241;
-
-/** A slow, continuous pulsing radial glow behind the medal so it feels alive, not static. */
-function MedalGlow({ size }: { size: number }) {
-  const pulse = useSharedValue(0.92);
-
-  useEffect(() => {
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(1.15, { duration: 1400, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.92, { duration: 1400, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      false,
-    );
-  }, [pulse]);
-
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
-
-  return (
-    <Animated.View pointerEvents="none" style={[{ position: "absolute" }, style]}>
-      <Svg width={size} height={size}>
-        <Defs>
-          <RadialGradient id="glow" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={colors.brand.yellow} stopOpacity={0.45} />
-            <Stop offset="60%" stopColor={colors.brand.yellow} stopOpacity={0.12} />
-            <Stop offset="100%" stopColor={colors.brand.yellow} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Circle cx={size / 2} cy={size / 2} r={size / 2} fill="url(#glow)" />
-      </Svg>
-    </Animated.View>
-  );
-}
 
 /** A one-shot expanding, fading ring — the "impact" beat as the medal lands. Re-fires whenever
  * `triggerKey` changes. */
@@ -109,18 +66,20 @@ type BadgeRevealFxProps = {
   size?: number;
 };
 
-/** The full "rank/PR reveal" effect — glow, impact ring, sparkles, and the medal itself popping in.
- * Shared by the PR celebration screen and the "What's my rank?" tool so both get the same payoff. */
+/** The full "rank/PR reveal" effect — impact ring, sparkles, and the medal itself popping in. The
+ * glow that used to live here (a flat yellow radial pulse, regardless of tier) is gone — every
+ * screen that renders this now sits on a `TierGradientBackground` tinted to the actual tier color,
+ * which does that job better (and correctly, per-tier) than a fixed-color glow behind just the
+ * medal could. Shared by the PR celebration screen, the PR share card, and the "What's my rank?"
+ * tool so all three get the same payoff. */
 export function BadgeRevealFx({ tier, triggerKey, size = 180 }: BadgeRevealFxProps) {
   const medalHeight = size / MEDAL_ASPECT_RATIO;
-  const glowSize = size * 1.9;
   const ringSize = size * 1.15;
 
   return (
     <View className="items-center justify-center" style={{ width: size, height: medalHeight }}>
-      <MedalGlow key={`glow-${triggerKey}`} size={glowSize} />
       <ShockwaveRing key={`ring-${triggerKey}`} triggerKey={triggerKey} size={ringSize} />
-      <Animated.View key={`medal-${triggerKey}`} entering={ZoomIn.springify().damping(9).mass(0.8).delay(250)}>
+      <Animated.View key={`medal-${triggerKey}`} entering={ZoomIn.springify().damping(8).mass(0.8).delay(250)}>
         <Image source={rankTierImages[tier]} resizeMode="contain" style={{ width: size, height: medalHeight }} />
       </Animated.View>
       <Sparkles key={`sparkles-${triggerKey}`} />

@@ -21,9 +21,16 @@ export function WelcomeWidget({ name, onPressStartWorkout }: WelcomeWidgetProps)
         />
 
         <View className="pr-2">
-          <EditableText id="home.welcome.greeting" className="body-lg text-text-secondary">
-            {`Welcome back, ${name}! 👋`}
-          </EditableText>
+          {/* Capped well short of the full width — the mascot image above is absolutely positioned
+              and doesn't push this text over, so without a real max-width a long name wraps right
+              under it instead of stopping before it (only visible once the name is long enough to
+              reach that zone). The headline below is short/line-broken enough to already clear the
+              mascot, so it keeps the wider natural width instead of wrapping an extra line for nothing. */}
+          <View className="max-w-[55%]">
+            <EditableText id="home.welcome.greeting" className="body-lg text-text-secondary">
+              {`Welcome back, ${name}! 👋`}
+            </EditableText>
+          </View>
           <EditableText id="home.welcome.headline" className="heading-2 mt-1 text-brand-white" style={{ fontStyle: "italic" }}>
             {"READY TO\nBE UNSTOPPABLE?"}
           </EditableText>

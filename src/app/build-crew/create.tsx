@@ -1,8 +1,10 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
 import { Image, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
 
+import { CrewAvatarGeneratorModal } from "@/components/CrewAvatarGeneratorModal";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { SearchableSelectField } from "@/components/SearchableSelectField";
@@ -18,6 +20,8 @@ export default function CreateCrewScreen() {
   const [nameError, setNameError] = useState<string | null>(null);
   const [trainingType, setTrainingType] = useState<string>(CREW_TRAINING_TYPES[0]);
   const [icon, setIcon] = useState(CREW_ICONS[0].key);
+  const [generatorOpen, setGeneratorOpen] = useState(false);
+  const isGeneratedIcon = !CREW_ICONS.some((item) => item.key === icon);
 
   function handleCreate() {
     const trimmedName = crewName.trim();
@@ -33,6 +37,14 @@ export default function CreateCrewScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
       <ScrollView className="flex-1" contentContainerClassName="px-6 pb-6 pt-4" showsVerticalScrollIndicator={false}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          className="mb-2 h-9 w-9 items-center justify-center rounded-full border border-divider"
+        >
+          <Ionicons name="chevron-back" size={20} color={colors.neutral.textPrimary} />
+        </Pressable>
+
         <View className="items-center gap-2">
           <Animated.Text
             entering={FadeInDown.springify().damping(14).mass(0.6)}
@@ -101,6 +113,18 @@ export default function CreateCrewScreen() {
                   </Pressable>
                 );
               })}
+              <Pressable
+                onPress={() => setGeneratorOpen(true)}
+                className={`h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 ${
+                  isGeneratedIcon ? "border-brand-yellow" : "border-dashed border-divider"
+                }`}
+              >
+                {isGeneratedIcon ? (
+                  <CrewIconBadge iconKey={icon} size={60} />
+                ) : (
+                  <Ionicons name="sparkles-outline" size={22} color={colors.neutral.textSecondary} />
+                )}
+              </Pressable>
             </View>
           </View>
         </Animated.View>
@@ -109,6 +133,8 @@ export default function CreateCrewScreen() {
           <OnboardingFooter label="Create Crew" activeIndex={4} dotCount={5} onPress={handleCreate} />
         </View>
       </ScrollView>
+
+      <CrewAvatarGeneratorModal visible={generatorOpen} onClose={() => setGeneratorOpen(false)} onPick={setIcon} />
     </SafeAreaView>
   );
 }

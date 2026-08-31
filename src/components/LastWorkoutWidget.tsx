@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 
+import { EditableText } from "@/components/EditableText";
 import { RankBadge } from "@/components/RankBadge";
 import { WorkoutSummaryModal } from "@/components/WorkoutSummaryModal";
 import { EXERCISE_BY_ID, findExerciseByDisplayName } from "@/data/exercises";
@@ -45,27 +46,31 @@ export function LastWorkoutWidget({ sessions }: LastWorkoutWidgetProps) {
       >
         <View className="flex-1 gap-1.5">
           <Text className="body-md font-body-bold text-text-primary">LAST WORKOUT</Text>
-          <Text className="caption text-text-secondary">
-            {date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} · {session.name}
-          </Text>
-          <Text className="body-lg font-body-semibold text-text-primary">{session.primaryExercise.name}</Text>
+          <EditableText id="home.lastWorkout.dateAndName" className="caption text-text-secondary">
+            {`${date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} · ${session.name}`}
+          </EditableText>
+          <EditableText id="home.lastWorkout.exerciseName" className="body-lg font-body-semibold text-text-primary">
+            {session.primaryExercise.name}
+          </EditableText>
 
           <View className="mt-1.5 flex-row gap-5">
             <View className="gap-0.5">
               <Text className="caption text-text-secondary">Volume</Text>
-              <Text className="body-md font-body-semibold text-text-primary">
-                {session.volumeKg.toLocaleString("en-US")} kg
-              </Text>
+              <EditableText id="home.lastWorkout.volume" className="body-md font-body-semibold text-text-primary">
+                {`${session.volumeKg.toLocaleString("en-US")} kg`}
+              </EditableText>
             </View>
             <View className="gap-0.5">
               <Text className="caption text-text-secondary">Reps</Text>
-              <Text className="body-md font-body-semibold text-text-primary">{session.primaryExercise.reps}</Text>
+              <EditableText id="home.lastWorkout.reps" className="body-md font-body-semibold text-text-primary">
+                {String(session.primaryExercise.reps)}
+              </EditableText>
             </View>
             <View className="gap-0.5">
               <Text className="caption text-text-secondary">1RM Est.</Text>
-              <Text className="body-md font-body-semibold text-text-primary">
-                {session.primaryExercise.oneRepMaxKg} kg
-              </Text>
+              <EditableText id="home.lastWorkout.oneRepMax" className="body-md font-body-semibold text-text-primary">
+                {`${session.primaryExercise.oneRepMaxKg} kg`}
+              </EditableText>
             </View>
           </View>
         </View>

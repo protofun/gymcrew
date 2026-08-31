@@ -1,25 +1,54 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
-import { Pressable, ScrollView, Share, Text, TextInput, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
-import { ExerciseVolumeChart } from "@/components/ExerciseVolumeChart";
+import { EditableText } from "@/components/EditableText";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
-import { VolumeTrendChart } from "@/components/VolumeTrendChart";
-import { formatMuscleName } from "@/data/exercises";
+import { NewPrsBanner } from "@/components/NewPrsBanner";
+import { PrShareCard } from "@/components/PrShareCard";
+import { RankBadge } from "@/components/RankBadge";
+import { ShareCardModal } from "@/components/ShareCardModal";
+import { WorkoutShareCard } from "@/components/WorkoutShareCard";
+import { WorkoutStatsTabs } from "@/components/WorkoutStatsTabs";
+import { images } from "@/constants/images";
+import { EXERCISE_BY_ID, formatMuscleName } from "@/data/exercises";
 import { formatElapsed } from "@/hooks/use-elapsed-timer";
+import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
+import { RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
+import { estimateOneRepMax } from "@/lib/workout-metrics";
+import { estimateCalories } from "@/lib/workout-sessions";
+import type { WorkoutPr } from "@/lib/workout-finish";
+import { workoutXpEarned } from "@/lib/xp";
 import type { LoggedExercise } from "@/store/active-workout-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutHistoryStore, type CompletedWorkout } from "@/store/workout-history-store";
 import { colors } from "@/theme";
 
-type Tab = "overview" | "exercises" | "muscles";
+/** The single heaviest completed (non-warmup) set of the workout — the "highlight" lift to call
+ * out on the results screen, separate from `lib/workout-sessions.ts`'s `primaryExercise` (which
+ * only tracks estimated 1RM, not the actual weight×reps worth showing here). */
+function topLiftOf(workout: CompletedWorkout): { name: string; weightKg: number; reps: number } | null {
+  let best: { name: string; weightKg: number; reps: number } | null = null;
+  for (const exercise of workout.exercises) {
+    for (const set of exercise.sets) {
+      if (!set.completed || set.isWarmup || set.weightKg == null) continue;
+      if (!best || set.weightKg > best.weightKg) {
+        best = { name: exercise.name, weightKg: set.weightKg, reps: set.reps ?? 0 };
+      }
+    }
+  }
+  return best;
+}
+
+type Tab = "overview" | "exercises" | "muscles" | "prs";
 const TABS: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "exercises", label: "Exercises" },
   { key: "muscles", label: "Muscles" },
+  { key: "prs", label: "PRs" },
 ];
 
 function ratingFor(workout: CompletedWorkout): { emoji: string; label: string; detail: string } {
@@ -32,11 +61,13 @@ function ratingFor(workout: CompletedWorkout): { emoji: string; label: string; d
   return { emoji: "📝", label: "Session Recorded", detail: "No sets were marked complete." };
 }
 
-function StatItem({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
+function StatItem({ id, icon, label, value }: { id: string; icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
   return (
     <View className="flex-1 items-center gap-1.5">
       <Ionicons name={icon} size={18} color={colors.brand.yellow} />
-      <Text className="heading-4 text-text-primary">{value}</Text>
+      <EditableText id={id} className="heading-4 text-text-primary">
+        {value}
+      </EditableText>
       <Text className="caption text-text-secondary">{label}</Text>
     </View>
   );
@@ -58,12 +89,14 @@ function ExerciseAccordionRow({ exercise, unit, hasPr }: { exercise: LoggedExerc
         </View>
         <View className="flex-1 gap-0.5">
           <View className="flex-row items-center gap-1.5">
-            <Text className="body-lg font-body-semibold text-text-primary">{exercise.name}</Text>
+            <EditableText id={`workout.summary.exercise.${exercise.exerciseId}.name`} className="body-lg font-body-semibold text-text-primary">
+              {exercise.name}
+            </EditableText>
             {hasPr && <Ionicons name="trophy" size={14} color={colors.brand.yellow} />}
           </View>
-          <Text className="caption text-text-secondary">
-            {completedSets.length} of {exercise.sets.length} sets · {formatMuscleName(exercise.primaryMuscle)}
-          </Text>
+          <EditableText id={`workout.summary.exercise.${exercise.exerciseId}.subtitle`} className="caption text-text-secondary">
+            {`${completedSets.length} of ${exercise.sets.length} sets · ${formatMuscleName(exercise.primaryMuscle)}`}
+          </EditableText>
         </View>
         <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={colors.neutral.textSecondary} />
       </Pressable>
@@ -100,16 +133,48 @@ function ExerciseAccordionRow({ exercise, unit, hasPr }: { exercise: LoggedExerc
   );
 }
 
+function PrRow({ pr, tier, unit, onPress }: { pr: WorkoutPr; tier: RankTier; unit: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+      className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3"
+    >
+      <RankBadge tier={tier} size={44} />
+      <View className="flex-1 gap-0.5">
+        <EditableText id={`workout.summary.pr.${pr.exerciseId}.name`} className="body-md font-body-semibold text-text-primary" numberOfLines={1}>
+          {pr.exerciseName}
+        </EditableText>
+        <EditableText id={`workout.summary.pr.${pr.exerciseId}.detail`} className="caption text-text-secondary">
+          {`${pr.weightKg}${unit} × ${pr.reps}${pr.previousBestKg !== null ? ` · +${Math.round((pr.weightKg - pr.previousBestKg) * 10) / 10}${unit}` : ""}`}
+        </EditableText>
+      </View>
+      <Ionicons name="share-outline" size={18} color={colors.neutral.textSecondary} />
+    </Pressable>
+  );
+}
+
 export default function WorkoutSummaryScreen() {
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `justFinished` is only ever set by the finish flow (active.tsx / pr-celebration.tsx) — every
+  // other entry point (history, calendar, notifications) opens this screen without it, so the
+  // "just finished" hero below never shows up on an old workout opened later.
+  const { id, justFinished } = useLocalSearchParams<{ id: string; justFinished?: string }>();
   const [tab, setTab] = useState<Tab>("overview");
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [sharingPr, setSharingPr] = useState<{ pr: WorkoutPr; tier: RankTier; topPercent: number | null; progressToNextTier: number | null } | null>(
+    null,
+  );
   const posthog = usePostHog();
 
   const allWorkouts = useWorkoutHistoryStore((state) => state.workouts);
   const workout = allWorkouts.find((w) => w.id === id) ?? allWorkouts[0];
   const updateWorkoutNotes = useWorkoutHistoryStore((state) => state.updateWorkoutNotes);
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
+  const bodyWeightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
+  const age = useOnboardingStore((state) => state.onboarding.age);
+
+  const rankProfile: RankProfile = useMemo(() => ({ gender, bodyWeightKg, age }), [gender, bodyWeightKg, age]);
 
   if (!workout) {
     router.replace("/home");
@@ -118,23 +183,39 @@ export default function WorkoutSummaryScreen() {
 
   const rating = ratingFor(workout);
   const prExerciseIds = new Set(workout.prs.map((pr) => pr.exerciseId));
+  const topLift = topLiftOf(workout);
+  const calories = estimateCalories(Math.round(workout.durationSeconds / 60), bodyWeightKg);
+  const xpEarned = workoutXpEarned(workout.prs.length);
 
-  function handleShare() {
-    // Share.share returns a rejected promise on web when the browser has no native share sheet
-    // (e.g. non-HTTPS or headless contexts) — .catch() it so that never surfaces as an unhandled
-    // rejection (a plain try/catch around the call wouldn't catch an async rejection like this).
+  const prsWithTier = workout.prs.map((pr) => {
+    const exercise = EXERCISE_BY_ID[pr.exerciseId];
+    const detail = exercise ? genericExerciseRankDetail(exercise, pr.weightKg, pr.reps, rankProfile) : null;
+    const tier: RankTier = detail?.tier ?? "rookie";
+    const topPercent = detail ? Math.max(1, 100 - Math.round(detail.progressToNextTier * 100)) : null;
+    return { pr, tier, topPercent, progressToNextTier: detail?.progressToNextTier ?? null };
+  });
+  const topTier: RankTier | null =
+    prsWithTier.length > 0
+      ? prsWithTier.reduce((best, cur) => (RANK_TIERS.indexOf(cur.tier) > RANK_TIERS.indexOf(best) ? cur.tier : best), prsWithTier[0].tier)
+      : null;
+
+  function handleOpenShare() {
     posthog.capture("workout_shared", {
       workout_name: workout!.name,
       volume_kg: workout!.volumeKg,
       completed_sets: workout!.completedSets,
       duration_seconds: workout!.durationSeconds,
     });
-    Share.share({
-      message: `${workout!.name} — ${formatElapsed(workout!.durationSeconds)}, ${workout!.volumeKg.toLocaleString(
-        "en-US",
-      )} ${workout!.unit} lifted across ${workout!.completedSets} sets on GymCrew.`,
-    }).catch((error) => console.warn("Sharing is unavailable on this platform", error));
+    setShareModalVisible(true);
   }
+
+  const shareFallbackMessage = `${workout.name} — ${formatElapsed(workout.durationSeconds)}, ${workout.volumeKg.toLocaleString(
+    "en-US",
+  )} ${workout.unit} lifted across ${workout.completedSets} sets on GymCrew.`;
+
+  const prShareFallbackMessage = sharingPr
+    ? `New PR on ${sharingPr.pr.exerciseName}: ${sharingPr.pr.weightKg}${workout.unit} × ${sharingPr.pr.reps} on GymCrew! 💪`
+    : "";
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
@@ -143,18 +224,48 @@ export default function WorkoutSummaryScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Workout Summary</Text>
-        <Pressable onPress={handleShare} hitSlop={8}>
+        <Pressable onPress={handleOpenShare} hitSlop={8}>
           <Ionicons name="share-outline" size={22} color={colors.neutral.textPrimary} />
         </Pressable>
       </View>
 
       <View className="gap-1 px-4 pb-4">
-        <Text className="body-lg font-body-semibold text-text-primary">{workout.name}</Text>
-        <Text className="caption text-text-secondary">
-          {new Date(workout.completedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} ·{" "}
-          {formatElapsed(workout.durationSeconds)}
-        </Text>
+        <EditableText id="workout.summary.name" className="body-lg font-body-semibold text-text-primary">
+          {workout.name}
+        </EditableText>
+        <EditableText id="workout.summary.dateAndDuration" className="caption text-text-secondary">
+          {`${new Date(workout.completedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} · ${formatElapsed(workout.durationSeconds)}`}
+        </EditableText>
       </View>
+
+      {/* Only shown right after finishing (see `justFinished` above) — this is what used to be its
+          own screen (workout/complete.tsx). Folding it in here cuts a full screen out of every
+          "finish workout" flow and puts the exercise/muscle breakdown one scroll away instead of
+          one tab-and-a-screen away. */}
+      {justFinished === "1" &&
+        (workout.prs.length > 0 ? (
+          <View className="mx-4 mb-4">
+            <NewPrsBanner
+              count={workout.prs.length}
+              topTier={topTier ?? "rookie"}
+              exerciseNames={workout.prs.map((pr) => pr.exerciseName)}
+              xpEarned={xpEarned}
+            />
+          </View>
+        ) : (
+          <View className="mx-4 mb-4 flex-row items-center gap-4">
+            <Image source={images.mascotFlexing} resizeMode="contain" style={{ width: 110, height: 110 * (205 / 250) }} />
+            <View className="flex-1 gap-1.5">
+              <Text className="heading-3 text-text-primary">Workout Complete!</Text>
+              <View className="flex-row items-center gap-1.5">
+                <Ionicons name="flame" size={16} color={colors.semantic.streak} />
+                <EditableText id="workout.summary.celebrationName" className="body-lg font-body-semibold text-text-secondary">
+                  {workout.name}
+                </EditableText>
+              </View>
+            </View>
+          </View>
+        ))}
 
       <View className="flex-row gap-6 border-b border-divider px-4">
         {TABS.map((t) => {
@@ -181,27 +292,53 @@ export default function WorkoutSummaryScreen() {
       >
         {tab === "overview" && (
           <>
-            <View className="flex-row items-center justify-between">
-              <StatItem icon="time-outline" label="Duration" value={formatElapsed(workout.durationSeconds)} />
-              <VDivider />
-              <StatItem icon="barbell-outline" label="Volume" value={`${workout.volumeKg.toLocaleString("en-US")} ${workout.unit}`} />
-              <VDivider />
-              <StatItem icon="layers-outline" label="Sets" value={String(workout.completedSets)} />
-              <VDivider />
-              <StatItem icon="trophy-outline" label="PRs" value={String(workout.prs.length)} />
-            </View>
-
-            <View className="flex-row items-center gap-3">
-              <Text style={{ fontSize: 28 }}>{rating.emoji}</Text>
-              <View className="flex-1 gap-0.5">
-                <Text className="body-md font-body-semibold text-text-primary">{rating.label}</Text>
-                <Text className="body-sm text-text-secondary">{rating.detail}</Text>
+            <View className="gap-4">
+              <View className="flex-row items-center justify-between">
+                <StatItem id="workout.summary.duration" icon="time-outline" label="Duration" value={formatElapsed(workout.durationSeconds)} />
+                <VDivider />
+                <StatItem id="workout.summary.volume" icon="barbell-outline" label="Volume" value={`${workout.volumeKg.toLocaleString("en-US")} ${workout.unit}`} />
+                <VDivider />
+                <StatItem id="workout.summary.sets" icon="layers-outline" label="Sets" value={String(workout.completedSets)} />
+              </View>
+              <View className="flex-row items-center">
+                <StatItem id="workout.summary.prs" icon="trophy-outline" label="PRs" value={String(workout.prs.length)} />
+                <VDivider />
+                <StatItem id="workout.summary.calories" icon="flame-outline" label="Calories" value={`~${calories}`} />
               </View>
             </View>
 
-            <VolumeTrendChart workouts={allWorkouts} currentWorkoutId={workout.id} />
+            {topLift && (
+              <View className="flex-row items-center gap-2 rounded-xl border border-divider bg-surface px-3 py-2.5">
+                <Ionicons name="star" size={14} color={colors.brand.yellow} />
+                <Text className="body-sm flex-1 text-text-secondary" numberOfLines={1}>
+                  <Text className="font-body-semibold text-text-primary">Top lift: {topLift.name}</Text> — {topLift.weightKg}
+                  {workout.unit} × {topLift.reps} (est. 1RM {estimateOneRepMax(topLift.weightKg, topLift.reps)}
+                  {workout.unit})
+                </Text>
+              </View>
+            )}
 
-            <ExerciseVolumeChart exercises={workout.exercises} unit={workout.unit} />
+            {workout.prs.length > 0 && (
+              <Pressable
+                onPress={() => router.push("/profile/achievements")}
+                className="flex-row items-center justify-center gap-1.5 py-1"
+              >
+                <Text className="body-sm font-body-semibold text-brand-yellow">View all your PRs</Text>
+                <Ionicons name="arrow-forward" size={14} color={colors.brand.yellow} />
+              </Pressable>
+            )}
+
+            {!justFinished && (
+              <View className="flex-row items-center gap-3">
+                <Text style={{ fontSize: 28 }}>{rating.emoji}</Text>
+                <View className="flex-1 gap-0.5">
+                  <Text className="body-md font-body-semibold text-text-primary">{rating.label}</Text>
+                  <Text className="body-sm text-text-secondary">{rating.detail}</Text>
+                </View>
+              </View>
+            )}
+
+            <WorkoutStatsTabs workout={workout} workouts={allWorkouts} bodyWeightKg={bodyWeightKg} />
 
             <View className="gap-2">
               <Text className="body-sm text-text-secondary">Notes</Text>
@@ -240,7 +377,46 @@ export default function WorkoutSummaryScreen() {
               <MuscleHeatmap muscleIntensity={workout.muscleIntensity} height={300} gender={gender} />
             </View>
           ))}
+
+        {tab === "prs" &&
+          (prsWithTier.length === 0 ? (
+            <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-14">
+              <Ionicons name="trophy-outline" size={28} color={colors.neutral.textSecondary} />
+              <Text className="body-md text-text-secondary">No PRs this session.</Text>
+              <Text className="body-sm text-text-secondary">Beat a previous best to see it here.</Text>
+            </View>
+          ) : (
+            <View className="gap-2.5">
+              {prsWithTier.map(({ pr, tier, topPercent, progressToNextTier }) => (
+                <PrRow
+                  key={pr.exerciseId}
+                  pr={pr}
+                  tier={tier}
+                  unit={workout.unit}
+                  onPress={() => setSharingPr({ pr, tier, topPercent, progressToNextTier })}
+                />
+              ))}
+            </View>
+          ))}
       </ScrollView>
+
+      <ShareCardModal visible={shareModalVisible} onClose={() => setShareModalVisible(false)} fallbackMessage={shareFallbackMessage}>
+        <WorkoutShareCard workout={workout} gender={gender} />
+      </ShareCardModal>
+
+      <ShareCardModal visible={sharingPr !== null} onClose={() => setSharingPr(null)} fallbackMessage={prShareFallbackMessage}>
+        {sharingPr && (
+          <PrShareCard
+            tier={sharingPr.tier}
+            exerciseName={sharingPr.pr.exerciseName}
+            weightKg={sharingPr.pr.weightKg}
+            reps={sharingPr.pr.reps}
+            unit={workout.unit}
+            topPercent={sharingPr.topPercent}
+            progressToNextTier={sharingPr.progressToNextTier}
+          />
+        )}
+      </ShareCardModal>
     </View>
   );
 }

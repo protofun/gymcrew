@@ -7,9 +7,10 @@ export const DEVELOPER_MODE_USER_ID = "user_3HriM4eE0Ir7FlM4RCWohr7VV2o";
 
 type DeveloperModeStore = {
   enabled: boolean;
-  /** Keyed by the `id` passed to <EditableText>/<EditableNumber> — plain string overrides only,
-   * purely local (never pushed to the backend, see lib/backend-sync.ts). This is fake content for
-   * screenshots/videos, not real app data. */
+  /** Keyed by the `id` passed to <EditableText> — plain string overrides only, purely local (never
+   * pushed to the backend, see lib/backend-sync.ts). This is fake content for screenshots/videos,
+   * not real app data. Numeric displays are covered too — <EditableText> just deals in strings, so
+   * callers format the number first (see (tabs)/ranks.tsx's powerScore for the pattern). */
   overrides: Record<string, string>;
   toggleEnabled: () => void;
   setOverride: (id: string, value: string) => void;

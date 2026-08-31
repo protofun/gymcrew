@@ -107,8 +107,9 @@ type CrewActions = {
   /** Adds crew XP (e.g. a completed challenge reward), rolling over into the next division if it fills the bar. */
   addXp: (amount: number) => void;
   clearDivisionCelebration: () => void;
-  /** Server-backed (leader/co-leader only). */
-  updateInfo: (updates: { name?: string; tagline?: string }) => void;
+  /** Server-backed (leader/co-leader only) — awaits the server so a rejected change (e.g. a crew
+   * name someone else already has) never shows as saved locally when it wasn't. */
+  updateInfo: (updates: { name?: string; tagline?: string }) => Promise<ActionResult>;
   setIcon: (icon: string) => void;
   setPrivacy: (privacy: CrewPrivacy) => void;
   toggleJoinRequests: () => void;
@@ -194,7 +195,7 @@ function normalizeCrew(apiCrew: ApiCrew): Pick<CrewSyncedState, "id" | "inviteCo
       id: member.id === myId ? CURRENT_MEMBER_ID : member.id,
       name: member.name,
       username: member.username,
-      avatarUrl: `https://picsum.photos/seed/${encodeURIComponent(member.id)}/128`,
+      avatarUrl: member.avatarUrl,
       level: member.level,
       division: member.division as Division,
       role: member.role,
@@ -239,14 +240,15 @@ export const useCrewStore = create<CrewState & CrewActions>()(
         });
       },
       clearDivisionCelebration: () => set({ pendingDivisionCelebration: null }),
-      updateInfo: (updates) => {
+      updateInfo: async (updates) => {
         const crewId = get().id;
-        set((state) => ({
-          name: updates.name?.trim() ? updates.name.trim() : state.name,
-          tagline: updates.tagline !== undefined ? updates.tagline : state.tagline,
-        }));
-        if (crewId) {
-          api.updateCrew(crewId, updates).catch((error) => console.warn("Failed to sync crew info to server", error));
+        if (!crewId) return { ok: false, error: "Not in a crew." };
+        try {
+          const crew = await api.updateCrew(crewId, updates);
+          set({ name: crew.name, tagline: crew.tagline });
+          return { ok: true };
+        } catch (error) {
+          return { ok: false, error: errorMessage(error) };
         }
       },
       setIcon: (icon) => {

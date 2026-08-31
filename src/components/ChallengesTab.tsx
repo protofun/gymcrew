@@ -12,6 +12,7 @@ import { crewChallengeProgress, simulatedOpponentProgress, weekKeyRange } from "
 import { sameDivisionRivals, type RivalCrewInput } from "@/lib/crew-league";
 import { currentWeekKey, fromDateKey, toDateKey } from "@/lib/date";
 import { divisionIndex } from "@/lib/division";
+import { useAdminChallengeStore } from "@/store/admin-challenge-store";
 import { useChallengeStore } from "@/store/challenge-store";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewStore } from "@/store/crew-store";
@@ -67,6 +68,7 @@ export function ChallengesTab() {
   const markAwarded = useChallengeStore((state) => state.markAwarded);
   const markBattleWinAwarded = useChallengeStore((state) => state.markBattleWinAwarded);
   const createCustomChallenge = useChallengeStore((state) => state.createCustomChallenge);
+  const adminChallenges = useAdminChallengeStore((state) => state.challenges);
   const grantTokens = useCurrencyStore((state) => state.grantTokens);
   const membersActivity = useCrewActivityStore((state) => state.membersActivity);
   const memberActivityLookup = (memberId: string) => membersActivity[memberId] ?? { recentWorkouts: [], records: {} };
@@ -118,6 +120,32 @@ export function ChallengesTab() {
     };
   });
 
+  // Summer Challenge challenges (see AdminChallengeFormSheet's "Summer Challenge" toggle) are pulled
+  // out of the regular admin pool and shown separately, locked, below — not counted toward progress
+  // or the completion-reward effect further down, since they're not actually playable yet.
+  const summerChallenges = adminChallenges.filter((challenge) => challenge.isActive && challenge.isSummerChallenge);
+
+  const admin = adminChallenges
+    .filter((challenge) => challenge.isActive && !challenge.isSummerChallenge)
+    .map((challenge) => {
+      const myContribution = progress[challenge.id] ?? 0;
+      const startKeyA = toDateKey(new Date(challenge.createdAt));
+      const endKeyA = toDateKey(new Date());
+      const target = challenge.perMemberTarget * members.length;
+      const total = crewChallengeProgress(challenge.metric, members, myContribution, startKeyA, endKeyA, memberActivityLookup);
+      return {
+        key: challenge.id,
+        metric: challenge.metric,
+        name: challenge.name,
+        unit: challenge.unit,
+        progress: total,
+        target,
+        isComplete: total >= target,
+        xpReward: CHALLENGE_XP_REWARD,
+        timeLabel: "Admin Event",
+      };
+    });
+
   const upcoming = upcomingWeeklyChallenges(2, weekKey).flatMap(({ weekKey: futureWeekKey, challenges }) => {
     const startsAt = fromDateKey(futureWeekKey).getTime();
     return challenges.map((challenge) => ({
@@ -133,9 +161,9 @@ export function ChallengesTab() {
     }));
   });
 
-  // Every challenge (weekly or crew battle) awards crew XP + personal tokens once, the first time it's detected complete.
+  // Every challenge (weekly, crew battle, or admin event) awards crew XP + personal tokens once, the first time it's detected complete.
   useEffect(() => {
-    for (const challenge of [...weekly, ...custom]) {
+    for (const challenge of [...weekly, ...custom, ...admin]) {
       if (challenge.isComplete && !awardedIds.includes(challenge.key)) {
         addXp(CHALLENGE_XP_REWARD);
         grantTokens(TOKENS_PER_CHALLENGE_COMPLETE);
@@ -152,9 +180,14 @@ export function ChallengesTab() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [[...weekly, ...custom].map((challenge) => `${challenge.key}:${challenge.isComplete}`).join(",")]);
+  }, [[...weekly, ...custom, ...admin].map((challenge) => `${challenge.key}:${challenge.isComplete}`).join(",")]);
 
-  const visible = scope === "Active" ? [...weekly, ...custom].filter((c) => !c.isComplete) : scope === "Upcoming" ? upcoming : [...weekly, ...custom].filter((c) => c.isComplete);
+  const visible =
+    scope === "Active"
+      ? [...weekly, ...custom, ...admin].filter((c) => !c.isComplete)
+      : scope === "Upcoming"
+        ? upcoming
+        : [...weekly, ...custom, ...admin].filter((c) => c.isComplete);
 
   function handleCreate(template: ChallengeTemplate, opponent: RivalCrewInput, durationDays: number) {
     createCustomChallenge({
@@ -171,7 +204,41 @@ export function ChallengesTab() {
 
   return (
     <View className="mx-4 mt-4 gap-4">
-      <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-1">
+      {summerChallenges.length > 0 && (
+        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-3">
+          <View className="gap-1">
+            <Text style={headerStyle} className="text-brand-white">
+              🦍 SUMMER CHALLENGE
+            </Text>
+            <View className="flex-row items-center gap-1.5">
+              <Ionicons name="lock-closed" size={13} color={colors.neutral.textSecondary} />
+              <Text className="caption font-body-semibold text-text-secondary">Unlocks when the app officially releases.</Text>
+            </View>
+          </View>
+          <View className="gap-3">
+            {summerChallenges.map((challenge, index) => (
+              <Animated.View key={challenge.id} entering={FadeInUp.delay(index * 60).springify().damping(16).mass(0.6)}>
+                <ChallengeCard
+                  id={`crew.challenges.summer.${challenge.id}`}
+                  metric={challenge.metric}
+                  name={challenge.name}
+                  unit={challenge.unit}
+                  progress={0}
+                  target={challenge.perMemberTarget * members.length}
+                  timeLabel=""
+                  isComplete={false}
+                  xpReward={CHALLENGE_XP_REWARD}
+                  locked
+                  lockedLabel="Waiting for app release"
+                  onPress={() => {}}
+                />
+              </Animated.View>
+            ))}
+          </View>
+        </Animated.View>
+      )}
+
+      <Animated.View entering={FadeInUp.delay(60).springify().damping(16).mass(0.6)} className="gap-1">
         <Text style={headerStyle} className="text-brand-white">
           {scope === "Upcoming" ? "WHAT'S COMING" : scope === "Completed" ? "VICTORIES" : "PROVE YOURSELVES"}
         </Text>
@@ -240,6 +307,7 @@ export function ChallengesTab() {
           {visible.map((challenge, index) => (
             <Animated.View key={challenge.key} entering={FadeInUp.delay(180 + index * 60).springify().damping(16).mass(0.6)}>
               <ChallengeCard
+                id={`crew.challenges.${challenge.key}`}
                 metric={challenge.metric}
                 name={challenge.name}
                 unit={challenge.unit}

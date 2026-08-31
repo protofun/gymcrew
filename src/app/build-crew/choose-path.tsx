@@ -12,7 +12,7 @@ import { colors } from "@/theme";
 
 type PathKey = "join" | "create" | "later";
 
-const MASCOT_WIDTH = 148;
+const MASCOT_WIDTH = 84;
 
 const PATHS: {
   key: PathKey;
@@ -64,6 +64,14 @@ export default function ChoosePathScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
       <View className="flex-1 px-6 pb-6 pt-4">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          className="mb-2 h-9 w-9 items-center justify-center rounded-full border border-divider"
+        >
+          <Ionicons name="chevron-back" size={20} color={colors.neutral.textPrimary} />
+        </Pressable>
+
         <View className="items-center gap-2">
           <Animated.Text
             entering={FadeInDown.springify().damping(14).mass(0.6)}
@@ -79,7 +87,7 @@ export default function ChoosePathScreen() {
           </Animated.Text>
         </View>
 
-        <View className="flex-1 justify-center gap-4">
+        <View className="flex-1 justify-center gap-2.5">
           {PATHS.map((path, index) => {
             const active = path.key === selected;
             return (
@@ -92,25 +100,23 @@ export default function ChoosePathScreen() {
               >
                 <Pressable
                   onPress={() => setSelected(path.key)}
-                  className={`overflow-hidden rounded-2xl border bg-surface ${
+                  className={`flex-row items-center overflow-hidden rounded-2xl border bg-surface p-3 ${
                     active ? "border-brand-yellow" : "border-divider"
                   }`}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, position: "relative" })}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
                 >
-                  <View className={`p-5 ${active ? "pr-40" : ""}`}>
-                    <View className="gap-3">
-                      {active ? (
-                        <Ionicons name={path.icon} size={28} color={colors.brand.yellow} />
-                      ) : (
-                        <View className="h-11 w-11 items-center justify-center rounded-full border border-divider">
-                          <Ionicons name={path.icon} size={20} color={colors.neutral.textPrimary} />
-                        </View>
-                      )}
-                      <View className="gap-1">
-                        <Text className="heading-4 text-text-primary">{path.title}</Text>
-                        <Text className="body-md text-text-secondary">{path.description}</Text>
-                      </View>
-                    </View>
+                  <View
+                    className="h-10 w-10 items-center justify-center rounded-full border"
+                    style={{ borderColor: active ? colors.brand.yellow : colors.neutral.divider }}
+                  >
+                    <Ionicons name={path.icon} size={18} color={active ? colors.brand.yellow : colors.neutral.textPrimary} />
+                  </View>
+
+                  <View className="flex-1 gap-0.5 pl-3 pr-2">
+                    <Text className="body-lg font-body-bold text-text-primary">{path.title}</Text>
+                    <Text className="body-sm text-text-secondary" numberOfLines={2}>
+                      {path.description}
+                    </Text>
                   </View>
 
                   {active && (
@@ -118,13 +124,7 @@ export default function ChoosePathScreen() {
                       entering={FadeIn.duration(220)}
                       exiting={FadeOut.duration(120)}
                       source={path.mascot.source}
-                      style={{
-                        position: "absolute",
-                        right: 4,
-                        bottom: 0,
-                        width: MASCOT_WIDTH,
-                        height: MASCOT_WIDTH / path.mascot.aspectRatio,
-                      }}
+                      style={{ width: MASCOT_WIDTH, height: MASCOT_WIDTH / path.mascot.aspectRatio }}
                       resizeMode="contain"
                     />
                   )}

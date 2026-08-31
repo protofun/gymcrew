@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { EditableText } from "@/components/EditableText";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { StatCard, StatRow, StatSectionHeader } from "@/components/StatRow";
 import { StatTile } from "@/components/StatTile";
@@ -91,8 +92,8 @@ export default function TrainingHistoryScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="flex-row gap-3">
-          <StatTile icon="flame" label="Current Streak" value={`${currentStreak}d`} />
-          <StatTile icon="trophy" label="Longest Streak" value={`${longestStreak}d`} />
+          <StatTile id="profile.history.currentStreak" icon="flame" label="Current Streak" value={`${currentStreak}d`} />
+          <StatTile id="profile.history.longestStreak" icon="trophy" label="Longest Streak" value={`${longestStreak}d`} />
         </View>
 
         <View className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface p-4">
@@ -144,21 +145,32 @@ export default function TrainingHistoryScreen() {
         <View className="gap-2">
           <StatSectionHeader label="All-Time Totals" />
           <StatCard>
-            <StatRow label="Total Workouts" value={String(totals.workouts)} />
-            <StatRow label="Total Sets" value={totals.sets.toLocaleString("en-US")} />
-            <StatRow label="Total Reps" value={totals.reps.toLocaleString("en-US")} />
-            <StatRow label="Total Volume" value={formatWeight(totals.volumeKg, weightUnit)} />
-            <StatRow label="Total Training Time" value={formatDuration(totals.durationSeconds)} />
-            <StatRow label="Avg Workout Duration" value={formatDuration(totals.avgDurationSeconds)} isLast />
+            <StatRow id="profile.history.totalWorkouts" label="Total Workouts" value={String(totals.workouts)} />
+            <StatRow id="profile.history.totalSets" label="Total Sets" value={totals.sets.toLocaleString("en-US")} />
+            <StatRow id="profile.history.totalReps" label="Total Reps" value={totals.reps.toLocaleString("en-US")} />
+            <StatRow id="profile.history.totalVolume" label="Total Volume" value={formatWeight(totals.volumeKg, weightUnit)} />
+            <StatRow id="profile.history.totalTime" label="Total Training Time" value={formatDuration(totals.durationSeconds)} />
+            <StatRow id="profile.history.avgDuration" label="Avg Workout Duration" value={formatDuration(totals.avgDurationSeconds)} isLast />
           </StatCard>
         </View>
 
         <View className="gap-2">
           <StatSectionHeader label="Muscle Balance" />
           <StatCard>
-            <StatRow label="Most Trained" value={most ? formatMuscleLabel(most) : "—"} valueColor={most ? colors.semantic.success : undefined} />
-            <StatRow label="Least Trained" value={least ? formatMuscleLabel(least) : "—"} valueColor={least ? colors.semantic.error : undefined} />
             <StatRow
+              id="profile.history.mostTrained"
+              label="Most Trained"
+              value={most ? formatMuscleLabel(most) : "—"}
+              valueColor={most ? colors.semantic.success : undefined}
+            />
+            <StatRow
+              id="profile.history.leastTrained"
+              label="Least Trained"
+              value={least ? formatMuscleLabel(least) : "—"}
+              valueColor={least ? colors.semantic.error : undefined}
+            />
+            <StatRow
+              id="profile.history.bestWeek"
               label="Best Week (Volume)"
               value={best ? `${fromDateKey(best.weekKey).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · ${formatWeight(best.volumeKg, weightUnit)}` : "—"}
               isLast
@@ -196,12 +208,12 @@ export default function TrainingHistoryScreen() {
                     />
                   </View>
                   <View className="flex-1 gap-0.5">
-                    <Text className="body-md font-body-semibold text-text-primary">{workout.name}</Text>
-                    <Text className="caption text-text-secondary">
-                      {new Date(workout.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {workout.completedSets} sets ·{" "}
-                      {formatWeight(workout.volumeKg, weightUnit)}
-                      {workout.prs.length > 0 ? ` · ${workout.prs.length} PR${workout.prs.length === 1 ? "" : "s"}` : ""}
-                    </Text>
+                    <EditableText id={`profile.history.workout.${workout.id}.name`} className="body-md font-body-semibold text-text-primary">
+                      {workout.name}
+                    </EditableText>
+                    <EditableText id={`profile.history.workout.${workout.id}.detail`} className="caption text-text-secondary">
+                      {`${new Date(workout.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · ${workout.completedSets} sets · ${formatWeight(workout.volumeKg, weightUnit)}${workout.prs.length > 0 ? ` · ${workout.prs.length} PR${workout.prs.length === 1 ? "" : "s"}` : ""}`}
+                    </EditableText>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.neutral.textSecondary} />
                 </Pressable>
