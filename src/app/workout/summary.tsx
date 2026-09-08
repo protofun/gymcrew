@@ -9,16 +9,20 @@ import { EditableText } from "@/components/EditableText";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { NewPrsBanner } from "@/components/NewPrsBanner";
 import { PrShareCard } from "@/components/PrShareCard";
+import { ProgressBar } from "@/components/ProgressBar";
 import { RankBadge } from "@/components/RankBadge";
+import { SkewedStat } from "@/components/SkewedStat";
 import { ShareCardModal } from "@/components/ShareCardModal";
 import { WorkoutShareCard } from "@/components/WorkoutShareCard";
 import { WorkoutStatsTabs } from "@/components/WorkoutStatsTabs";
 import { images } from "@/constants/images";
 import { EXERCISE_BY_ID, formatMuscleName } from "@/data/exercises";
 import { formatElapsed } from "@/hooks/use-elapsed-timer";
+import { toDateKey } from "@/lib/date";
 import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
 import { formatMuscleLabel } from "@/lib/muscle-groups";
 import { formatReadyAt, formatRecoveryLabel, recoveryStatusForWorkout, type MuscleRecoveryStatus } from "@/lib/muscle-recovery";
+import { sumMacros } from "@/lib/nutrition-macros";
 import { RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
 import { estimateOneRepMax } from "@/lib/workout-metrics";
 import { estimateCalories } from "@/lib/workout-sessions";
@@ -27,6 +31,8 @@ import type { WorkoutPr } from "@/lib/workout-finish";
 import { workoutXpEarned } from "@/lib/xp";
 import type { LoggedExercise } from "@/store/active-workout-store";
 import { useCrewWarStore } from "@/store/crew-war-store";
+import { useNutritionLogStore } from "@/store/nutrition-log-store";
+import { useNutritionTargetsStore } from "@/store/nutrition-targets-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutHistoryStore, type CompletedWorkout } from "@/store/workout-history-store";
 import { colors } from "@/theme";
@@ -54,6 +60,46 @@ function WarAttackSummary({ volumeKg, prCount }: { volumeKg: number; prCount: nu
           Crew {leading ? "leads" : "trails"} {Math.round(war.myScore).toLocaleString("en-US")} vs{" "}
           {Math.round(war.opponentScore).toLocaleString("en-US")} · {war.opponent.name}
         </Text>
+      </View>
+    </View>
+  );
+}
+
+/** "Today's Fuel" — the nutrition connection on the just-finished screen (see NUTRITION.md section
+ * 28). Renders nothing without real targets set yet, same "don't push half-configured features"
+ * rule HomeNutritionWidget follows — a fresh workout finish is not the moment to interrupt with a
+ * nutrition setup flow. */
+function TodaysFuelCard() {
+  const todayKey = useMemo(() => toDateKey(new Date()), []);
+  const entries = useNutritionLogStore((state) => state.entries);
+  const calories = useNutritionTargetsStore((state) => state.calories);
+  const proteinTarget = useNutritionTargetsStore((state) => state.proteinG);
+
+  const totals = useMemo(() => sumMacros(entries.filter((entry) => entry.dateKey === todayKey)), [entries, todayKey]);
+
+  if (calories === null || proteinTarget === null) return null;
+
+  const proteinRemaining = Math.max(0, Math.round(proteinTarget - totals.proteinG));
+
+  return (
+    <View className="mx-4 mb-4 overflow-hidden rounded-2xl border border-divider bg-surface">
+      <View style={{ height: 3, backgroundColor: colors.semantic.streak }} />
+      <View className="gap-3 p-3.5">
+        <View className="flex-row items-center justify-between">
+          <View className="flex-row items-center gap-1.5">
+            <Ionicons name="flame" size={13} color={colors.semantic.streak} />
+            <Text className="body-sm font-body-semibold text-text-primary">Today&apos;s Fuel</Text>
+          </View>
+          <SkewedStat size={16} color={colors.neutral.textPrimary}>{`${Math.round(totals.calories)} / ${calories} kcal`}</SkewedStat>
+        </View>
+        <ProgressBar ratio={calories > 0 ? totals.calories / calories : 0} color={colors.semantic.streak} height={6} />
+        <View className="flex-row items-center justify-between">
+          <Text className="caption text-text-secondary">{proteinRemaining > 0 ? `You still need ${proteinRemaining}g protein today.` : "Protein goal hit for today 🔥"}</Text>
+          <Pressable onPress={() => router.push("/nutrition/add")} className="flex-row items-center gap-1 rounded-full bg-brand-yellow px-3 py-1.5">
+            <Ionicons name="add" size={13} color={colors.brand.iron} />
+            <Text className="caption font-body-semibold text-brand-iron">Add Food</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -329,6 +375,7 @@ export default function WorkoutSummaryScreen() {
         ))}
 
       {justFinished === "1" && <WarAttackSummary volumeKg={workout.volumeKg} prCount={workout.prs.length} />}
+      {justFinished === "1" && <TodaysFuelCard />}
 
       <View className="flex-row gap-6 border-b border-divider px-4">
         {TABS.map((t) => {

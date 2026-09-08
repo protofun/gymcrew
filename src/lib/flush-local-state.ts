@@ -3,10 +3,13 @@ import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { useCosmeticsStore } from "@/store/cosmetics-store";
 import { useCurrencyStore } from "@/store/currency-store";
 import { useCustomExercisesStore } from "@/store/custom-exercises-store";
+import { useCustomFoodsStore } from "@/store/custom-foods-store";
 import { useCustomWorkoutsStore } from "@/store/custom-workouts-store";
 import { useFavoriteExercisesStore } from "@/store/favorite-exercises-store";
+import { useFavoriteFoodsStore } from "@/store/favorite-foods-store";
 import { useGoalsStore } from "@/store/goals-store";
 import { useNotificationsStore } from "@/store/notifications-store";
+import { useNutritionTargetsStore } from "@/store/nutrition-targets-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { useThemeStore } from "@/store/theme-store";
 import { useTodayTrainingStore } from "@/store/today-training-store";
@@ -79,4 +82,22 @@ export function flushLocalStateToServer(): void {
 
   const workoutSplit = useWorkoutSplitStore.getState();
   pushState("workout-split", { preferences: workoutSplit.preferences, plan: workoutSplit.plan, acceptedAt: workoutSplit.acceptedAt });
+
+  const customFoods = useCustomFoodsStore.getState();
+  pushState("custom-foods", { foods: customFoods.foods });
+
+  const favoriteFoods = useFavoriteFoodsStore.getState();
+  pushState("favorite-foods", { favoriteIds: favoriteFoods.favoriteIds });
+
+  const nutritionTargets = useNutritionTargetsStore.getState();
+  pushState("nutrition-targets", {
+    calories: nutritionTargets.calories,
+    proteinG: nutritionTargets.proteinG,
+    carbsG: nutritionTargets.carbsG,
+    fatG: nutritionTargets.fatG,
+    goal: nutritionTargets.goal,
+    activityLevel: nutritionTargets.activityLevel,
+    isCustom: nutritionTargets.isCustom,
+    goalWeightKg: nutritionTargets.goalWeightKg,
+  });
 }

@@ -69,7 +69,7 @@ type SettingsRoute =
   | "/crew/settings"
   | "/workout-split/intro";
 
-type ProgressCard = { icon: ImageSourcePropType; label: string; caption: string; route: SettingsRoute | "/(tabs)/ranks" };
+type ProgressCard = { icon: ImageSourcePropType; label: string; caption: string; route: SettingsRoute | "/(tabs)/ranks" | "/nutrition" };
 
 function SettingsRow({
   icon,
@@ -156,6 +156,7 @@ const PROGRESS_CARDS: ProgressCard[] = [
   { icon: navIcons.rankOverTime, label: "Rank Over Time", caption: "Division timeline & rank-up history", route: "/profile/rank-history" },
   { icon: navIcons.achievements, label: "Personal Records", caption: "Every PR, newest first", route: "/profile/achievements" },
   { icon: navIcons.trainingHistory, label: "Training History", caption: "Calendar, streaks & charts", route: "/profile/history" },
+  { icon: navIcons.nutrition, label: "Nutrition", caption: "Calories, macros & food log", route: "/nutrition" },
   { icon: navIcons.bodyLog, label: "Body Log", caption: "Weight & body fat over time", route: "/profile/body-log" },
   { icon: navIcons.allStats, label: "All Stats", caption: "Every number, one place", route: "/profile/all-stats" },
 ];

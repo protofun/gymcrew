@@ -99,6 +99,94 @@ CREATE TABLE IF NOT EXISTS body_log_entries (
   INDEX idx_bodylog_user_date (user_id, logged_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- A user's saved meal or shake — a reusable combination of foods, one tap away from being logged
+-- (see NUTRITION.md section 14-18). `items_json` mirrors `workouts.exercises_json`'s precedent:
+-- one JSON array of ingredient snapshots (name, per-serving macros, quantity), not a normalized
+-- meal_items table, since nothing on the backend needs to query into individual ingredients.
+-- Snapshotting each item's macros at add-time (rather than joining a live foods row) means a saved
+-- meal's totals never silently drift if the underlying food is later edited or deleted — same
+-- reasoning as `food_logs` below. `total_*` columns are precomputed client-side and stored
+-- redundantly (like `workouts.volume_kg`) so My Meals/My Shakes can render totals without
+-- re-summing JSON.
+CREATE TABLE IF NOT EXISTS meals (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  user_id VARCHAR(64) NOT NULL,
+  kind ENUM('meal', 'shake') NOT NULL DEFAULT 'meal',
+  name VARCHAR(255) NOT NULL,
+  description VARCHAR(500) NOT NULL DEFAULT '',
+  items_json JSON NOT NULL,
+  total_calories DECIMAL(7,2) NOT NULL DEFAULT 0,
+  total_protein_g DECIMAL(6,2) NOT NULL DEFAULT 0,
+  total_carbs_g DECIMAL(6,2) NOT NULL DEFAULT 0,
+  total_fat_g DECIMAL(6,2) NOT NULL DEFAULT 0,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  CONSTRAINT fk_meals_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_meals_user_kind (user_id, kind)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- One row per logged food/meal/shake in a user's daily food log (see NUTRITION.md section 3, 35).
+-- `name`/`calories`/`protein_g`/`carbs_g`/`fat_g` are a snapshot at the moment of logging (same
+-- "never retroactively changes" reasoning as `meals.items_json` above) — editing or deleting the
+-- source food/meal later never rewrites a day that's already in the books. `food_id`/`meal_id` are
+-- kept only as an optional back-reference (e.g. "log this again"), hence ON DELETE SET NULL rather
+-- than CASCADE. Foods themselves have no backend table yet — Phase 1 keeps the food library
+-- client-side (src/data/nutrition-foods.ts + the user's own custom foods, synced the same way
+-- custom-exercises are), same reasoning `custom_exercises` never got a table either. `food_id` is
+-- therefore just an opaque id from that client-side world, not a real FK.
+CREATE TABLE IF NOT EXISTS food_logs (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  user_id VARCHAR(64) NOT NULL,
+  food_id VARCHAR(64) NULL,
+  meal_id VARCHAR(64) NULL,
+  name VARCHAR(255) NOT NULL,
+  meal_slot ENUM('breakfast', 'lunch', 'dinner', 'snacks') NOT NULL DEFAULT 'snacks',
+  quantity DECIMAL(8,2) NOT NULL DEFAULT 1,
+  unit VARCHAR(16) NOT NULL DEFAULT 'g',
+  calories DECIMAL(7,2) NOT NULL,
+  protein_g DECIMAL(6,2) NOT NULL,
+  carbs_g DECIMAL(6,2) NOT NULL,
+  fat_g DECIMAL(6,2) NOT NULL,
+  date_key VARCHAR(10) NOT NULL,
+  logged_at BIGINT NOT NULL,
+  CONSTRAINT fk_foodlogs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_foodlogs_meal FOREIGN KEY (meal_id) REFERENCES meals(id) ON DELETE SET NULL,
+  INDEX idx_foodlogs_user_date (user_id, date_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- A shared (not per-user) cache of normalized Open Food Facts products — Level 5/6 of the food
+-- database priority (see NUTRITION.md section 34). Never queried by the client directly: the
+-- client only ever hits GymCrew's own foods (bundled + custom, client-side — see
+-- src/data/nutrition-foods.ts) first, and this cache/Open Food Facts second, via
+-- backend/routes/nutrition-off.php. Caching here (rather than re-querying OFF on every search)
+-- is what keeps the app fast and within OFF's rate limits, per that section's explicit warning
+-- against uncontrolled search-as-you-type against the live API. `raw_json` keeps the untouched OFF
+-- response around for future re-normalization without a second network call.
+CREATE TABLE IF NOT EXISTS off_products_cache (
+  barcode VARCHAR(64) NOT NULL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  brand VARCHAR(255) NULL,
+  serving_size DECIMAL(8,2) NOT NULL DEFAULT 100,
+  serving_unit VARCHAR(16) NOT NULL DEFAULT 'g',
+  calories DECIMAL(7,2) NOT NULL DEFAULT 0,
+  protein_g DECIMAL(6,2) NOT NULL DEFAULT 0,
+  carbs_g DECIMAL(6,2) NOT NULL DEFAULT 0,
+  fat_g DECIMAL(6,2) NOT NULL DEFAULT 0,
+  fiber_g DECIMAL(6,2) NULL,
+  sugar_g DECIMAL(6,2) NULL,
+  saturated_fat_g DECIMAL(6,2) NULL,
+  sodium_mg DECIMAL(7,2) NULL,
+  photo_url VARCHAR(512) NULL,
+  raw_json JSON NULL,
+  fetched_at BIGINT NOT NULL,
+  INDEX idx_offcache_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Upgrades a database created before `photo_url` existed on `off_products_cache` — see the
+-- `username` upgrade note above `users` for why this is needed alongside CREATE TABLE IF NOT
+-- EXISTS, and why it's safe to keep re-running this whole file.
+ALTER TABLE off_products_cache ADD COLUMN IF NOT EXISTS photo_url VARCHAR(512) NULL AFTER sodium_mg;
+
 -- Dedicated table for personal level/rank — pulled out of the generic user_state blob below
 -- specifically so it's directly visible/queryable in phpMyAdmin (not hidden inside a JSON blob).
 -- Written/read by backend/routes/profile_level.php via GET/PUT /profile-level.
@@ -367,6 +455,11 @@ CREATE TABLE IF NOT EXISTS crew_live_sessions (
 --                          subset that's also broken out into columns on `users` above)
 --   'challenges'        — store/challenge-store.ts     (weekly + custom Battle challenge progress)
 --   'crew-league'       — store/crew-league-store.ts   (weekly league standings history)
+--   'custom-foods'      — store/custom-foods-store.ts  (user-created foods, same pattern as
+--                          'custom-exercises' above)
+--   'favorite-foods'    — store/favorite-foods-store.ts (starred food ids, same pattern as
+--                          'favorite-exercises' above)
+--   'nutrition-targets' — store/nutrition-targets-store.ts (daily calorie/macro targets + goal)
 --
 -- IMPORTANT about the last two: same "per-account own view, not yet genuinely shared" caveat that
 -- used to apply to crew (and to live-workout sessions) too — see crews/crew_members above, and

@@ -27,10 +27,15 @@ import { useCrewLeagueStore } from "@/store/crew-league-store";
 import { useCrewStore } from "@/store/crew-store";
 import { useCurrencyStore } from "@/store/currency-store";
 import { useCustomExercisesStore } from "@/store/custom-exercises-store";
+import { useCustomFoodsStore } from "@/store/custom-foods-store";
 import { useCustomWorkoutsStore } from "@/store/custom-workouts-store";
 import { useFavoriteExercisesStore } from "@/store/favorite-exercises-store";
+import { useFavoriteFoodsStore } from "@/store/favorite-foods-store";
 import { useGoalsStore } from "@/store/goals-store";
 import { useNotificationsStore } from "@/store/notifications-store";
+import { useNutritionLogStore } from "@/store/nutrition-log-store";
+import { useNutritionMealsStore } from "@/store/nutrition-meals-store";
+import { useNutritionTargetsStore } from "@/store/nutrition-targets-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
@@ -165,6 +170,11 @@ export default function TabsLayout() {
         useChallengeStore.getState().syncFromServer(),
         useCrewLeagueStore.getState().syncFromServer(),
         useWorkoutSplitStore.getState().syncFromServer(),
+        useCustomFoodsStore.getState().syncFromServer(),
+        useFavoriteFoodsStore.getState().syncFromServer(),
+        useNutritionTargetsStore.getState().syncFromServer(),
+        useNutritionMealsStore.getState().syncFromServer(),
+        useNutritionLogStore.getState().syncFromServer(),
       ]);
       if (cancelled) return;
 

@@ -7,6 +7,7 @@ import { BiggestOpportunityCard } from "@/components/BiggestOpportunityCard";
 import { CrewCard } from "@/components/CrewCard";
 import { CrewWarWidget } from "@/components/CrewWarWidget";
 import { GoalsWidget } from "@/components/GoalsWidget";
+import { HomeNutritionWidget } from "@/components/HomeNutritionWidget";
 import { LastWorkoutWidget } from "@/components/LastWorkoutWidget";
 import { MuscleSuggestions } from "@/components/MuscleSuggestions";
 import { VisualTrainingCalendar } from "@/components/VisualTrainingCalendar";
@@ -56,6 +57,7 @@ export default function HomeScreen() {
       <MuscleSuggestions sessions={sessions} />
       <BiggestOpportunityCard />
       <LastWorkoutWidget sessions={sessions} />
+      <HomeNutritionWidget />
       <GoalsWidget sessions={sessions} />
       <CrewCard />
     </ScrollView>

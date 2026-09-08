@@ -1,6 +1,8 @@
 import { getClerkInstance } from "@clerk/expo";
 
 import type { ChallengeMetric } from "@/data/challenges";
+import type { Food } from "@/data/nutrition-foods";
+import type { MealSlot } from "@/lib/meal-slot";
 import type { LoggedExercise } from "@/store/active-workout-store";
 import type { BodyLogEntry } from "@/store/body-log-store";
 import type { PersonalRecord } from "@/store/personal-records-store";
@@ -256,6 +258,54 @@ export type AdminChallengeInput = {
   isSummerChallenge?: boolean;
 };
 
+/** A meal/shake ingredient — a `Food` snapshot (see data/nutrition-foods.ts) plus how much of it,
+ * so `scaleMacros(item, item.quantity)` (lib/nutrition-macros.ts) always gives that item's current
+ * contribution without needing the source food to still exist. */
+export type MealItem = Food & { quantity: number };
+
+export type MealKind = "meal" | "shake";
+
+export type ApiMeal = {
+  id: string;
+  kind: MealKind;
+  name: string;
+  description: string;
+  items: MealItem[];
+  totalCalories: number;
+  totalProteinG: number;
+  totalCarbsG: number;
+  totalFatG: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type SaveMealInput = Omit<ApiMeal, "id" | "createdAt" | "updatedAt"> & { id?: string };
+
+export type ApiFoodLog = {
+  id: string;
+  foodId: string | null;
+  mealId: string | null;
+  name: string;
+  mealSlot: MealSlot;
+  quantity: number;
+  unit: string;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  dateKey: string;
+  loggedAt: number;
+};
+
+export type CreateFoodLogInput = Omit<ApiFoodLog, "loggedAt"> & { loggedAt?: number };
+
+export type OffBarcodeLookupResponse = { found: false } | { found: true; food: Food };
+
+/** `hasMore` reflects Open Food Facts' own result count for the term, not just "did this page come
+ * back full" — see backend/routes/nutrition-off.php's handleOffSearch. Lets the client offer a real
+ * "load more" instead of guessing when a term's matches run out. */
+export type OffSearchResponse = { results: Food[]; hasMore: boolean; page: number };
+
 export const api = {
   getProfile: () => request<ApiProfile>("/profile"),
   updateProfile: (data: Partial<Omit<ApiProfile, "id">>) => request<ApiProfile>("/profile", { method: "PUT", body: data }),
@@ -361,4 +411,35 @@ export const api = {
   updateAdminChallenge: (id: string, data: Partial<AdminChallengeInput>) =>
     request<ApiAdminChallenge>(`/admin-challenges/${id}`, { method: "PUT", body: data }),
   deleteAdminChallenge: (id: string) => request<{ ok: true }>(`/admin-challenges/${id}`, { method: "DELETE" }),
+
+  /** Saved meals & shakes (see backend/routes/nutrition-meals.php) — `kind` is the only thing that
+   * tells them apart server-side. */
+  getNutritionMeals: () => request<ApiMeal[]>("/nutrition-meals"),
+  createNutritionMeal: (data: SaveMealInput) => request<ApiMeal>("/nutrition-meals", { method: "POST", body: data }),
+  updateNutritionMeal: (id: string, data: SaveMealInput) => request<ApiMeal>(`/nutrition-meals/${id}`, { method: "PUT", body: data }),
+  deleteNutritionMeal: (id: string) => request<{ ok: true }>(`/nutrition-meals/${id}`, { method: "DELETE" }),
+
+  /** The daily food log (see backend/routes/nutrition-logs.php). */
+  getFoodLogsByDate: (dateKey: string) => request<ApiFoodLog[]>(`/nutrition-logs?date=${encodeURIComponent(dateKey)}`),
+  getFoodLogsByRange: (startKey: string, endKey: string) =>
+    request<ApiFoodLog[]>(`/nutrition-logs?start=${encodeURIComponent(startKey)}&end=${encodeURIComponent(endKey)}`),
+  addFoodLog: (data: CreateFoodLogInput) => request<ApiFoodLog>("/nutrition-logs", { method: "POST", body: data }),
+  removeFoodLog: (id: string) => request<{ ok: true }>(`/nutrition-logs/${id}`, { method: "DELETE" }),
+  /** Duplicates every entry from `fromDateKey` onto `toDateKey` server-side (see NUTRITION.md
+   * section 32's "Copy Yesterday") — returns the newly created rows. */
+  copyFoodLogDay: (fromDateKey: string, toDateKey: string) =>
+    request<ApiFoodLog[]>("/nutrition-logs/copy-day", { method: "POST", body: { fromDateKey, toDateKey } }),
+
+  /** Open Food Facts, proxied and cached server-side (see backend/routes/nutrition-off.php) — the
+   * client never calls Open Food Facts directly. `found: false` is a normal, non-error outcome for
+   * a barcode OFF doesn't have (see NUTRITION.md section 12). */
+  lookupBarcode: (barcode: string) => request<OffBarcodeLookupResponse>(`/nutrition-off/barcode/${encodeURIComponent(barcode)}`),
+  searchOpenFoodFacts: (query: string, page = 1) =>
+    request<OffSearchResponse>(`/nutrition-off/search?q=${encodeURIComponent(query)}&page=${page}`),
+
+  /** Uploads a photo for one of the user's own custom foods (see backend/routes/nutrition-food-photo.php)
+   * — same base64-upload pattern as `uploadCrewIcon`. Returns a public URL the client stores directly
+   * on that Food record's `photoUrl`. */
+  uploadFoodPhoto: (imageBase64: string, contentType: string) =>
+    request<{ url: string }>("/nutrition-food-photo", { method: "POST", body: { imageBase64, contentType } }),
 };

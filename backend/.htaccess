@@ -14,3 +14,9 @@ RewriteRule ^ index.php [QSA,L]
 <FilesMatch "^\.env">
   Require all denied
 </FilesMatch>
+
+# scripts/ holds maintenance scripts meant to run via cron (CLI), never over HTTP — off-preload.php
+# already refuses to run outside php_sapi_name() === 'cli' on its own, this is defense in depth.
+<IfModule mod_alias.c>
+  RedirectMatch 403 ^/scripts/
+</IfModule>

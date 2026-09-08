@@ -15,6 +15,10 @@ require_once __DIR__ . '/routes/crew-live-sessions.php';
 require_once __DIR__ . '/routes/crew-activity-events.php';
 require_once __DIR__ . '/routes/crew-duels.php';
 require_once __DIR__ . '/routes/admin-challenges.php';
+require_once __DIR__ . '/routes/nutrition-meals.php';
+require_once __DIR__ . '/routes/nutrition-logs.php';
+require_once __DIR__ . '/routes/nutrition-off.php';
+require_once __DIR__ . '/routes/nutrition-food-photo.php';
 require_once __DIR__ . '/routes/state.php';
 require_once __DIR__ . '/routes/waitlist.php';
 require_once __DIR__ . '/routes/athlete-signup.php';
@@ -182,6 +186,18 @@ switch ($resource) {
         break;
     case 'admin-challenges':
         handleAdminChallenges($pdo, $userId, $method, $body, $segments);
+        break;
+    case 'nutrition-meals':
+        handleNutritionMeals($pdo, $userId, $method, $body, $resourceId);
+        break;
+    case 'nutrition-logs':
+        handleNutritionLogs($pdo, $userId, $method, $body, $segments);
+        break;
+    case 'nutrition-off':
+        handleNutritionOff($pdo, $method, $segments);
+        break;
+    case 'nutrition-food-photo':
+        handleNutritionFoodPhoto($pdo, $userId, $method, $body);
         break;
     case 'state':
         handleState($pdo, $userId, $method, $body, $resourceId);

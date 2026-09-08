@@ -90,6 +90,38 @@ To test with a real token, sign into the app, and temporarily log `await getToke
 curl -i https://api.yourdomain.com/profile -H "Authorization: Bearer <token>"
 ```
 
+## 7. Nutrition: preload the Open Food Facts cache (recommended)
+
+The food search in the app checks `off_products_cache` (a local MySQL table) before ever calling
+Open Food Facts live — but that table starts out empty, so the *first* time anyone searches
+"chicken" or "banana", the app has to wait on a live Open Food Facts request (which can be slow).
+`scripts/off-preload.php` fixes this by running ~90 common food search terms (English + Dutch)
+against Open Food Facts once and caching every result, so common searches are answered straight
+from the database afterwards — no network round trip, near-instant.
+
+Set this up once as a scheduled Cron Job so it keeps the cache warm automatically:
+
+1. hPanel → **Advanced → Cron Jobs** → **Create a New Cron Job**.
+2. **Common Settings:** `Once Per Day` (pick a quiet hour, e.g. 4:00 AM).
+3. **Command:**
+   ```
+   php /home/<your-hostinger-username>/<path-to-this-folder>/scripts/off-preload.php
+   ```
+   (hPanel's File Manager shows the full server path if you're not sure — right-click
+   `off-preload.php` → "Copy path", or check the path shown at the top of File Manager.)
+4. Save. You can also click "Run Now" (or SSH in and run the command directly) to warm the cache
+   immediately instead of waiting for the first scheduled run.
+
+It's safe to re-run any time — every write is an upsert, never a duplicate. Takes a few minutes to
+run (it deliberately paces its requests to stay polite to Open Food Facts). The term list is a
+plain PHP array at the top of the script — add whatever your users search for often that isn't
+turning up instantly yet.
+
+This step is optional (the live-fallback in `handleOffSearch` means search still works without it),
+but strongly recommended — without it, most searches take that same "first search" hit every time
+for anyone, since a shared-hosting MySQL cache this small (a few thousand rows) doesn't survive
+without something keeping it fed.
+
 ## A note on testing
 
 This was written and reviewed carefully, but **not executed** — this sandbox has no PHP, MySQL, or

@@ -37,6 +37,15 @@ export default {
       ],
       "@clerk/expo",
       "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          cameraPermission: "GymCrew needs camera access to scan a barcode and add food to your log.",
+          // GymCrew only ever scans barcodes — no video/photo capture needs audio, so skip
+          // requesting the Android microphone permission entirely.
+          recordAudioAndroid: false,
+        },
+      ],
     ],
     experiments: {
       typedRoutes: true,
