@@ -1,6 +1,7 @@
 import { getClerkInstance } from "@clerk/expo";
 
 import type { ChallengeMetric } from "@/data/challenges";
+import type { LoggedExercise } from "@/store/active-workout-store";
 import type { BodyLogEntry } from "@/store/body-log-store";
 import type { PersonalRecord } from "@/store/personal-records-store";
 import type { CompletedWorkout } from "@/store/workout-history-store";
@@ -160,6 +161,18 @@ export type ApiCrewMemberActivity = {
 
 export type ApiWarContributor = { userId: string; name: string; volumeKg: number };
 
+/** One logged workout during an active War, real or bot — see backend/routes/crew-wars.php's
+ * crew_war_attacks. This is the attack feed CrewWarTab renders, not just a running total. */
+export type ApiWarAttack = {
+  attackerName: string;
+  workoutName: string | null;
+  volumeKg: number;
+  prCount: number;
+  score: number;
+  attackedAt: number;
+  isMine: boolean;
+};
+
 export type ApiCrewWar = {
   id: string;
   status: "active" | "completed";
@@ -171,9 +184,23 @@ export type ApiCrewWar = {
   won: boolean | null;
   opponent: { id: string; name: string; icon: string; division: string };
   topContributors: ApiWarContributor[];
+  recentAttacks: ApiWarAttack[];
 };
 
-export type ApiActiveWarResponse = { war: ApiCrewWar | null; queued: boolean };
+export type ApiActiveWarResponse = { war: ApiCrewWar };
+
+/** A crew's real, currently-in-progress workout (see backend/routes/crew-live-sessions.php) — the
+ * leader's own `active-workout-store` exercises, pushed here as they log, not chosen up front. */
+export type ApiCrewLiveSession = {
+  id: string;
+  leaderId: string;
+  leaderName: string;
+  workoutName: string;
+  exercises: LoggedExercise[];
+  participantIds: string[];
+  startedAt: number;
+  updatedAt: number;
+};
 
 export type CrewActivityEventType = "pr" | "streak" | "long_session" | "division_up";
 
@@ -264,6 +291,10 @@ export const api = {
    * to `null` when nothing's been saved under that key yet. */
   getState: <T>(key: string) => request<T | null>(`/state/${key}`),
   setState: (key: string, data: unknown) => request<{ ok: true }>(`/state/${key}`, { method: "PUT", body: data }),
+  /** Same as `getState`, but for every key at once — see backend/routes/state.php's
+   * handleStateBatch. Used by `pullState` to collapse the ~15 separate sign-in syncs into one
+   * request instead of one per store. */
+  getStates: (keys: string[]) => request<Record<string, unknown>>(`/state-batch?keys=${keys.map(encodeURIComponent).join(",")}`),
 
   getProfileLevel: () => request<ApiProfileLevel | null>("/profile-level"),
   updateProfileLevel: (data: ApiProfileLevel) => request<{ ok: true }>("/profile-level", { method: "PUT", body: data }),
@@ -274,19 +305,39 @@ export const api = {
   createCrew: (data: CreateCrewInput) => request<ApiCrew>("/crews", { method: "POST", body: data }),
   joinCrewByCode: (inviteCode: string) => request<ApiCrew>("/crews/join", { method: "POST", body: { inviteCode } }),
   updateCrew: (crewId: string, data: UpdateCrewInput) => request<ApiCrew>(`/crews/${crewId}`, { method: "PUT", body: data }),
+  /** Uploads a real photo as the crew's icon (leader/co-leader only) — see
+   * backend/routes/crews.php's uploadCrewIcon. Saved server-side and returned as a public URL,
+   * which is then just another value for the `icon` field, same as a preset key or DiceBear URL. */
+  uploadCrewIcon: (crewId: string, imageBase64: string, contentType: string) =>
+    request<{ icon: string }>(`/crews/${crewId}/icon`, { method: "POST", body: { imageBase64, contentType } }),
   leaveCrewApi: (crewId: string) => request<{ ok: true }>(`/crews/${crewId}/leave`, { method: "POST" }),
   kickCrewMember: (crewId: string, memberId: string) =>
     request<{ ok: true }>(`/crews/${crewId}/members/${memberId}`, { method: "DELETE" }),
   /** Every crewmate's real recent workouts/PRs/profile — see backend/routes/crews.php. */
   getCrewActivity: (crewId: string) => request<{ members: Record<string, ApiCrewMemberActivity> }>(`/crews/${crewId}/activity`),
 
-  /** Real crew-vs-crew Wars via automatic matchmaking (see backend/routes/crew-wars.php) — unlike
-   * the old "Challenge Another Crew" flow, the opponent here is a genuine other crew. */
+  /** Real crew-vs-crew Wars (see backend/routes/crew-wars.php) — a crew is never without an active
+   * one; `getActiveWar` auto-starts one server-side (real matchmaking if a crew's waiting, else an
+   * immediate same-division bot crew — a real row either way, not computed client-side) the moment
+   * there isn't one already. */
   getActiveWar: () => request<ApiActiveWarResponse>("/crew-wars/active"),
-  queueForWar: () => request<{ status: "queued" | "matched"; war?: ApiCrewWar }>("/crew-wars/queue", { method: "POST" }),
-  leaveWarQueue: () => request<{ ok: true }>("/crew-wars/queue", { method: "DELETE" }),
-  contributeToWar: (volumeKg: number) =>
-    request<{ ok: true; contributed: boolean }>("/crew-wars/contribute", { method: "POST", body: { volumeKg } }),
+  /** One logged workout = one attack. Called right after a workout finishes. */
+  attackInWar: (volumeKg: number, prCount: number, workoutName: string) =>
+    request<{ ok: true; attacked: boolean; score?: number }>("/crew-wars/attack", {
+      method: "POST",
+      body: { volumeKg, prCount, workoutName },
+    }),
+
+  /** Real, crew-shared "someone's currently training" state (see backend/routes/crew-live-sessions.php)
+   * — replaces the old hardcoded `led-workout` mock. No pre-planning: `startLiveSession` is called the
+   * moment the leader starts their own workout, and `updateLiveSessionExercises` mirrors it as they log. */
+  getActiveLiveSession: () => request<{ session: ApiCrewLiveSession | null }>("/crew-live-sessions/active"),
+  startLiveSession: (workoutName: string, exercises: LoggedExercise[]) =>
+    request<{ session: ApiCrewLiveSession }>("/crew-live-sessions", { method: "POST", body: { workoutName, exercises } }),
+  updateLiveSessionExercises: (exercises: LoggedExercise[]) =>
+    request<{ ok: true }>("/crew-live-sessions/exercises", { method: "PUT", body: { exercises } }),
+  joinLiveSession: () => request<{ session: ApiCrewLiveSession }>("/crew-live-sessions/join", { method: "POST" }),
+  endLiveSession: () => request<{ ok: true }>("/crew-live-sessions/end", { method: "POST" }),
 
   /** The crew-internal motivation feed (see backend/routes/crew-activity-events.php) — real
    * timestamped crewmate moments (PRs, streaks, long sessions, division ups), not fabricated. */

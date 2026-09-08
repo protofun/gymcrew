@@ -140,21 +140,6 @@ export function WorkoutLogger({
               )
             )}
 
-            <View className="flex-row items-center gap-3 px-2.5">
-              <View className="w-8" />
-              <View className="flex-1 flex-row items-center justify-center gap-1">
-                <Ionicons name="barbell-outline" size={12} color={colors.neutral.textSecondary} />
-                <Text className="caption text-text-secondary">{unit.toUpperCase()}</Text>
-              </View>
-              <View className="flex-1 flex-row items-center justify-center gap-1">
-                <Ionicons name="repeat-outline" size={12} color={colors.neutral.textSecondary} />
-                <Text className="caption text-text-secondary">REPS</Text>
-              </View>
-              <View className="w-9 items-center">
-                <Ionicons name="checkmark-circle-outline" size={14} color={colors.neutral.textSecondary} />
-              </View>
-            </View>
-
             <View className="gap-2.5">
               {exercise.sets.map((set, index) => (
                 <ExerciseSetRow
@@ -168,10 +153,6 @@ export function WorkoutLogger({
                 />
               ))}
             </View>
-
-            <Text className="caption -mt-1 px-2.5 text-text-secondary">
-              Tap a set number to mark it as warm-up · tap ⊗ to remove a set
-            </Text>
 
             <Pressable
               onPress={onAddSet}

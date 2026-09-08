@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState, type ReactNode } from "react";
-import { FlatList, Image, Modal, Pressable, Text, TextInput, View } from "react-native";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { FlatList, Image, Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CreateExerciseForm } from "@/components/CreateExerciseForm";
@@ -44,15 +44,17 @@ function ExerciseRow({
       className="flex-row items-center gap-3 border-b border-divider px-4 py-3"
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
     >
-      {renderLeading ? (
-        renderLeading(exercise)
-      ) : exercise.imageUrl ? (
-        <Image source={{ uri: exercise.imageUrl }} className="h-11 w-11 rounded-xl bg-surface" />
-      ) : (
-        <View className="h-11 w-11 items-center justify-center rounded-xl bg-surface">
-          <Ionicons name="barbell-outline" size={18} color={colors.neutral.textSecondary} />
-        </View>
-      )}
+      <View className="h-11 w-11 items-center justify-center">
+        {renderLeading ? (
+          renderLeading(exercise)
+        ) : exercise.imageUrl ? (
+          <Image source={{ uri: exercise.imageUrl }} className="h-11 w-11 rounded-xl bg-surface" />
+        ) : (
+          <View className="h-11 w-11 items-center justify-center rounded-xl bg-surface">
+            <Ionicons name="barbell-outline" size={18} color={colors.neutral.textSecondary} />
+          </View>
+        )}
+      </View>
       <View className="flex-1 gap-0.5">
         <Text className="body-md font-body-semibold text-text-primary" numberOfLines={1}>
           {exercise.name}
@@ -62,13 +64,12 @@ function ExerciseRow({
           {exercise.equipment ? ` • ${formatMuscleName(exercise.equipment)}` : ""}
         </Text>
       </View>
-      <Pressable onPress={onToggleFavorite} hitSlop={8} className="p-1">
+      <Pressable onPress={onToggleFavorite} hitSlop={8} className="h-9 w-9 shrink-0 items-center justify-center">
         <Ionicons name={isFavorite ? "star" : "star-outline"} size={20} color={isFavorite ? colors.brand.yellow : colors.neutral.textSecondary} />
       </Pressable>
-      <Pressable onPress={onInfoPress} hitSlop={8} className="p-1">
+      <Pressable onPress={onInfoPress} hitSlop={8} className="h-9 w-9 shrink-0 items-center justify-center">
         <Ionicons name="information-circle-outline" size={22} color={colors.neutral.textSecondary} />
       </Pressable>
-      <Ionicons name="chevron-forward" size={18} color={colors.neutral.textSecondary} />
     </Pressable>
   );
 }
@@ -107,6 +108,22 @@ export function ExercisePickerModal({
   const addCustomExercise = useCustomExercisesStore((state) => state.addExercise);
   const favoriteIds = useFavoriteExercisesStore((state) => state.favoriteIds);
   const toggleFavorite = useFavoriteExercisesStore((state) => state.toggleFavorite);
+
+  // Web only: react-native-web's Modal is just a `position: fixed` overlay — it never stops the
+  // screen underneath from scrolling. Fast/momentum scrolling inside this list can leak past its
+  // own edges into the workout screen behind it, which (with only a couple of exercises logged) is
+  // short enough to hit its own bottom almost immediately — looking exactly like the whole app
+  // "jumped down and froze" while you were still mid-scroll in here. Locking body scroll while this
+  // modal is open removes that path entirely. No effect on native, where Modal already isolates
+  // touch/scroll from the screen behind it.
+  useEffect(() => {
+    if (Platform.OS !== "web" || !visible) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [visible]);
 
   const results = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
@@ -170,11 +187,12 @@ export function ExercisePickerModal({
                 placeholderTextColor={colors.neutral.textSecondary}
                 autoCorrect={false}
                 className="body-md flex-1 text-text-primary"
+                style={{ minWidth: 0 }}
               />
               <Pressable
                 onPress={() => setFavoritesOnly((current) => !current)}
                 hitSlop={8}
-                className={`flex-row items-center gap-1 rounded-full px-2.5 py-1 ${favoritesOnly ? "bg-brand-yellow" : "border border-divider"}`}
+                className={`shrink-0 flex-row items-center gap-1 rounded-full px-2.5 py-1 ${favoritesOnly ? "bg-brand-yellow" : "border border-divider"}`}
               >
                 <Ionicons name={favoritesOnly ? "star" : "star-outline"} size={13} color={favoritesOnly ? colors.brand.iron : colors.neutral.textSecondary} />
                 <Text className={`caption font-body-semibold ${favoritesOnly ? "text-brand-iron" : "text-text-secondary"}`}>Favorites</Text>

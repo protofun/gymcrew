@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { RankBadge } from "@/components/RankBadge";
 import { RestTimerBanner } from "@/components/RestTimerBanner";
@@ -22,11 +23,16 @@ import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { useCrewFeedStore } from "@/store/crew-feed-store";
 import { useCrewWarStore } from "@/store/crew-war-store";
 import { TOKENS_PER_PR, TOKENS_PER_WORKOUT, useCurrencyStore } from "@/store/currency-store";
+import { useLedWorkoutStore } from "@/store/led-workout-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors } from "@/theme";
+
+/** How long to wait after the last edit before pushing to the crew's shared live session — logging
+ * a set is many quick edits in a row (weight, then reps, then complete), no need to push every one. */
+const CREW_LIVE_SESSION_PUSH_DEBOUNCE_MS = 2000;
 
 /** Streak lengths worth a crew-feed nudge — only fires the moment one is first crossed, not on
  * every workout past it (see handleFinish's streakBefore/streakAfter comparison). */
@@ -36,9 +42,17 @@ const LONG_SESSION_MINUTES = 75;
 
 export default function ActiveWorkoutScreen() {
   const insets = useSafeAreaInsets();
+  const { leadingCrew } = useLocalSearchParams<{ leadingCrew?: string }>();
+  const isLeadingCrew = leadingCrew === "1";
   const [pickerVisible, setPickerVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [replacingExerciseId, setReplacingExerciseId] = useState<string | null>(null);
+  // Measured, not guessed — the footer's real height changes when the rest timer banner appears
+  // (see RestTimerBanner), and a fixed padding sized for the button alone left the rest-timer case
+  // undersized, leaving the last set row's controls (e.g. the remove-set ⊗) sitting underneath the
+  // footer's touch area, unpressable. 170 is just the pre-measurement fallback for the first frame.
+  const [footerHeight, setFooterHeight] = useState(170);
+  const [pendingDiscardAction, setPendingDiscardAction] = useState<(() => void) | null>(null);
   // Lazy init from the store directly (not the `exercises` selector below, which isn't declared
   // yet) — if the workout arrived pre-populated (e.g. started from a template), the first exercise
   // starts expanded instead of everything being collapsed with nothing marked as active.
@@ -69,9 +83,25 @@ export default function ActiveWorkoutScreen() {
   const discardWorkout = useActiveWorkoutStore((state) => state.discardWorkout);
   const finishWorkout = useActiveWorkoutStore((state) => state.finishWorkout);
 
+  const pushLiveSessionExercises = useLedWorkoutStore((state) => state.pushExercises);
+  const endLiveSession = useLedWorkoutStore((state) => state.endSession);
+
   const elapsedSeconds = useElapsedTimer(startedAt);
   const hasProgress = exercises.length > 0;
   const posthog = usePostHog();
+
+  // Mirrors whatever the leader actually logs to the crew's shared live session, debounced — see
+  // led-workout-store.ts. No-op (via pushExercises' own guard) once the session's ended, and for
+  // every joiner who isn't leading.
+  const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!isLeadingCrew) return;
+    if (pushTimer.current) clearTimeout(pushTimer.current);
+    pushTimer.current = setTimeout(() => pushLiveSessionExercises(exercises), CREW_LIVE_SESSION_PUSH_DEBOUNCE_MS);
+    return () => {
+      if (pushTimer.current) clearTimeout(pushTimer.current);
+    };
+  }, [isLeadingCrew, exercises, pushLiveSessionExercises]);
 
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
@@ -126,10 +156,12 @@ export default function ActiveWorkoutScreen() {
     currency.grantTokens(TOKENS_PER_WORKOUT + prs.length * TOKENS_PER_PR);
     if (currency.xpBoostActive) currency.consumeXpBoost();
 
-    // Real crew-vs-crew War contribution + the crew-internal motivation feed — all best-effort,
-    // no-ops if there's no crew or no active War (see crew-war-store.ts / crew-feed-store.ts).
+    // Real crew-vs-crew War attack + the crew-internal motivation feed — all best-effort, no-ops
+    // without a crew (see crew-war-store.ts / crew-feed-store.ts). Fire-and-forget: finishing a
+    // workout shouldn't wait on a network round trip — see lib/war.ts for the instant preview shown
+    // on the summary screen right after this.
     const crewFeed = useCrewFeedStore.getState();
-    useCrewWarStore.getState().recordContribution(volumeKg);
+    useCrewWarStore.getState().attack(volumeKg, prs.length, name.trim() || "Workout");
     for (const pr of prs) {
       crewFeed.logEvent("pr", { exerciseName: pr.exerciseName, weightKg: pr.weightKg, reps: pr.reps });
     }
@@ -141,6 +173,7 @@ export default function ActiveWorkoutScreen() {
       crewFeed.logEvent("long_session", { durationMinutes: Math.round(elapsedSeconds / 60), workoutName: name.trim() || "Workout" });
     }
 
+    if (isLeadingCrew) endLiveSession();
     finishWorkout();
     // PR or not, this always lands on the results screen — `workout/complete` no longer exists as
     // its own stop; `justFinished` tells the results screen to show its "just finished" hero.
@@ -151,15 +184,16 @@ export default function ActiveWorkoutScreen() {
     }
   }
 
+  // `Alert.alert` with multiple buttons never shows a dialog on React Native Web (see
+  // ConfirmModal's own doc comment) — on the PWA this made the close button silently do nothing
+  // the moment there was progress to discard, since that's exactly the path that used to call
+  // Alert.alert. ConfirmModal is the cross-platform replacement.
   function confirmDiscard(onConfirm: () => void) {
     if (!hasProgress) {
       onConfirm();
       return;
     }
-    Alert.alert("Discard this workout?", "Everything you've logged so far will be lost. This can't be undone.", [
-      { text: "Keep Going", style: "cancel" },
-      { text: "Discard", style: "destructive", onPress: onConfirm },
-    ]);
+    setPendingDiscardAction(() => onConfirm);
   }
 
   function handleClose() {
@@ -169,14 +203,21 @@ export default function ActiveWorkoutScreen() {
         duration_seconds: elapsedSeconds,
         source: "close_button",
       });
+      if (isLeadingCrew) endLiveSession();
       discardWorkout();
-      router.back();
+      // `router.back()` alone silently does nothing without real navigation history — e.g. a hard
+      // refresh on the web/PWA build while already on this screen resets it, leaving "Discard"
+      // looking like it does nothing (the workout IS reset underneath, just stuck on this screen).
+      // Same fix as the workout-split screen's back button.
+      if (router.canGoBack()) router.back();
+      else router.replace("/log");
     });
   }
 
   function handleDiscardFromSettings() {
     setSettingsVisible(false);
     confirmDiscard(() => {
+      if (isLeadingCrew) endLiveSession();
       posthog.capture("workout_discarded", {
         exercise_count: exercises.length,
         duration_seconds: elapsedSeconds,
@@ -217,7 +258,7 @@ export default function ActiveWorkoutScreen() {
           as the TextInput textAlign crash: works on web, silently drops or conflicts on native). */}
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ gap: 20, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 170 }}
+        contentContainerStyle={{ gap: 20, paddingHorizontal: 16, paddingTop: 20, paddingBottom: footerHeight + 20 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -247,7 +288,10 @@ export default function ActiveWorkoutScreen() {
         )}
       </ScrollView>
 
-      <View style={{ position: "absolute", left: 16, right: 16, bottom: insets.bottom + 12 }}>
+      <View
+        style={{ position: "absolute", left: 16, right: 16, bottom: insets.bottom + 12 }}
+        onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height + insets.bottom + 12)}
+      >
         <RestTimerBanner
           restEndTime={restEndTime}
           restDurationSeconds={restDurationSeconds}
@@ -305,6 +349,20 @@ export default function ActiveWorkoutScreen() {
         autoFillPreviousSet={autoFillPreviousSet}
         onChangeAutoFillPreviousSet={setAutoFillPreviousSet}
         onDiscard={handleDiscardFromSettings}
+      />
+
+      <ConfirmModal
+        visible={pendingDiscardAction !== null}
+        title="Discard this workout?"
+        message="Everything you've logged so far will be lost. This can't be undone."
+        confirmLabel="Discard"
+        destructive
+        onConfirm={() => {
+          const action = pendingDiscardAction;
+          setPendingDiscardAction(null);
+          action?.();
+        }}
+        onCancel={() => setPendingDiscardAction(null)}
       />
     </View>
   );

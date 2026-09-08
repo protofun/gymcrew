@@ -15,7 +15,7 @@ type EditableTextProps = {
 
 /**
  * Drop-in replacement for <Text> that becomes tap-to-edit when Developer Mode is on (see
- * profile/account.tsx, gated to DEVELOPER_MODE_USER_ID) — for temporarily overriding copy/numbers
+ * profile/account.tsx, gated to DEVELOPER_MODE_EMAILS) — for temporarily overriding copy/numbers
  * shown on screen when recording demo content. Overrides are local-only (AsyncStorage), never sent
  * to the backend, and never affect real app data. Outside Developer Mode this renders exactly like
  * a plain <Text>.

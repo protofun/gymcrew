@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Image, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Modal, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -12,14 +12,17 @@ import { RankBadge } from "@/components/RankBadge";
 import { muscleGroupImages } from "@/constants/images";
 import { ALL_MUSCLE_GROUPS, type MuscleGroup } from "@/data/workout-log";
 import { memberLiftCards, muscleGroupRanksForCrewMember } from "@/lib/crew-lift-compare";
-import { buildLiftRankCards } from "@/lib/lift-rank-cards";
+import { buildLiftRankCards, type LiftRankCard } from "@/lib/lift-rank-cards";
 import { computeMuscleGroupRanks, type MuscleGroupRank } from "@/lib/muscle-group-rank";
 import { formatMuscleLabel } from "@/lib/muscle-groups";
+import { formatReadyAt, formatRecoveryLabel, recoveryStatusForAllGroups } from "@/lib/muscle-recovery";
 import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile } from "@/lib/rank";
+import { rankForHypotheticalWeight, weeksNeededForGoal, weightNeededForTier } from "@/lib/rank-simulator";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { CURRENT_MEMBER_ID, useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
+import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
 
 // Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native when
@@ -34,18 +37,61 @@ const sectionHeaderStyle = {
 
 const PRESSED_STYLE = ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.85 : 1 });
 
+function MuscleRecoveryRow({ group, status }: { group: MuscleGroup; status: ReturnType<typeof recoveryStatusForAllGroups>[MuscleGroup] }) {
+  const dotColor = status.isRecovered ? colors.semantic.success : colors.semantic.warning;
+  return (
+    <View className="flex-row items-center gap-3 rounded-xl bg-background px-3 py-2.5">
+      <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: dotColor }} />
+      <Text className="body-sm flex-1 font-body-semibold text-text-primary">{formatMuscleLabel(group)}</Text>
+      <View className="items-end">
+        <Text className="caption font-body-semibold" style={{ color: dotColor }}>
+          {formatRecoveryLabel(status)}
+        </Text>
+        {status.readyAt !== null && !status.isRecovered && (
+          <Text className="caption text-text-secondary">{formatReadyAt(status.readyAt)}</Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Weeks to close this group's gap to its next tier — anchored on the real bestWeightKg of whichever
+ * contributing lift weighs most into its composite rank (see muscle-group-rank.ts's
+ * MUSCLE_GROUP_WEIGHTS), not a fabricated number. Reuses the exact same estimate machinery as the
+ * "What's My Rank" simulator (lib/rank-simulator.ts) — a directional estimate from the user's own
+ * historical pace, never promised as exact. `null` at the top tier already (nothing left to close).
+ */
+function estimateWeeksToNextTier(rank: Extract<MuscleGroupRank, { status: "ranked" }>, cards: LiftRankCard[], profile: RankProfile): number | null {
+  if (rank.tierIndex >= RANK_TIERS.length - 1) return null;
+  const topContributor = [...rank.contributingLifts].sort((a, b) => b.weight - a.weight)[0];
+  const card = topContributor ? cards.find((c) => c.id === topContributor.liftId) : undefined;
+  if (!card) return null;
+
+  const nextTierIndex = rank.tierIndex + 1;
+  const goalWeightKg = weightNeededForTier(nextTierIndex, (weightKg) => rankForHypotheticalWeight(card, weightKg, profile));
+  return weeksNeededForGoal(card.bestWeightKg, goalWeightKg) || null;
+}
+
 function GroupDetailSheet({
   group,
   rank,
   onClose,
   canLog,
+  myCards,
+  myProfile,
 }: {
   group: MuscleGroup | null;
   rank: MuscleGroupRank | null;
   onClose: () => void;
+  /** Also gates the "estimated journey" + "Build a plan" CTA below — both are about the current
+   * user's own next steps, so neither makes sense while viewing a crew member's body graph. */
   canLog: boolean;
+  myCards: LiftRankCard[];
+  myProfile: RankProfile;
 }) {
   const insets = useSafeAreaInsets();
+  const estimatedWeeks = group && rank?.status === "ranked" && canLog ? estimateWeeksToNextTier(rank, myCards, myProfile) : null;
 
   return (
     <Modal visible={group !== null} transparent animationType="fade" onRequestClose={onClose}>
@@ -90,6 +136,31 @@ function GroupDetailSheet({
                       </View>
                     ))}
                   </View>
+
+                  {canLog && rank.tierIndex < RANK_TIERS.length - 1 && (
+                    <>
+                      {estimatedWeeks != null && (
+                        <View className="flex-row items-start gap-2 rounded-xl bg-background p-3">
+                          <Ionicons name="hourglass-outline" size={15} color={colors.neutral.textSecondary} style={{ marginTop: 1 }} />
+                          <Text className="body-sm flex-1 text-text-secondary">
+                            Estimated {estimatedWeeks}-week journey to {formatRankTier(RANK_TIERS[rank.tierIndex + 1])} at a typical pace —
+                            actual progress varies.
+                          </Text>
+                        </View>
+                      )}
+                      <Pressable
+                        onPress={() => {
+                          onClose();
+                          router.push({ pathname: "/workout-split/setup", params: { muscle: group } });
+                        }}
+                        style={PRESSED_STYLE}
+                        className="flex-row items-center justify-center gap-2 rounded-full border border-brand-yellow py-3.5"
+                      >
+                        <Ionicons name="trending-up-outline" size={16} color={colors.brand.yellow} />
+                        <Text className="body-sm font-body-semibold text-brand-yellow">Build a plan for {formatMuscleLabel(group)}</Text>
+                      </Pressable>
+                    </>
+                  )}
                 </>
               ) : (
                 <>
@@ -141,6 +212,7 @@ function GroupDetailSheet({
 export default function MuscleRankScreen() {
   const insets = useSafeAreaInsets();
   const [selectedGroup, setSelectedGroup] = useState<MuscleGroup | null>(null);
+  const [showRecovery, setShowRecovery] = useState(false);
   const { memberId } = useLocalSearchParams<{ memberId?: string }>();
 
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
@@ -149,6 +221,8 @@ export default function MuscleRankScreen() {
   const records = usePersonalRecordsStore((state) => state.records);
   const crewMembers = useCrewStore((state) => state.members);
   const membersActivity = useCrewActivityStore((state) => state.membersActivity);
+  const workouts = useWorkoutHistoryStore((state) => state.workouts);
+  const recoveryByGroup = useMemo(() => recoveryStatusForAllGroups(workouts), [workouts]);
 
   const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
   const myCards = useMemo(() => buildLiftRankCards(records, profile, "gym"), [records, profile]);
@@ -233,6 +307,52 @@ export default function MuscleRankScreen() {
           </View>
         </Animated.View>
 
+        {!viewingOtherMember && (
+          <Animated.View
+            entering={FadeInUp.delay(50).springify().damping(16).mass(0.6)}
+            className="gap-3 rounded-2xl border border-divider bg-surface p-4"
+          >
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 pr-3">
+                <Text className="body-md font-body-semibold text-text-primary">Muscle Recovery</Text>
+                <Text className="caption text-text-secondary">Show real rest-time estimates per muscle group.</Text>
+              </View>
+              <Switch
+                value={showRecovery}
+                onValueChange={setShowRecovery}
+                trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
+                thumbColor={colors.brand.white}
+              />
+            </View>
+            {showRecovery && (
+              <View className="gap-2">
+                {ALL_MUSCLE_GROUPS.map((group) => (
+                  <MuscleRecoveryRow key={group} group={group} status={recoveryByGroup[group]} />
+                ))}
+              </View>
+            )}
+          </Animated.View>
+        )}
+
+        {!viewingOtherMember && (
+          <Animated.View entering={FadeInUp.delay(60).springify().damping(16).mass(0.6)}>
+            <Pressable
+              onPress={() => router.push("/workout-split/intro")}
+              style={PRESSED_STYLE}
+              className="flex-row items-center gap-3 rounded-2xl bg-brand-yellow px-4 py-4"
+            >
+              <View className="h-10 w-10 items-center justify-center rounded-full bg-brand-iron/10">
+                <Ionicons name="trending-up-outline" size={20} color={colors.brand.iron} />
+              </View>
+              <View className="flex-1">
+                <Text className="body-md font-body-semibold text-brand-iron">Build My Split</Text>
+                <Text className="body-sm text-brand-iron/70">Turn your rank gaps into your next training plan.</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.brand.iron} />
+            </Pressable>
+          </Animated.View>
+        )}
+
         <Animated.View entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)} className="gap-1">
           <Text style={sectionHeaderStyle} className="text-brand-white">
             MUSCLE GROUPS
@@ -260,7 +380,14 @@ export default function MuscleRankScreen() {
         </View>
       </ScrollView>
 
-      <GroupDetailSheet group={selectedGroup} rank={selectedRank} onClose={() => setSelectedGroup(null)} canLog={!viewingOtherMember} />
+      <GroupDetailSheet
+        group={selectedGroup}
+        rank={selectedRank}
+        onClose={() => setSelectedGroup(null)}
+        canLog={!viewingOtherMember}
+        myCards={myCards}
+        myProfile={profile}
+      />
     </View>
   );
 }

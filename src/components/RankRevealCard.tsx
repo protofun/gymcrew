@@ -81,14 +81,23 @@ export function RankRevealCard({ id, name, tier, weightKg, reps, unit, topPercen
         {headerRight}
       </View>
 
-      <EditableText id={`${id}.name`} style={exerciseNameStyle} className="text-text-primary" numberOfLines={1}>
+      {/* No `numberOfLines` here — same reason as the tier name below: on web it compiles to
+          `overflow: hidden` sized to the pre-skew box, which clips the tail of this skewed text
+          (e.g. "Seated Row" rendering as "Seated Ro") even when the name would've fit on one line
+          fine unskewed. A long exercise name just wraps to a second line instead, which this
+          centered column layout handles fine — better than silently truncating a real name. */}
+      <EditableText id={`${id}.name`} style={exerciseNameStyle} className="text-center text-text-primary">
         {name}
       </EditableText>
 
       <BadgeRevealFx tier={tier} triggerKey={triggerKey} size={MEDAL_SIZE} />
 
       <View className="items-center gap-1.5">
-        <EditableText id={`${id}.tier`} style={[tierNameStyle, { color: tint }]} numberOfLines={1}>
+        {/* No `numberOfLines` here — on web that compiles to `overflow: hidden` on the text node,
+            which clips the tail of the glyph run this skewed style paints (e.g. "TITAN" losing
+            half its "N"), since the transform is applied after RN measures the pre-skew box. Every
+            tier name is a single word, so there's no wrapping risk to guard against anyway. */}
+        <EditableText id={`${id}.tier`} style={[tierNameStyle, { color: tint }]}>
           {formatRankTier(tier).toUpperCase()}
         </EditableText>
         {topPercent != null && (

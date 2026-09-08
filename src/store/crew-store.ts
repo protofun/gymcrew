@@ -111,6 +111,10 @@ type CrewActions = {
    * name someone else already has) never shows as saved locally when it wasn't. */
   updateInfo: (updates: { name?: string; tagline?: string }) => Promise<ActionResult>;
   setIcon: (icon: string) => void;
+  /** Server-backed (leader/co-leader only) — uploads a real photo and awaits the server so a
+   * rejected/failed upload never shows as saved locally when it wasn't (unlike `setIcon`, which is
+   * local-first since a preset key or DiceBear URL can't fail to "exist"). */
+  uploadIcon: (imageBase64: string, contentType: string) => Promise<ActionResult>;
   setPrivacy: (privacy: CrewPrivacy) => void;
   toggleJoinRequests: () => void;
   setTrainingType: (trainingType: string) => void;
@@ -255,6 +259,17 @@ export const useCrewStore = create<CrewState & CrewActions>()(
         const crewId = get().id;
         set({ icon });
         if (crewId) api.updateCrew(crewId, { icon }).catch((error) => console.warn("Failed to sync crew icon to server", error));
+      },
+      uploadIcon: async (imageBase64, contentType) => {
+        const crewId = get().id;
+        if (!crewId) return { ok: false, error: "Not in a crew." };
+        try {
+          const { icon } = await api.uploadCrewIcon(crewId, imageBase64, contentType);
+          set({ icon });
+          return { ok: true };
+        } catch (error) {
+          return { ok: false, error: errorMessage(error) };
+        }
       },
       setPrivacy: (privacy) => {
         const crewId = get().id;

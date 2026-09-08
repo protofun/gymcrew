@@ -114,3 +114,14 @@ const MUSCLE_GROUP_SET = new Set<string>(ALL_MUSCLE_GROUPS);
 export function resolveMuscleGroup(name: string): MuscleGroup | null {
   return toMuscleGroup(name) ?? (MUSCLE_GROUP_SET.has(name) ? (name as MuscleGroup) : null);
 }
+
+/** Which silhouette (front vs back) best represents a training day's dominant muscles — for
+ * single-view heatmap badges (e.g. the workout-split day slots) that can't show both front and
+ * back at once. Weighted toward the groups each view is actually about (chest/abs → front,
+ * glutes/hamstrings/back → back) rather than summing every group the body-silhouette data happens
+ * to tag on both sides (e.g. a small "back" sliver is visible in the front artwork too). */
+export function preferredMuscleView(muscleIntensity: Partial<Record<MuscleGroup, number>>): "front" | "back" {
+  const backSignal = (muscleIntensity.back ?? 0) * 2 + (muscleIntensity.hamstrings ?? 0) + (muscleIntensity.glutes ?? 0);
+  const frontSignal = (muscleIntensity.chest ?? 0) * 2 + (muscleIntensity.abs ?? 0) + (muscleIntensity.quads ?? 0);
+  return backSignal > frontSignal ? "back" : "front";
+}

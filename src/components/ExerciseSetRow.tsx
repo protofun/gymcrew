@@ -52,23 +52,54 @@ export function ExerciseSetRow({ index, set, unit, previousSet, onUpdate, onRemo
     onUpdate({ weightKg });
   }
 
+  // Tapping into a blank field commits last time's number immediately — no need to type the same
+  // digits you're already looking at as a placeholder. Still fully editable from there.
+  function handleWeightFocus() {
+    if (set.weightKg === null && previousSet?.weightKg != null) {
+      setWeightText(formatWeight(previousSet.weightKg, unit));
+      onUpdate({ weightKg: previousSet.weightKg });
+    }
+  }
+
+  function handleRepsFocus() {
+    if (set.reps === null && previousSet?.reps != null) {
+      onUpdate({ reps: previousSet.reps });
+    }
+  }
+
+  // A completed set collapses to one compact line instead of the full editable row — once you've
+  // hit a number there's rarely a reason to keep staring at two big input boxes for it. Tapping the
+  // checkmark again reopens it for editing.
+  if (set.completed) {
+    return (
+      <Pressable
+        onPress={() => onUpdate({ completed: false })}
+        className="flex-row items-center gap-2.5 rounded-xl bg-success/15 px-2.5 py-2"
+      >
+        <View className="h-8 w-8 items-center justify-center rounded-full bg-success">
+          <Ionicons name="checkmark" size={16} color={colors.brand.iron} />
+        </View>
+        <Text className="body-md flex-1 font-body-semibold text-text-primary">
+          {formatWeight(set.weightKg, unit) || "–"} {unit} × {set.reps ?? "–"}
+        </Text>
+        <Ionicons name="checkmark-circle" size={22} color={colors.semantic.success} />
+      </Pressable>
+    );
+  }
+
   return (
-    <View
-      className={`flex-row items-center gap-2.5 rounded-xl px-2.5 py-2.5 ${set.completed ? "bg-success/25" : ""}`}
-    >
+    <View className="flex-row items-center gap-2.5 rounded-xl px-2.5 py-1.5">
       {/* Tap toggles warm-up. Removing a set is the separate, explicit ⊗ icon at the end of the
           row — this badge used to also remove on long-press, which was undocumented and an easy
           way to accidentally delete a set while adjusting warm-up state. */}
       <Pressable onPress={() => onUpdate({ isWarmup: !set.isWarmup })} hitSlop={6}>
         <View
-          className={`h-8 w-8 items-center justify-center rounded-full ${
-            set.completed ? "bg-success" : set.isWarmup ? "bg-transparent" : "bg-background"
-          }`}
-          style={set.isWarmup && !set.completed ? { borderWidth: 1.5, borderColor: colors.semantic.warning } : undefined}
+          className={`h-8 w-8 items-center justify-center rounded-full ${set.isWarmup ? "bg-transparent" : "bg-background"}`}
+          style={set.isWarmup ? { borderWidth: 1.5, borderColor: colors.semantic.warning } : undefined}
         >
           <Text
-            className={`body-md font-body-semibold ${set.completed ? "text-brand-iron" : !set.isWarmup ? "text-text-secondary" : ""}`}
-            style={set.isWarmup && !set.completed ? { color: colors.semantic.warning } : undefined}
+            className={`body-md font-body-semibold ${!set.isWarmup ? "text-text-secondary" : ""}`}
+            style={set.isWarmup ? { color: colors.semantic.warning } : undefined}
           >
             {set.isWarmup ? "W" : index}
           </Text>
@@ -84,31 +115,31 @@ export function ExerciseSetRow({ index, set, unit, previousSet, onUpdate, onRemo
       <TextInput
         value={weightText}
         onChangeText={handleWeightChange}
+        onFocus={handleWeightFocus}
         keyboardType="decimal-pad"
         placeholder={weightPlaceholder}
         placeholderTextColor={colors.neutral.textSecondary}
-        className={`body-md flex-1 rounded-xl px-3 py-3 text-text-primary ${set.completed ? "bg-success/30" : "bg-background"}`}
+        className="body-md flex-1 rounded-xl bg-background px-3 py-2 text-text-primary"
         style={{ minWidth: 0, textAlign: "center" }}
       />
 
       <TextInput
         value={set.reps?.toString() ?? ""}
         onChangeText={(text) => onUpdate({ reps: parseNumberInput(text) })}
+        onFocus={handleRepsFocus}
         keyboardType="number-pad"
         placeholder={repsPlaceholder}
         placeholderTextColor={colors.neutral.textSecondary}
-        className={`body-md flex-1 rounded-xl px-3 py-3 text-text-primary ${set.completed ? "bg-success/30" : "bg-background"}`}
+        className="body-md flex-1 rounded-xl bg-background px-3 py-2 text-text-primary"
         style={{ minWidth: 0, textAlign: "center" }}
       />
 
       <Pressable
-        onPress={() => onUpdate({ completed: !set.completed })}
+        onPress={() => onUpdate({ completed: true })}
         hitSlop={6}
-        className={`h-9 w-9 items-center justify-center rounded-full ${
-          set.completed ? "bg-success" : "border border-divider"
-        }`}
+        className="h-9 w-9 items-center justify-center rounded-full border border-divider"
       >
-        <Ionicons name="checkmark" size={18} color={set.completed ? colors.brand.iron : colors.neutral.textSecondary} />
+        <Ionicons name="checkmark" size={18} color={colors.neutral.textSecondary} />
       </Pressable>
 
       <Pressable onPress={onRemove} hitSlop={6} className="h-9 w-9 items-center justify-center">

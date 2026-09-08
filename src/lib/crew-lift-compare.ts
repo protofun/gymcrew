@@ -1,3 +1,4 @@
+import { EXERCISE_BY_ID } from "@/data/exercises";
 import { ALL_MUSCLE_GROUPS, type MuscleGroup } from "@/data/workout-log";
 import { MAJOR_LIFT_CARDS, SEEDED_LIFT_CARDS, type LiftCardId } from "@/data/rank-lifts";
 import type { ApiCrewMemberActivity } from "@/lib/api";
@@ -276,7 +277,9 @@ export function memberLiftCards(
 
     return {
       id: def.id,
-      name: def.name,
+      // Real exercise-library name, same as lib/lift-rank-cards.ts — see data/rank-lifts.ts's
+      // doc comment for why it's never duplicated as a field on `def` itself.
+      name: EXERCISE_BY_ID[def.exerciseId]?.name ?? def.exerciseId,
       image: def.image,
       exerciseId: def.exerciseId,
       tier,

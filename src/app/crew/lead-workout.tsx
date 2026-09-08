@@ -1,79 +1,52 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useState } from "react";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ExercisePickerModal } from "@/components/ExercisePickerModal";
-import { RankBadge } from "@/components/RankBadge";
-import type { Exercise } from "@/data/exercises";
-import { tierForExercise } from "@/lib/generic-lift-rank";
-import { buildLiftRankCards } from "@/lib/lift-rank-cards";
-import type { RankProfile } from "@/lib/rank";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
-import { CURRENT_MEMBER_ID, useCrewStore } from "@/store/crew-store";
 import { useLedWorkoutStore } from "@/store/led-workout-store";
-import { useOnboardingStore } from "@/store/onboarding-store";
-import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { colors } from "@/theme";
 
-function DraftExerciseRow({ exercise, onRemove }: { exercise: Exercise; onRemove: () => void }) {
-  return (
-    <View className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3">
-      {exercise.imageUrl ? (
-        <Image source={{ uri: exercise.imageUrl }} className="h-12 w-12 rounded-xl bg-background" />
-      ) : (
-        <View className="h-12 w-12 items-center justify-center rounded-xl bg-background">
-          <Ionicons name="barbell-outline" size={20} color={colors.neutral.textSecondary} />
-        </View>
-      )}
-      <Text className="body-md font-body-semibold flex-1 text-text-primary">{exercise.name}</Text>
-      <Pressable onPress={onRemove} hitSlop={8}>
-        <Ionicons name="close" size={20} color={colors.neutral.textSecondary} />
-      </Pressable>
-    </View>
-  );
-}
-
+/**
+ * No pre-planning — the leader just names the session and starts training normally. Whatever
+ * exercises/sets they actually log get mirrored to the crew's shared live session as they go (see
+ * workout/active.tsx's push effect), not chosen up front. That used to require building the whole
+ * exercise list before starting, which was too much friction for anyone to actually use.
+ */
 export default function LeadWorkoutScreen() {
   const insets = useSafeAreaInsets();
   const today = useTodayWorkout();
   const [name, setName] = useState(today.isRestDay ? "" : today.workoutName);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [pickerVisible, setPickerVisible] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const members = useCrewStore((state) => state.members);
-  const me = members.find((member) => member.id === CURRENT_MEMBER_ID);
-  const startSession = useLedWorkoutStore((state) => state.startSession);
+  const discardWorkout = useActiveWorkoutStore((state) => state.discardWorkout);
   const startWorkout = useActiveWorkoutStore((state) => state.startWorkout);
   const setWorkoutName = useActiveWorkoutStore((state) => state.setName);
-  const addExercise = useActiveWorkoutStore((state) => state.addExercise);
+  const startSession = useLedWorkoutStore((state) => state.startSession);
 
-  const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
-  const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
-  const age = useOnboardingStore((state) => state.onboarding.age);
-  const records = usePersonalRecordsStore((state) => state.records);
-  const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
-  const cards = useMemo(() => buildLiftRankCards(records, profile, "gym"), [records, profile]);
+  const canStart = name.trim().length > 0 && !starting;
 
-  const canStart = name.trim().length > 0 && exercises.length > 0;
-
-  function handleStartLeading() {
-    if (!canStart || !me) return;
+  async function handleStartLeading() {
+    if (!canStart) return;
     const trimmedName = name.trim();
+    setStarting(true);
+    setError(null);
+    const result = await startSession(trimmedName, []);
+    setStarting(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
 
-    startSession(
-      me.id,
-      me.name,
-      trimmedName,
-      exercises.map((exercise) => exercise.id),
-    );
-
+    // Leading a session always starts fresh — discard first since `startWorkout` now leaves an
+    // already-in-progress workout untouched rather than overwriting it (see active-workout-store.ts).
+    discardWorkout();
     startWorkout();
     setWorkoutName(trimmedName);
-    for (const exercise of exercises) addExercise(exercise);
-    router.replace("/workout/active");
+    router.replace({ pathname: "/workout/active", params: { leadingCrew: "1" } });
   }
 
   return (
@@ -85,15 +58,16 @@ export default function LeadWorkoutScreen() {
         <Text className="heading-4 text-text-primary">Lead a Crew Workout</Text>
       </View>
 
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ gap: 16, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Text className="body-sm text-text-secondary">
-          Build the exercise list once — everyone who joins sees the same exercises and only fills in their own reps &amp; sets.
-        </Text>
+      <View className="flex-1 gap-4 px-4 pt-6">
+        <View className="items-center gap-2 px-4 py-6">
+          <View className="h-14 w-14 items-center justify-center rounded-full bg-surface">
+            <Ionicons name="flag" size={26} color={colors.brand.yellow} />
+          </View>
+          <Text className="body-md text-center text-text-secondary">
+            Name your session and start training — your crew sees what you&apos;re doing as you log it, live.
+            No need to plan it out first.
+          </Text>
+        </View>
 
         <View className="gap-1.5">
           <Text className="body-sm text-text-secondary">Workout Name</Text>
@@ -107,24 +81,13 @@ export default function LeadWorkoutScreen() {
           />
         </View>
 
-        <View className="gap-3">
-          {exercises.map((exercise, index) => (
-            <DraftExerciseRow
-              key={`${exercise.id}-${index}`}
-              exercise={exercise}
-              onRemove={() => setExercises((prev) => prev.filter((_, i) => i !== index))}
-            />
-          ))}
-        </View>
-
-        <Pressable
-          onPress={() => setPickerVisible(true)}
-          className="flex-row items-center justify-center gap-1.5 rounded-xl border border-dashed border-divider py-3.5"
-        >
-          <Ionicons name="add" size={18} color={colors.neutral.textSecondary} />
-          <Text className="body-sm text-text-secondary">Add Exercise</Text>
-        </Pressable>
-      </ScrollView>
+        {error && (
+          <View className="flex-row items-start gap-2 rounded-2xl border border-error/40 bg-error/10 p-3">
+            <Ionicons name="warning" size={16} color={colors.semantic.error} style={{ marginTop: 1 }} />
+            <Text className="body-sm flex-1 text-text-secondary">{error}</Text>
+          </View>
+        )}
+      </View>
 
       <View style={{ position: "absolute", left: 16, right: 16, bottom: insets.bottom + 12 }}>
         <Pressable
@@ -133,20 +96,10 @@ export default function LeadWorkoutScreen() {
           className={`items-center rounded-full py-4 ${canStart ? "bg-brand-yellow" : "bg-surface"}`}
         >
           <Text className={`body-lg font-body-semibold ${canStart ? "text-brand-iron" : "text-text-secondary"}`}>
-            Start Leading
+            {starting ? "Starting…" : "Start Leading"}
           </Text>
         </Pressable>
       </View>
-
-      <ExercisePickerModal
-        visible={pickerVisible}
-        onClose={() => setPickerVisible(false)}
-        onSelect={(exercise) => {
-          setExercises((prev) => [...prev, exercise]);
-          setPickerVisible(false);
-        }}
-        renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, cards, records, profile)} size={34} />}
-      />
     </View>
   );
 }

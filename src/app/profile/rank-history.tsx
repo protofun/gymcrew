@@ -11,14 +11,16 @@ import { RankBadge } from "@/components/RankBadge";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { StatCard, StatRow, StatSectionHeader } from "@/components/StatRow";
 import { DIVISION_COLOR } from "@/lib/division";
-import { buildLiftRankCards, overallPowerScore, highestTier } from "@/lib/lift-rank-cards";
+import { buildLiftRankCards, highestTier } from "@/lib/lift-rank-cards";
 import { computeMuscleGroupRanks } from "@/lib/muscle-group-rank";
 import { computeProfileSnapshot } from "@/lib/profile-snapshot";
-import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS } from "@/lib/rank";
+import { userOverallPowerScore } from "@/lib/ranks-board";
+import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile } from "@/lib/rank";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
 import { useProfileSnapshotStore } from "@/store/profile-snapshot-store";
+import { useTrackedLiftsStore } from "@/store/tracked-lifts-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors } from "@/theme";
 
@@ -36,6 +38,9 @@ export default function RankHistoryScreen() {
   const snapshotAsOfMs = useProfileSnapshotStore((state) => state.asOfMs);
   const snapshotWeightKg = useProfileSnapshotStore((state) => state.weightKg);
   const clearSnapshot = useProfileSnapshotStore((state) => state.clearSnapshot);
+  const removedDefaultIds = useTrackedLiftsStore((state) => state.removedDefaultIds);
+  const hiddenAchievementIds = useTrackedLiftsStore((state) => state.hiddenAchievementIds);
+  const customExerciseIds = useTrackedLiftsStore((state) => state.customExerciseIds);
 
   const snapshot = useMemo(
     () => (snapshotAsOfMs != null ? computeProfileSnapshot(snapshotAsOfMs, workouts, divisionHistory) : null),
@@ -45,16 +50,21 @@ export default function RankHistoryScreen() {
   const records = snapshot?.records ?? liveRecords;
   const timelineDivisionHistory = snapshotAsOfMs != null ? divisionHistory.filter((entry) => entry.reachedAt <= snapshotAsOfMs) : divisionHistory;
 
-  const cards = useMemo(
-    () =>
-      buildLiftRankCards(
-        records,
-        { gender: onboarding.gender ?? "male", bodyWeightKg: snapshotAsOfMs != null && snapshotWeightKg != null ? snapshotWeightKg : (onboarding.weightKg ?? 85), age: onboarding.age },
-        "gym",
-      ),
-    [records, onboarding.gender, onboarding.weightKg, onboarding.age, snapshotAsOfMs, snapshotWeightKg],
+  const profile: RankProfile = useMemo(
+    () => ({
+      gender: onboarding.gender ?? "male",
+      bodyWeightKg: snapshotAsOfMs != null && snapshotWeightKg != null ? snapshotWeightKg : (onboarding.weightKg ?? 85),
+      age: onboarding.age,
+    }),
+    [onboarding.gender, onboarding.weightKg, onboarding.age, snapshotAsOfMs, snapshotWeightKg],
   );
-  const powerScore = overallPowerScore(cards);
+  const cards = useMemo(() => buildLiftRankCards(records, profile, "gym"), [records, profile]);
+  // Same figure as the Ranks tab's own hero card — must account for the user's board customization
+  // (removed/added tiles), not just the 12 built-in tracked lifts, or the two screens disagree.
+  const powerScore = useMemo(
+    () => userOverallPowerScore(records, profile, removedDefaultIds, hiddenAchievementIds, customExerciseIds),
+    [records, profile, removedDefaultIds, hiddenAchievementIds, customExerciseIds],
+  );
   const topTier = highestTier(cards);
   const weakPoints = cards.filter((card) => card.isWeakPoint);
 

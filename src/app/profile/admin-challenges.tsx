@@ -11,9 +11,9 @@ import type { AdminChallengeInput, ApiAdminChallenge } from "@/lib/api";
 import { useAdminChallengeStore } from "@/store/admin-challenge-store";
 import { colors } from "@/theme";
 
-/** Gated in profile/account.tsx to the same email — this screen never renders for anyone else, and
+/** Gated in profile/account.tsx to the same list — this screen never renders for anyone else, and
  * every mutation is re-checked server-side regardless (see backend/routes/admin-challenges.php). */
-const ADMIN_CHALLENGE_EMAIL = "jaimy.mathon@gmail.com";
+const ADMIN_CHALLENGE_EMAILS = ["jaimy.mathon@gmail.com", "akb.koycu@gmail.com"];
 
 function ChallengeRow({
   challenge,
@@ -70,7 +70,7 @@ function ChallengeRow({
 export default function AdminChallengesScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useUser();
-  const isAdmin = user?.primaryEmailAddress?.emailAddress?.toLowerCase() === ADMIN_CHALLENGE_EMAIL;
+  const isAdmin = ADMIN_CHALLENGE_EMAILS.includes(user?.primaryEmailAddress?.emailAddress?.toLowerCase() ?? "");
 
   const challenges = useAdminChallengeStore((state) => state.challenges);
   const fetchChallenges = useAdminChallengeStore((state) => state.fetch);

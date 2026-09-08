@@ -3,13 +3,13 @@ import { Modal, Pressable, Text, View } from "react-native";
 import Animated, { SlideInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import type { LedWorkoutSession } from "@/store/led-workout-store";
+import type { ApiCrewLiveSession } from "@/lib/api";
 import { colors } from "@/theme";
 
 type CrewActivitySheetProps = {
   visible: boolean;
   onClose: () => void;
-  session: LedWorkoutSession | null;
+  session: ApiCrewLiveSession | null;
   iAmLeader: boolean;
   iHaveJoined: boolean;
   hasWorkoutInProgress: boolean;

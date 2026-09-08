@@ -1,5 +1,6 @@
 import type { ImageSourcePropType } from "react-native";
 
+import { EXERCISE_BY_ID } from "@/data/exercises";
 import { MAJOR_LIFT_CARDS, SEEDED_LIFT_CARDS, type LiftCardId } from "@/data/rank-lifts";
 import { calculateLiftRankDetail, estimateTierPositionForWeight, RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
 import type { PersonalRecord } from "@/store/personal-records-store";
@@ -73,6 +74,13 @@ export function gymStandingForCard(liftId: string, tierIndex: number, progressTo
  * so a well-rounded lifter with everything close together never gets a false flag. */
 const WEAK_POINT_TIER_GAP = 4;
 
+/** The exercise's real name from the library — always used for a tracked lift's display name so it
+ * matches exactly how the same exercise reads in the searchable exercise picker (see
+ * data/rank-lifts.ts's doc comment above its type definitions). */
+function exerciseName(exerciseId: string): string {
+  return EXERCISE_BY_ID[exerciseId]?.name ?? exerciseId;
+}
+
 export function buildLiftRankCards(records: Record<string, PersonalRecord>, profile: RankProfile, scope: RankScope): LiftRankCard[] {
   const computed = MAJOR_LIFT_CARDS.map((lift) => {
     const record = records[lift.exerciseId];
@@ -81,7 +89,7 @@ export function buildLiftRankCards(records: Record<string, PersonalRecord>, prof
     const score = Math.round((weightKg / profile.bodyWeightKg) * SCORE_PER_BODYWEIGHT_RATIO);
     return {
       id: lift.id,
-      name: lift.name,
+      name: exerciseName(lift.exerciseId),
       image: lift.image,
       exerciseId: lift.exerciseId,
       tier,
@@ -105,7 +113,7 @@ export function buildLiftRankCards(records: Record<string, PersonalRecord>, prof
     if (!record) {
       return {
         id: lift.id,
-        name: lift.name,
+        name: exerciseName(lift.exerciseId),
         image: lift.image,
         exerciseId: lift.exerciseId,
         tier: RANK_TIERS[0],
@@ -133,7 +141,7 @@ export function buildLiftRankCards(records: Record<string, PersonalRecord>, prof
 
     return {
       id: lift.id,
-      name: lift.name,
+      name: exerciseName(lift.exerciseId),
       image: lift.image,
       exerciseId: lift.exerciseId,
       tier,

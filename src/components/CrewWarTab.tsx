@@ -1,18 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
+import { useEffect } from "react";
+import { ActivityIndicator, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { ProgressBar } from "@/components/ProgressBar";
 import { useCountdown } from "@/hooks/use-countdown";
-import { CURRENT_MEMBER_ID, useCrewStore } from "@/store/crew-store";
+import { formatShortAgo } from "@/lib/time-since";
+import { useCrewStore } from "@/store/crew-store";
 import { TOKENS_PER_BATTLE_WIN, useCurrencyStore } from "@/store/currency-store";
 import { useCrewWarStore } from "@/store/crew-war-store";
 import { colors, fontFamily } from "@/theme";
 
 /** Bonus crew XP for actually winning a War — same shape/value as ChallengesTab's BATTLE_WIN_XP_BONUS. */
 const WAR_WIN_XP_BONUS = 200;
+/** Below this much time left, the subtitle switches from flavor text to concrete urgency framing. */
+const URGENCY_THRESHOLD_MS = 12 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native when
 // combined with a sibling className (see ChallengesTab's headerStyle for the same constraint).
@@ -34,76 +38,18 @@ function formatCountdown(remainingSeconds: number): string {
   return `${Math.max(1, minutes)}m left`;
 }
 
-function WarExplainer({ canStartWar, myDivision, joining, onJoin }: { canStartWar: boolean; myDivision: string; joining: boolean; onJoin: () => void }) {
-  return (
-    <Animated.View entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)} className="gap-4 rounded-2xl border border-divider bg-surface p-5">
-      <View className="items-center gap-3">
-        <View className="h-14 w-14 items-center justify-center rounded-full bg-brand-yellow/15">
-          <Ionicons name="shield-half" size={26} color={colors.brand.yellow} />
-        </View>
-        <Text className="heading-4 text-center text-text-primary">Challenge a Real Crew</Text>
-        <Text className="body-sm text-center text-text-secondary">
-          Start a 3-day War against a genuine opponent crew, matched automatically to your crew&apos;s strength. Every workout your
-          crew logs adds to your score — most total volume when the War ends wins.
-        </Text>
-      </View>
-
-      <Pressable
-        onPress={() => canStartWar && onJoin()}
-        disabled={joining}
-        className={`flex-row items-center justify-center gap-2 rounded-full py-4 ${canStartWar ? "bg-brand-yellow" : "border border-dashed border-divider"}`}
-      >
-        {joining ? (
-          <ActivityIndicator color={colors.brand.iron} />
-        ) : (
-          <>
-            <Ionicons name={canStartWar ? "flag" : "lock-closed"} size={16} color={canStartWar ? colors.brand.iron : colors.neutral.textSecondary} />
-            <Text className={`body-md font-body-bold ${canStartWar ? "text-brand-iron" : "text-text-secondary"}`}>
-              {canStartWar ? "Find a War" : `Only your crew leader or co-leader can start a War (you're ${myDivision})`}
-            </Text>
-          </>
-        )}
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-function WarSearching({ onCancel }: { onCancel: () => void }) {
-  return (
-    <Animated.View entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)} className="items-center gap-4 rounded-2xl border border-divider bg-surface p-6">
-      <ActivityIndicator color={colors.brand.yellow} />
-      <Text className="body-md font-body-semibold text-text-primary">Searching for an opponent…</Text>
-      <Text className="body-sm text-center text-text-secondary">
-        We&apos;ll match your crew the moment another crew of similar strength is looking too.
-      </Text>
-      <Pressable onPress={onCancel} className="rounded-full border border-divider px-4 py-2">
-        <Text className="body-sm font-body-semibold text-text-secondary">Cancel</Text>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
 export function CrewWarTab() {
   const war = useCrewWarStore((state) => state.war);
-  const queued = useCrewWarStore((state) => state.queued);
-  const loading = useCrewWarStore((state) => state.loading);
   const rewardedWarIds = useCrewWarStore((state) => state.rewardedWarIds);
   const refresh = useCrewWarStore((state) => state.refresh);
-  const joinQueue = useCrewWarStore((state) => state.joinQueue);
-  const leaveQueue = useCrewWarStore((state) => state.leaveQueue);
   const markRewarded = useCrewWarStore((state) => state.markRewarded);
 
-  const members = useCrewStore((state) => state.members);
-  const crewIcon = useCrewStore((state) => state.icon);
   const crewName = useCrewStore((state) => state.name);
+  const crewIcon = useCrewStore((state) => state.icon);
   const crewDivision = useCrewStore((state) => state.division);
   const addCrewXp = useCrewStore((state) => state.addXp);
   const grantTokens = useCurrencyStore((state) => state.grantTokens);
 
-  const [joining, setJoining] = useState(false);
-
-  const me = members.find((member) => member.id === CURRENT_MEMBER_ID);
-  const canStartWar = me?.role === "leader" || me?.role === "co-leader";
   const remainingSeconds = useCountdown(war?.status === "active" ? war.endsAt : null);
 
   useEffect(() => {
@@ -111,8 +57,7 @@ export function CrewWarTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Grants the win bonus exactly once per War, the first time any device notices it was actually
-  // won — same locally-guarded pattern as ChallengesTab's battleWinAwardedIds.
+  // Grants the win bonus exactly once per War, the first time any device notices it was actually won.
   useEffect(() => {
     if (war && war.status === "completed" && war.won === true && !rewardedWarIds.includes(war.id)) {
       addCrewXp(WAR_WIN_XP_BONUS);
@@ -122,32 +67,41 @@ export function CrewWarTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [war?.id, war?.status, war?.won]);
 
-  async function handleJoinQueue() {
-    setJoining(true);
-    const result = await joinQueue();
-    setJoining(false);
-    if (!result.ok) Alert.alert("Couldn't start a War", result.error);
-  }
-
   const maxScore = war ? Math.max(war.myScore, war.opponentScore, 1) : 1;
+  const remainingMs = remainingSeconds * 1000;
+  const isBehind = !!war && war.status === "active" && war.myScore < war.opponentScore;
+  const isUrgent = isBehind && remainingMs > 0 && remainingMs < URGENCY_THRESHOLD_MS;
+
+  const todayStart = Date.now() - (Date.now() % DAY_MS);
+  const todaysAttackCount = war?.recentAttacks.filter((attack) => attack.isMine && attack.attackedAt >= todayStart).length ?? 0;
+
+  const subtitle =
+    isUrgent && war
+      ? `${formatCountdown(remainingSeconds)} — down ${Math.round(war.opponentScore - war.myScore).toLocaleString("en-US")}kg. One strong attack swings this.`
+      : war?.status === "active"
+        ? "Every rep counts. Don't let them catch up."
+        : "Real crew. Real stakes. A few days to prove it.";
 
   return (
     <View className="mx-4 mt-4 gap-4">
       <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-1">
-        <Text style={headerStyle} className="text-brand-white">
-          CREW WAR
-        </Text>
-        <View className="flex-row items-center gap-1.5">
-          <Ionicons name="flame" size={13} color={colors.semantic.streak} />
-          <Text className="caption font-body-semibold text-text-secondary">
-            {war?.status === "active" ? "Every rep counts. Don't let them catch up." : "Real crew. Real stakes. A few days to prove it."}
+        <View className="flex-row items-center justify-between">
+          <Text style={headerStyle} className="text-brand-white">
+            CREW WAR
           </Text>
+          {war?.status === "active" && (
+            <Text className="caption font-body-semibold text-text-secondary">Today: {todaysAttackCount} attack{todaysAttackCount === 1 ? "" : "s"}</Text>
+          )}
+        </View>
+        <View className="flex-row items-center gap-1.5">
+          <Ionicons name="flame" size={13} color={isUrgent ? colors.semantic.error : colors.semantic.streak} />
+          <Text className={`caption font-body-semibold ${isUrgent ? "text-error" : "text-text-secondary"}`}>{subtitle}</Text>
         </View>
       </Animated.View>
 
-      {loading && !war && !queued ? (
+      {!war ? (
         <ActivityIndicator color={colors.brand.yellow} />
-      ) : war?.status === "active" ? (
+      ) : war.status === "active" ? (
         <Animated.View entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)} className="gap-4 rounded-2xl border border-divider bg-surface p-4">
           <View className="flex-row items-center justify-between">
             <Text className="caption font-body-bold text-text-secondary" style={{ letterSpacing: 1 }}>
@@ -213,34 +167,52 @@ export function CrewWarTab() {
             </View>
           )}
         </Animated.View>
-      ) : war?.status === "completed" ? (
-        <View className="gap-4">
-          <Animated.View
-            entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)}
-            className={`items-center gap-2 rounded-2xl border p-5 ${
-              war.won === true ? "border-success bg-success/10" : war.won === false ? "border-divider bg-surface" : "border-divider bg-surface"
-            }`}
-          >
-            <Ionicons
-              name={war.won === true ? "trophy" : war.won === false ? "sad-outline" : "remove-circle-outline"}
-              size={28}
-              color={war.won === true ? colors.semantic.success : colors.neutral.textSecondary}
-            />
-            <Text className="heading-4 text-text-primary">
-              {war.won === true ? "War Won!" : war.won === false ? "War Lost" : "It's a Draw"}
-            </Text>
-            <Text className="body-sm text-center text-text-secondary">
-              {crewName} · {Math.round(war.myScore).toLocaleString("en-US")} kg vs {war.opponent.name} ·{" "}
-              {Math.round(war.opponentScore).toLocaleString("en-US")} kg
-            </Text>
-          </Animated.View>
-
-          <WarExplainer canStartWar={canStartWar} myDivision={me?.division ?? "Rookie"} joining={joining} onJoin={handleJoinQueue} />
-        </View>
-      ) : queued ? (
-        <WarSearching onCancel={leaveQueue} />
       ) : (
-        <WarExplainer canStartWar={canStartWar} myDivision={me?.division ?? "Rookie"} joining={joining} onJoin={handleJoinQueue} />
+        <Animated.View
+          entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)}
+          className={`items-center gap-2 rounded-2xl border p-5 ${war.won === true ? "border-success bg-success/10" : "border-divider bg-surface"}`}
+        >
+          <Ionicons
+            name={war.won === true ? "trophy" : war.won === false ? "sad-outline" : "remove-circle-outline"}
+            size={28}
+            color={war.won === true ? colors.semantic.success : colors.neutral.textSecondary}
+          />
+          <Text className="heading-4 text-text-primary">{war.won === true ? "War Won!" : war.won === false ? "War Lost" : "It's a Draw"}</Text>
+          <Text className="body-sm text-center text-text-secondary">
+            {crewName} · {Math.round(war.myScore).toLocaleString("en-US")} kg vs {war.opponent.name} · {Math.round(war.opponentScore).toLocaleString("en-US")}{" "}
+            kg
+          </Text>
+          <Text className="caption text-center text-text-secondary">A new War starts automatically.</Text>
+        </Animated.View>
+      )}
+
+      {war && war.recentAttacks.length > 0 && (
+        <Animated.View entering={FadeInUp.delay(160).springify().damping(16).mass(0.6)} className="gap-2.5 rounded-2xl border border-divider bg-surface p-4">
+          <Text className="caption font-body-bold text-text-secondary" style={{ letterSpacing: 1 }}>
+            ATTACK LOG
+          </Text>
+          <View className="gap-2.5">
+            {war.recentAttacks.map((attack, index) => (
+              <View key={`${attack.attackedAt}-${index}`} className="flex-row items-center gap-2.5">
+                <View
+                  className="h-7 w-7 items-center justify-center rounded-full"
+                  style={{ backgroundColor: attack.isMine ? `${colors.brand.yellow}26` : `${colors.neutral.textSecondary}26` }}
+                >
+                  <Ionicons name="flash" size={13} color={attack.isMine ? colors.brand.yellow : colors.neutral.textSecondary} />
+                </View>
+                <Text className="body-sm flex-1 text-text-secondary" numberOfLines={1}>
+                  <Text className="font-body-semibold text-text-primary">{attack.attackerName}</Text>
+                  {attack.workoutName ? ` attacked with ${attack.workoutName}` : " attacked"}
+                  {attack.prCount > 0 ? " 🔥" : ""}
+                </Text>
+                <Text className="caption font-body-bold" style={{ color: attack.isMine ? colors.brand.yellow : colors.neutral.textSecondary }}>
+                  +{Math.round(attack.score).toLocaleString("en-US")}
+                </Text>
+                <Text className="caption text-text-secondary">{formatShortAgo(attack.attackedAt)}</Text>
+              </View>
+            ))}
+          </View>
+        </Animated.View>
       )}
     </View>
   );

@@ -1,20 +1,22 @@
 <?php
 
 /**
- * Real crew-vs-crew Wars — see db/schema.sql's `crew_war_queue`/`crew_wars`/`crew_war_contributions`.
- * Unlike the old "Challenge Another Crew" flow (src/lib/challenge-progress.ts's
- * simulatedOpponentProgress — a hash, not a real opponent), every War here is two genuinely
- * different crews with real member contributions.
+ * Real crew-vs-crew Wars — see db/schema.sql's `crew_war_queue`/`crew_wars`/`crew_war_attacks`.
+ * A crew is never without a War to fight: `ensureActiveWar` below auto-starts a new one the moment
+ * there isn't an active one, matching a real crew waiting in `crew_war_queue` if one exists, or
+ * instantly a same-ish-division "bot" crew otherwise (real rows — see the seed block in
+ * db/schema.sql — so the whole War, opponent included, is genuinely persisted, not computed
+ * client-side). The old leader-gated "Find a War" / "Searching…" flow is gone — War is fully
+ * passive now, same as the Weekly League's always-on weekly cycle.
  *
- * Matchmaking is automatic and synchronous: joining the queue immediately tries to pair with
- * whoever else is waiting, closest in power. There's no cron in this setup, so a War's end is
- * resolved lazily — whichever side reads /crew-wars/active first after `ends_at` passes settles it.
+ * Every "attack" is one real logged workout during an active War — real or bot, both sides log
+ * real rows to `crew_war_attacks` (bot attacks are generated lazily on read, deterministically
+ * scheduled, same "resolve on next read, no cron" idea crew-duels.php already uses — see
+ * generateDueBotAttacks). This is what powers the attack feed, not just a running total.
  *
  * Routes (all require auth, see index.php):
- *   GET    /crew-wars/active     -> this crew's current/most recent War, plus queue status
- *   POST   /crew-wars/queue      -> join matchmaking (leader/co-leader only); pairs immediately if possible
- *   DELETE /crew-wars/queue      -> leave matchmaking
- *   POST   /crew-wars/contribute -> log this workout's volume toward an active War (best-effort, no-op if none)
+ *   GET  /crew-wars/active  -> this crew's current War (auto-starts one if there wasn't one)
+ *   POST /crew-wars/attack  -> record one attack from the caller's just-finished workout
  */
 function handleCrewWars(PDO $pdo, string $userId, string $method, ?array $body, array $segments): void
 {
@@ -25,18 +27,8 @@ function handleCrewWars(PDO $pdo, string $userId, string $method, ?array $body, 
         return;
     }
 
-    if ($sub === 'queue' && $method === 'POST') {
-        queueForWar($pdo, $userId);
-        return;
-    }
-
-    if ($sub === 'queue' && $method === 'DELETE') {
-        leaveWarQueue($pdo, $userId);
-        return;
-    }
-
-    if ($sub === 'contribute' && $method === 'POST') {
-        contributeToWar($pdo, $userId, $body ?? []);
+    if ($sub === 'attack' && $method === 'POST') {
+        recordAttack($pdo, $userId, $body ?? []);
         return;
     }
 
@@ -44,6 +36,32 @@ function handleCrewWars(PDO $pdo, string $userId, string $method, ?array $body, 
 }
 
 const WAR_DURATION_MS = 3 * 24 * 60 * 60 * 1000;
+const ATTACK_PR_BONUS = 250;
+const BOT_ATTACK_MIN_INTERVAL_MS = 8 * 60 * 60 * 1000;
+const BOT_ATTACK_MAX_INTERVAL_MS = 16 * 60 * 60 * 1000;
+
+const DIVISION_ORDER = [
+    'Rookie', 'Novice', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Elite', 'Master',
+    'Grandmaster', 'Champion', 'Titan', 'Mythic', 'Immortal', 'Legend', 'Overlord', 'Supreme',
+    'Conqueror', 'Dominator', 'Apex',
+];
+
+/** Matches the bot crews seeded in db/schema.sql — division is looked up live from `crews` rather
+ * than duplicated here, this is just which ids are bots at all (see isBotCrew). */
+function isBotCrew(string $crewId): bool
+{
+    return str_starts_with($crewId, 'bot-crew-');
+}
+
+function warHash(string $value): int
+{
+    $hash = 0;
+    $len = strlen($value);
+    for ($i = 0; $i < $len; $i++) {
+        $hash = ($hash * 31 + ord($value[$i])) & 0x7FFFFFFF;
+    }
+    return $hash;
+}
 
 /** Sum of every member's XP — a real, already-stored signal, used purely to pair similarly-strong
  * crews. Deliberately not the client's fuller `computeCrewWeeklyPower` volume calculation (that
@@ -58,6 +76,30 @@ function crewPowerSnapshot(PDO $pdo, string $crewId): int
     );
     $stmt->execute([$crewId]);
     return (int) $stmt->fetch()['power'];
+}
+
+/** The closest-division bot crew to `$crewId`'s own division — a real row, see db/schema.sql. */
+function nearestBotCrewId(PDO $pdo, string $crewId): string
+{
+    $stmt = $pdo->prepare('SELECT division FROM crews WHERE id = ?');
+    $stmt->execute([$crewId]);
+    $division = $stmt->fetch()['division'] ?? 'Rookie';
+    $myIndex = array_search($division, DIVISION_ORDER, true);
+    $myIndex = $myIndex === false ? 0 : $myIndex;
+
+    $botStmt = $pdo->query("SELECT id, division FROM crews WHERE id LIKE 'bot-crew-%'");
+    $best = 'bot-crew-beast-mode';
+    $bestDistance = PHP_INT_MAX;
+    foreach ($botStmt->fetchAll() as $bot) {
+        $botIndex = array_search($bot['division'], DIVISION_ORDER, true);
+        if ($botIndex === false) continue;
+        $distance = abs($myIndex - $botIndex);
+        if ($distance < $bestDistance) {
+            $bestDistance = $distance;
+            $best = $bot['id'];
+        }
+    }
+    return $best;
 }
 
 function activeWarForCrew(PDO $pdo, string $crewId): ?array
@@ -94,6 +136,116 @@ function resolveWarIfEnded(PDO $pdo, array $war): array
     return $stmt->fetch();
 }
 
+/**
+ * Guarantees `$crewId` has an active War, starting one if it doesn't: a real crew already waiting
+ * in `crew_war_queue` (closest in power) if there is one, otherwise an immediate match against the
+ * nearest-division bot crew — `$crewId` also gets queued for real matchmaking in the background so
+ * a genuine opponent can still be found later without ever leaving the crew stuck waiting for one.
+ */
+function ensureActiveWar(PDO $pdo, string $crewId): array
+{
+    $existing = activeWarForCrew($pdo, $crewId);
+    if ($existing) {
+        $existing = resolveWarIfEnded($pdo, $existing);
+        if ($existing['status'] === 'active') {
+            return $existing;
+        }
+    }
+
+    $crewPower = crewPowerSnapshot($pdo, $crewId);
+    $now = (int) round(microtime(true) * 1000);
+
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('DELETE FROM crew_war_queue WHERE crew_id = ?')->execute([$crewId]);
+
+        $matchStmt = $pdo->prepare(
+            'SELECT crew_id FROM crew_war_queue ORDER BY ABS(crew_power - ?) ASC, queued_at ASC LIMIT 1'
+        );
+        $matchStmt->execute([$crewPower]);
+        $opponent = $matchStmt->fetch();
+
+        $opponentCrewId = null;
+        if ($opponent) {
+            $deleteOpponent = $pdo->prepare('DELETE FROM crew_war_queue WHERE crew_id = ?');
+            $deleteOpponent->execute([$opponent['crew_id']]);
+            if ($deleteOpponent->rowCount() > 0) {
+                $opponentCrewId = $opponent['crew_id'];
+            }
+        }
+
+        if ($opponentCrewId === null) {
+            $pdo->prepare('INSERT INTO crew_war_queue (crew_id, crew_power, queued_at) VALUES (?, ?, ?)')
+                ->execute([$crewId, $crewPower, $now]);
+            $opponentCrewId = nearestBotCrewId($pdo, $crewId);
+        }
+
+        $warId = 'war-' . bin2hex(random_bytes(8));
+        $pdo->prepare(
+            'INSERT INTO crew_wars (id, crew_a_id, crew_b_id, started_at, ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([$warId, $crewId, $opponentCrewId, $now, $now + WAR_DURATION_MS, $now]);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+
+    $stmt = $pdo->prepare('SELECT * FROM crew_wars WHERE id = ?');
+    $stmt->execute([$warId]);
+    return $stmt->fetch();
+}
+
+/** Writes any of the bot opponent's scheduled attacks whose time has come into real
+ * `crew_war_attacks` rows and bumps the running score — lazy, on read, no cron, same idea
+ * crew-duels.php's resolveDuelIfDue already uses, just producing real rows instead of only a
+ * number. Deterministic (hashed off the War id + slot index), so re-running it is always a no-op
+ * past whatever's already been written — the unique key on (war_id, crew_id, attacked_at) also
+ * guards a concurrent double-read from double-inserting the same slot. */
+function generateDueBotAttacks(PDO $pdo, array $war): void
+{
+    $botCrewId = null;
+    if (isBotCrew($war['crew_a_id'])) $botCrewId = $war['crew_a_id'];
+    elseif (isBotCrew($war['crew_b_id'])) $botCrewId = $war['crew_b_id'];
+    if ($botCrewId === null) return;
+
+    $now = (int) round(microtime(true) * 1000);
+    $upTo = min($now, (int) $war['ends_at']);
+
+    $names = ['Alex', 'Sam', 'Jordan', 'Mike', 'Chris', 'Taylor', 'Casey', 'Morgan'];
+    $workouts = ['Push Day', 'Pull Day', 'Leg Day', 'Upper Body', 'Full Body'];
+
+    $slotIndex = 0;
+    $slotTime = (int) $war['started_at'];
+    while (true) {
+        $seed = warHash($war['id'] . ':' . $slotIndex);
+        $interval = BOT_ATTACK_MIN_INTERVAL_MS + ($seed % (BOT_ATTACK_MAX_INTERVAL_MS - BOT_ATTACK_MIN_INTERVAL_MS));
+        $slotTime += $interval;
+        if ($slotTime > $upTo) break;
+
+        $volumeKg = 2500 + ($seed % 6500); // one plausible session's volume, ~2,500-9,000kg
+        $prCount = ($seed % 5) === 0 ? 1 : 0; // ~1 in 5 bot attacks lands a "PR"
+        $score = $volumeKg + $prCount * ATTACK_PR_BONUS;
+        $name = $names[$seed % count($names)];
+        $workoutName = $workouts[intdiv($seed, 7) % count($workouts)];
+
+        try {
+            $pdo->prepare(
+                'INSERT INTO crew_war_attacks (war_id, crew_id, user_id, attacker_name, workout_name, volume_kg, pr_count, score, attacked_at)
+                 VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)'
+            )->execute([$war['id'], $botCrewId, $name, $workoutName, $volumeKg, $prCount, $score, $slotTime]);
+
+            $column = $war['crew_a_id'] === $botCrewId ? 'crew_a_score' : 'crew_b_score';
+            $pdo->prepare("UPDATE crew_wars SET $column = $column + ? WHERE id = ?")->execute([$score, $war['id']]);
+        } catch (PDOException $e) {
+            // Unique (war_id, crew_id, attacked_at) — another request already wrote this exact
+            // slot between our check and our insert. Nothing to do, it's already there.
+        }
+
+        $slotIndex++;
+    }
+}
+
 function warJson(PDO $pdo, array $war, string $viewerCrewId): array
 {
     $isCrewA = $war['crew_a_id'] === $viewerCrewId;
@@ -109,22 +261,31 @@ function warJson(PDO $pdo, array $war, string $viewerCrewId): array
         $crewsById[$row['id']] = $row;
     }
 
+    $attacksStmt = $pdo->prepare(
+        'SELECT crew_id, attacker_name, workout_name, volume_kg, pr_count, score, attacked_at
+         FROM crew_war_attacks WHERE war_id = ? ORDER BY attacked_at DESC LIMIT 20'
+    );
+    $attacksStmt->execute([$war['id']]);
+    $recentAttacks = array_map(function (array $row) use ($myCrewId): array {
+        return [
+            'attackerName' => $row['attacker_name'],
+            'workoutName' => $row['workout_name'],
+            'volumeKg' => (float) $row['volume_kg'],
+            'prCount' => (int) $row['pr_count'],
+            'score' => (float) $row['score'],
+            'attackedAt' => (int) $row['attacked_at'],
+            'isMine' => $row['crew_id'] === $myCrewId,
+        ];
+    }, $attacksStmt->fetchAll());
+
     $contributorsStmt = $pdo->prepare(
-        'SELECT wc.user_id, u.full_name, SUM(wc.volume_kg) AS total
-         FROM crew_war_contributions wc
-         JOIN users u ON u.id = wc.user_id
-         WHERE wc.war_id = ? AND wc.crew_id = ?
-         GROUP BY wc.user_id, u.full_name
-         ORDER BY total DESC
-         LIMIT 5'
+        'SELECT user_id, attacker_name, SUM(score) AS total
+         FROM crew_war_attacks WHERE war_id = ? AND crew_id = ? AND user_id IS NOT NULL
+         GROUP BY user_id, attacker_name ORDER BY total DESC LIMIT 5'
     );
     $contributorsStmt->execute([$war['id'], $myCrewId]);
     $topContributors = array_map(function (array $row): array {
-        return [
-            'userId' => $row['user_id'],
-            'name' => $row['full_name'] ?: 'Member',
-            'volumeKg' => (float) $row['total'],
-        ];
+        return ['userId' => $row['user_id'], 'name' => $row['attacker_name'], 'volumeKg' => (float) $row['total']];
     }, $contributorsStmt->fetchAll());
 
     $won = null;
@@ -147,6 +308,7 @@ function warJson(PDO $pdo, array $war, string $viewerCrewId): array
             'division' => $crewsById[$opponentCrewId]['division'] ?? 'Rookie',
         ],
         'topContributors' => $topContributors,
+        'recentAttacks' => $recentAttacks,
     ];
 }
 
@@ -158,127 +320,51 @@ function respondWithActiveWar(PDO $pdo, string $userId): void
         return;
     }
 
-    $queueStmt = $pdo->prepare('SELECT 1 FROM crew_war_queue WHERE crew_id = ?');
-    $queueStmt->execute([$crewId]);
-    $queued = (bool) $queueStmt->fetch();
+    $war = ensureActiveWar($pdo, $crewId);
+    generateDueBotAttacks($pdo, $war);
 
-    $war = activeWarForCrew($pdo, $crewId);
-    if (!$war) {
-        jsonResponse(['war' => null, 'queued' => $queued]);
-        return;
-    }
+    // Re-fetch — generateDueBotAttacks may have just updated the score columns.
+    $stmt = $pdo->prepare('SELECT * FROM crew_wars WHERE id = ?');
+    $stmt->execute([$war['id']]);
+    $war = $stmt->fetch();
 
-    $war = resolveWarIfEnded($pdo, $war);
-    jsonResponse(['war' => warJson($pdo, $war, $crewId), 'queued' => $queued]);
+    jsonResponse(['war' => warJson($pdo, $war, $crewId)]);
 }
 
-function queueForWar(PDO $pdo, string $userId): void
-{
-    $crewId = findMyCrewId($pdo, $userId);
-    if ($crewId === null) {
-        errorResponse('You are not in a crew', 404);
-        return;
-    }
-
-    $role = myRoleInCrew($pdo, $userId, $crewId);
-    if ($role !== 'leader' && $role !== 'co-leader') {
-        errorResponse('Only the crew leader or co-leader can start a War', 403);
-        return;
-    }
-
-    $existingWar = activeWarForCrew($pdo, $crewId);
-    if ($existingWar && $existingWar['status'] === 'active') {
-        errorResponse('Your crew is already in a War', 409);
-        return;
-    }
-
-    $crewPower = crewPowerSnapshot($pdo, $crewId);
-    $now = (int) round(microtime(true) * 1000);
-
-    $pdo->beginTransaction();
-    try {
-        // Re-queuing (e.g. reopening the tab) just refreshes the snapshot instead of erroring.
-        $pdo->prepare('DELETE FROM crew_war_queue WHERE crew_id = ?')->execute([$crewId]);
-
-        $matchStmt = $pdo->prepare(
-            'SELECT crew_id FROM crew_war_queue ORDER BY ABS(crew_power - ?) ASC, queued_at ASC LIMIT 1'
-        );
-        $matchStmt->execute([$crewPower]);
-        $opponent = $matchStmt->fetch();
-
-        if (!$opponent) {
-            $pdo->prepare('INSERT INTO crew_war_queue (crew_id, crew_power, queued_at) VALUES (?, ?, ?)')
-                ->execute([$crewId, $crewPower, $now]);
-            $pdo->commit();
-            jsonResponse(['status' => 'queued']);
-            return;
-        }
-
-        $deleteOpponent = $pdo->prepare('DELETE FROM crew_war_queue WHERE crew_id = ?');
-        $deleteOpponent->execute([$opponent['crew_id']]);
-        if ($deleteOpponent->rowCount() === 0) {
-            // Lost a race with another crew's matchmaking attempt — queue ourselves instead of erroring.
-            $pdo->prepare('INSERT INTO crew_war_queue (crew_id, crew_power, queued_at) VALUES (?, ?, ?)')
-                ->execute([$crewId, $crewPower, $now]);
-            $pdo->commit();
-            jsonResponse(['status' => 'queued']);
-            return;
-        }
-
-        $warId = 'war-' . bin2hex(random_bytes(8));
-        $pdo->prepare(
-            'INSERT INTO crew_wars (id, crew_a_id, crew_b_id, started_at, ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-        )->execute([$warId, $crewId, $opponent['crew_id'], $now, $now + WAR_DURATION_MS, $now]);
-
-        $pdo->commit();
-
-        $warStmt = $pdo->prepare('SELECT * FROM crew_wars WHERE id = ?');
-        $warStmt->execute([$warId]);
-        jsonResponse(['status' => 'matched', 'war' => warJson($pdo, $warStmt->fetch(), $crewId)], 201);
-    } catch (Throwable $e) {
-        $pdo->rollBack();
-        throw $e;
-    }
-}
-
-function leaveWarQueue(PDO $pdo, string $userId): void
-{
-    $crewId = findMyCrewId($pdo, $userId);
-    if ($crewId === null) {
-        errorResponse('You are not in a crew', 404);
-        return;
-    }
-
-    $pdo->prepare('DELETE FROM crew_war_queue WHERE crew_id = ?')->execute([$crewId]);
-    jsonResponse(['ok' => true]);
-}
-
-function contributeToWar(PDO $pdo, string $userId, array $data): void
+function recordAttack(PDO $pdo, string $userId, array $data): void
 {
     $volumeKg = isset($data['volumeKg']) ? (float) $data['volumeKg'] : 0;
+    $prCount = isset($data['prCount']) ? max(0, (int) $data['prCount']) : 0;
+    $workoutName = isset($data['workoutName']) ? trim((string) $data['workoutName']) : null;
+    if ($workoutName === '') $workoutName = null;
+
     $crewId = findMyCrewId($pdo, $userId);
     if ($volumeKg <= 0 || $crewId === null) {
-        jsonResponse(['ok' => true, 'contributed' => false]);
+        jsonResponse(['ok' => true, 'attacked' => false]);
         return;
     }
+
+    $war = ensureActiveWar($pdo, $crewId);
+    generateDueBotAttacks($pdo, $war);
+    if ($war['status'] !== 'active') {
+        jsonResponse(['ok' => true, 'attacked' => false]);
+        return;
+    }
+
+    $nameStmt = $pdo->prepare('SELECT full_name FROM users WHERE id = ?');
+    $nameStmt->execute([$userId]);
+    $attackerName = $nameStmt->fetch()['full_name'] ?: 'You';
 
     $now = (int) round(microtime(true) * 1000);
-    $stmt = $pdo->prepare(
-        "SELECT id, crew_a_id FROM crew_wars WHERE (crew_a_id = ? OR crew_b_id = ?) AND status = 'active' AND ends_at > ?"
-    );
-    $stmt->execute([$crewId, $crewId, $now]);
-    $war = $stmt->fetch();
-    if (!$war) {
-        jsonResponse(['ok' => true, 'contributed' => false]);
-        return;
-    }
+    $score = $volumeKg + $prCount * ATTACK_PR_BONUS;
 
     $pdo->prepare(
-        'INSERT INTO crew_war_contributions (war_id, crew_id, user_id, volume_kg, contributed_at) VALUES (?, ?, ?, ?, ?)'
-    )->execute([$war['id'], $crewId, $userId, $volumeKg, $now]);
+        'INSERT INTO crew_war_attacks (war_id, crew_id, user_id, attacker_name, workout_name, volume_kg, pr_count, score, attacked_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    )->execute([$war['id'], $crewId, $userId, $attackerName, $workoutName, $volumeKg, $prCount, $score, $now]);
 
     $column = $war['crew_a_id'] === $crewId ? 'crew_a_score' : 'crew_b_score';
-    $pdo->prepare("UPDATE crew_wars SET $column = $column + ? WHERE id = ?")->execute([$volumeKg, $war['id']]);
+    $pdo->prepare("UPDATE crew_wars SET $column = $column + ? WHERE id = ?")->execute([$score, $war['id']]);
 
-    jsonResponse(['ok' => true, 'contributed' => true]);
+    jsonResponse(['ok' => true, 'attacked' => true, 'score' => $score]);
 }

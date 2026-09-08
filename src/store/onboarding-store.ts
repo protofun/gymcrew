@@ -39,6 +39,11 @@ type OnboardingData = {
   progressUpdates: boolean;
   marketingTips: boolean;
   creatineReminders: boolean;
+  /** "HH:mm", 24h — when the daily creatine nudge should appear. Defaults to "09:00" at usage
+   * sites (see notifications.tsx / lib/notifications.ts), same optional-with-fallback convention
+   * as the other notification toggles above (none of these are seeded in the store's initial
+   * state, only set once the user actually visits Notification Settings). */
+  creatineReminderTime: string;
 };
 
 /** The subset of OnboardingData that's also broken out into real columns on the backend `users`

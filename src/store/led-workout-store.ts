@@ -1,65 +1,79 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
 
-import { pullState, pushState } from "@/lib/backend-sync";
+import { api, type ApiCrewLiveSession, isApiConfigured } from "@/lib/api";
+import type { LoggedExercise } from "@/store/active-workout-store";
 
-export type LedWorkoutSession = {
-  leaderId: string;
-  leaderName: string;
-  workoutName: string;
-  /** Exercise ids, in order — looked up in EXERCISE_BY_ID for display, so followers never need a duplicated copy. */
-  exerciseIds: string[];
-  participantIds: string[];
-  startedAt: number;
+type ActionResult = { ok: true } | { ok: false; error: string };
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+}
+
+type LedWorkoutState = {
+  session: ApiCrewLiveSession | null;
+  loading: boolean;
 };
 
-type LedWorkoutSyncedState = {
-  session: LedWorkoutSession | null;
-};
-
-type LedWorkoutStore = LedWorkoutSyncedState & {
-  startSession: (leaderId: string, leaderName: string, workoutName: string, exerciseIds: string[]) => void;
-  join: (memberId: string) => void;
+type LedWorkoutActions = {
+  /** Pulls the crew's current live session — call on focus, and poll on an interval while the
+   * Join screen is open (no websockets in this backend, see crew-live-sessions.php). */
+  refresh: () => Promise<void>;
+  /** Called the moment the leader starts their own workout — no pre-built exercise list required,
+   * an empty one is fine, `pushExercises` mirrors it as they actually log. */
+  startSession: (workoutName: string, exercises: LoggedExercise[]) => Promise<ActionResult>;
+  /** Best-effort, fire-and-forget — called on every meaningful change to the leader's own
+   * active-workout-store exercises (see workout/active.tsx). No-ops if not currently leading. */
+  pushExercises: (exercises: LoggedExercise[]) => void;
+  join: () => Promise<ActionResult>;
   endSession: () => void;
-  syncFromServer: () => Promise<void>;
 };
 
-// Seeded so "Join a Workout" has something real to show before the user ever leads one themselves.
-const DEFAULT_SESSION: LedWorkoutSession = {
-  leaderId: "m2",
-  leaderName: "Sam",
-  workoutName: "Push Day",
-  exerciseIds: ["Barbell_Bench_Press_-_Medium_Grip", "Barbell_Shoulder_Press", "Triceps_Pushdown"],
-  participantIds: ["m2", "m4"],
-  startedAt: Date.now(),
-};
+export const useLedWorkoutStore = create<LedWorkoutState & LedWorkoutActions>()((set, get) => ({
+  session: null,
+  loading: false,
 
-export const useLedWorkoutStore = create<LedWorkoutStore>()(
-  persist(
-    (set, get) => ({
-      session: DEFAULT_SESSION,
-      startSession: (leaderId, leaderName, workoutName, exerciseIds) => {
-        const session = { leaderId, leaderName, workoutName, exerciseIds, participantIds: [leaderId], startedAt: Date.now() };
-        set({ session });
-        pushState("led-workout", { session });
-      },
-      join: (memberId) => {
-        set((state) => {
-          if (!state.session || state.session.participantIds.includes(memberId)) return {};
-          return { session: { ...state.session, participantIds: [...state.session.participantIds, memberId] } };
-        });
-        pushState("led-workout", { session: get().session });
-      },
-      endSession: () => {
-        set({ session: null });
-        pushState("led-workout", { session: null });
-      },
-      syncFromServer: () => pullState<LedWorkoutSyncedState>("led-workout", (data) => set(data)),
-    }),
-    {
-      name: "gymcrew-led-workout",
-      storage: createJSONStorage(() => AsyncStorage),
-    },
-  ),
-);
+  refresh: async () => {
+    if (!isApiConfigured) return;
+    set({ loading: true });
+    try {
+      const { session } = await api.getActiveLiveSession();
+      set({ session, loading: false });
+    } catch (error) {
+      console.warn("Failed to fetch crew live session", error);
+      set({ loading: false });
+    }
+  },
+
+  startSession: async (workoutName, exercises) => {
+    if (!isApiConfigured) return { ok: false, error: "Not connected to the server." };
+    try {
+      const { session } = await api.startLiveSession(workoutName, exercises);
+      set({ session });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: errorMessage(error) };
+    }
+  },
+
+  pushExercises: (exercises) => {
+    if (!isApiConfigured || !get().session) return;
+    api.updateLiveSessionExercises(exercises).catch((error) => console.warn("Failed to sync live session exercises", error));
+  },
+
+  join: async () => {
+    if (!isApiConfigured) return { ok: false, error: "Not connected to the server." };
+    try {
+      const { session } = await api.joinLiveSession();
+      set({ session });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: errorMessage(error) };
+    }
+  },
+
+  endSession: () => {
+    set({ session: null });
+    if (!isApiConfigured) return;
+    api.endLiveSession().catch((error) => console.warn("Failed to end crew live session", error));
+  },
+}));

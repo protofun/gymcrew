@@ -13,18 +13,21 @@ import { ExerciseInstructionsModal } from "@/components/ExerciseInstructionsModa
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { RankBadge } from "@/components/RankBadge";
 import { RankRevealCard } from "@/components/RankRevealCard";
+import { TierPickerSheet } from "@/components/TierPickerSheet";
 import type { Exercise } from "@/data/exercises";
 import { genericExerciseRankDetail, tierForExercise } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards, type LiftRankCard } from "@/lib/lift-rank-cards";
 import { checkLiftPlausibility, type PlausibilityResult } from "@/lib/rank-plausibility";
-import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile } from "@/lib/rank";
+import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
 import {
-  maxRealisticGoalKg,
   rankForHypotheticalWeight,
   simulateRankProgression,
+  weeksNeededForGoal,
+  weightNeededForTier,
   type HypotheticalRankResult,
   type SimulationPoint,
 } from "@/lib/rank-simulator";
+import { ensureExerciseTrackedOnRanksBoard } from "@/lib/workout-finish";
 import { estimateOneRepMax } from "@/lib/workout-metrics";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore, type PersonalRecord } from "@/store/personal-records-store";
@@ -32,8 +35,9 @@ import { colors, fontFamily } from "@/theme";
 
 type Step = "pick" | "log" | "reveal" | "simulator";
 type Decision = "pending" | "logged" | "viewOnly";
-const PERIOD_OPTIONS = [4, 8, 12, 16] as const;
-const MAX_PERIOD_WEEKS = 16;
+/** Bound for the custom date picker only (it needs some calendar limit to stop scrolling at) —
+ * there's no realistic-timeline cap anymore, this is just generously far out. */
+const CUSTOM_DATE_MAX_WEEKS = 156;
 
 const PRESSED_STYLE = ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.75 : 1 });
 
@@ -302,15 +306,12 @@ function RankProgressionChart({ points }: { points: SimulationPoint[] }) {
   const coords = points.map((point, index) => ({ x: CHART_Y_AXIS_WIDTH + index * stepX, y: yForTier(point.tierIndex) }));
   const pathD = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x} ${c.y}`).join(" ");
 
-  const tickCount = isFlat ? 1 : Math.min(3, range + 1);
-  const yTicks = Array.from(
-    new Map(
-      Array.from({ length: tickCount }, (_, i) => {
-        const tierIndex = isFlat ? minTier : Math.round(minTier + (range * i) / Math.max(1, tickCount - 1));
-        return [tierIndex, { tierIndex, y: yForTier(tierIndex) }];
-      }),
-    ).values(),
-  );
+  // One badge per rank actually hit along the plotted path (not an arbitrary evenly-spaced sample
+  // across the whole range) — a goal that crosses several tiers should show all of them, not just
+  // the 3 the old evenly-spaced sampling capped out at.
+  const yTicks = Array.from(new Set(tierIndices))
+    .sort((a, b) => a - b)
+    .map((tierIndex) => ({ tierIndex, y: yForTier(tierIndex) }));
 
   return (
     <View className="gap-2">
@@ -370,17 +371,25 @@ function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: 
   }, [today]);
   const maxDate = useMemo(() => {
     const date = new Date(today);
-    date.setDate(date.getDate() + MAX_PERIOD_WEEKS * 7);
+    date.setDate(date.getDate() + CUSTOM_DATE_MAX_WEEKS * 7);
     return date;
   }, [today]);
 
+  // Either a target weight or a target rank drives the goal — never both at once, so switching
+  // modes can't leave a stale value from the other one silently still in effect.
+  const [goalMode, setGoalMode] = useState<"weight" | "rank">("weight");
   const [goalInput, setGoalInput] = useState(String(Math.round(currentWeightKg + Math.max(5, currentWeightKg * 0.08))));
-  const [periodWeeks, setPeriodWeeks] = useState<number>(8);
+  const [targetTier, setTargetTier] = useState<RankTier | null>(null);
+  const [tierPickerVisible, setTierPickerVisible] = useState(false);
+  // Same either/or as the goal above: by default the timeline is auto-estimated from the goal
+  // itself (no date chosen at all) — picking a specific date is an explicit opt-in via the tab
+  // below, not the starting state.
+  const [timelineMode, setTimelineMode] = useState<"auto" | "custom">("auto");
   const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
 
   const goalWeightKg = parseFloat(goalInput.replace(",", "."));
-  const validGoal = Number.isFinite(goalWeightKg) && goalWeightKg > 0;
+  const validGoal = goalMode === "weight" ? Number.isFinite(goalWeightKg) && goalWeightKg > 0 : targetTier !== null;
 
   // `lift` is the lift as picked in step 1 — if the logged set just became a new PR, its
   // tier/progress are stale (still anchored on the old bestWeightKg). Recompute both fresh so the
@@ -397,9 +406,26 @@ function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: 
       : null,
   };
 
-  const realisticGoalKg = maxRealisticGoalKg(currentWeightKg, periodWeeks);
-  const isUnrealistic = validGoal && goalWeightKg > realisticGoalKg;
-  const effectiveGoalKg = validGoal ? Math.min(goalWeightKg, realisticGoalKg) : 0;
+  // No more "is this realistic?" ceiling — whatever the user enters (a weight, or a rank to reach)
+  // is simulated as-is, however far off it is. A rank goal is resolved to the weight that first
+  // reaches it (see weightNeededForTier's doc comment for why a search instead of a formula).
+  const effectiveGoalKg = !validGoal
+    ? 0
+    : goalMode === "weight"
+      ? goalWeightKg
+      : weightNeededForTier(RANK_TIERS.indexOf(targetTier!), (weightKg) => rankAtWeight(simulatedLift, weightKg, currentReps, profile));
+
+  // Auto mode estimates how long the goal itself would take (see weeksNeededForGoal) — no date
+  // chosen at all. Custom mode uses whatever date was actually picked, defaulting to that same
+  // estimate until one has been.
+  const estimatedWeeks = Math.max(1, weeksNeededForGoal(currentWeightKg, effectiveGoalKg));
+  const customWeeksFromDate = customEndDate ? Math.max(1, Math.round((customEndDate.getTime() - today.getTime()) / (7 * 86400000))) : null;
+  const periodWeeks = timelineMode === "auto" ? estimatedWeeks : (customWeeksFromDate ?? estimatedWeeks);
+  const estimatedEndDate = useMemo(() => {
+    const date = new Date(today);
+    date.setDate(date.getDate() + estimatedWeeks * 7);
+    return date;
+  }, [today, estimatedWeeks]);
 
   const points = useMemo(
     () =>
@@ -411,15 +437,7 @@ function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: 
   );
   const goalTier = validGoal ? rankAtWeight(simulatedLift, effectiveGoalKg, currentReps, profile).tier : null;
 
-  function selectPreset(weeks: number) {
-    setPeriodWeeks(weeks);
-    setCustomEndDate(null);
-  }
-
   function handleSelectDate(date: Date) {
-    const days = Math.round((date.getTime() - today.getTime()) / 86400000);
-    const weeks = Math.min(MAX_PERIOD_WEEKS, Math.max(1, Math.round(days / 7)));
-    setPeriodWeeks(weeks);
     setCustomEndDate(date);
     setDatePickerVisible(false);
   }
@@ -433,70 +451,130 @@ function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: 
         <Text className="caption text-text-secondary">Set a goal and see how your rank could climb.</Text>
       </View>
 
-      <View className="flex-row items-center gap-3">
-        <View className="flex-1 gap-1 rounded-2xl border border-divider bg-surface p-3">
+      <View className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface px-4 py-3">
+        <View>
           <Text className="caption text-text-secondary">CURRENT</Text>
           <Text className="body-md font-body-bold text-text-primary">
             {currentWeightKg}kg × {currentReps}
           </Text>
         </View>
-        <Ionicons name="arrow-forward" size={16} color={colors.neutral.textSecondary} />
-        <View className="flex-1 gap-1 rounded-2xl border border-brand-yellow/30 bg-brand-yellow/5 p-3">
-          <Text className="caption text-brand-yellow">GOAL</Text>
-          <View className="flex-row items-center gap-1">
-            <TextInput
-              value={goalInput}
-              onChangeText={setGoalInput}
-              keyboardType="decimal-pad"
-              className="body-md font-body-bold text-text-primary"
-              style={{ minWidth: 40 }}
-            />
-            <Text className="body-md font-body-bold text-text-primary">
-              kg × {currentReps}
-            </Text>
-          </View>
-        </View>
+        <RankBadge tier={simulatedLift.tier} size={30} />
       </View>
 
       <View className="gap-2">
-        <Text className="caption font-body-semibold text-text-secondary">PERIOD (MAX {MAX_PERIOD_WEEKS} WEEKS)</Text>
+        <Text className="caption font-body-semibold text-text-secondary">GOAL</Text>
         <View className="flex-row rounded-full border border-divider bg-surface p-1">
-          {PERIOD_OPTIONS.map((weeks) => {
-            const active = weeks === periodWeeks && !customEndDate;
+          {(
+            [
+              { key: "weight", label: "Target Weight" },
+              { key: "rank", label: "Target Rank" },
+            ] as const
+          ).map(({ key, label }) => {
+            const active = key === goalMode;
             return (
               <Pressable
-                key={weeks}
-                onPress={() => selectPreset(weeks)}
+                key={key}
+                onPress={() => setGoalMode(key)}
                 className={`flex-1 items-center rounded-full py-2 ${active ? "bg-brand-yellow" : ""}`}
               >
-                <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{weeks}w</Text>
+                <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{label}</Text>
               </Pressable>
             );
           })}
         </View>
-        <Pressable
-          onPress={() => setDatePickerVisible(true)}
-          style={PRESSED_STYLE}
-          className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface px-4 py-3"
-        >
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="calendar-outline" size={16} color={colors.neutral.textSecondary} />
-            <Text className="body-sm text-text-secondary">
-              {customEndDate
-                ? `Ends ${customEndDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} (${periodWeeks}w)`
-                : "Pick an end date instead"}
-            </Text>
+
+        {goalMode === "weight" ? (
+          <View className="flex-row items-center gap-2 rounded-2xl border-2 border-brand-yellow bg-brand-yellow/10 px-4 py-3">
+            <TextInput
+              value={goalInput}
+              onChangeText={setGoalInput}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              placeholderTextColor={colors.neutral.textSecondary}
+              autoFocus
+              className="heading-4 flex-1 text-text-primary"
+              style={{ minWidth: 0 }}
+            />
+            <Text className="body-md font-body-semibold text-text-secondary">kg × {currentReps}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={14} color={colors.neutral.textSecondary} />
-        </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => setTierPickerVisible(true)}
+            style={PRESSED_STYLE}
+            className="flex-row items-center justify-between rounded-2xl border-2 border-brand-yellow bg-brand-yellow/10 px-4 py-3"
+          >
+            <View className="flex-row items-center gap-2.5">
+              {targetTier ? (
+                <RankBadge tier={targetTier} size={24} />
+              ) : (
+                <Ionicons name="trophy-outline" size={20} color={colors.neutral.textSecondary} />
+              )}
+              <Text className="heading-4 text-text-primary">{targetTier ? formatRankTier(targetTier) : "Pick a rank"}</Text>
+            </View>
+            <Ionicons name="chevron-down" size={18} color={colors.neutral.textSecondary} />
+          </Pressable>
+        )}
       </View>
 
-      {isUnrealistic && (
-        <View className="flex-row items-start gap-2 rounded-2xl border border-error/40 bg-error/10 p-3">
-          <Ionicons name="warning" size={16} color={colors.semantic.error} style={{ marginTop: 1 }} />
+      <View className="gap-2">
+        <Text className="caption font-body-semibold text-text-secondary">TIMELINE</Text>
+        <View className="flex-row rounded-full border border-divider bg-surface p-1">
+          {(
+            [
+              { key: "auto", label: "Auto-Estimate" },
+              { key: "custom", label: "Pick Date" },
+            ] as const
+          ).map(({ key, label }) => {
+            const active = key === timelineMode;
+            return (
+              <Pressable
+                key={key}
+                onPress={() => setTimelineMode(key)}
+                className={`flex-1 items-center rounded-full py-2 ${active ? "bg-brand-yellow" : ""}`}
+              >
+                <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {timelineMode === "auto" ? (
+          <View className="gap-0.5 rounded-2xl border border-divider bg-surface p-3">
+            <View className="flex-row items-center gap-1.5">
+              <Ionicons name="calculator-outline" size={14} color={colors.neutral.textSecondary} />
+              <Text className="body-sm font-body-semibold text-text-primary">
+                ~{estimatedWeeks} {estimatedWeeks === 1 ? "week" : "weeks"} at a typical pace
+              </Text>
+            </View>
+            <Text className="caption text-text-secondary">
+              Around {estimatedEndDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} — switch to{" "}
+              &quot;Pick Date&quot; to set your own instead.
+            </Text>
+          </View>
+        ) : (
+          <Pressable
+            onPress={() => setDatePickerVisible(true)}
+            style={PRESSED_STYLE}
+            className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface px-4 py-3"
+          >
+            <View className="flex-row items-center gap-2">
+              <Ionicons name="calendar-outline" size={16} color={colors.neutral.textSecondary} />
+              <Text className="body-sm text-text-secondary">
+                {customEndDate
+                  ? `Ends ${customEndDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} (${periodWeeks}w)`
+                  : "Pick your target date"}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={14} color={colors.neutral.textSecondary} />
+          </Pressable>
+        )}
+      </View>
+
+      {goalMode === "rank" && targetTier && (
+        <View className="flex-row items-center gap-2 rounded-2xl border border-divider bg-surface p-3">
+          <Ionicons name="calculator-outline" size={14} color={colors.neutral.textSecondary} />
           <Text className="body-sm flex-1 text-text-secondary">
-            {Math.round(goalWeightKg - currentWeightKg)}kg in {periodWeeks} weeks isn&apos;t realistic — showing your realistic ceiling of{" "}
-            {realisticGoalKg}kg instead.
+            That takes {Math.round(effectiveGoalKg)}kg × {currentReps} on {lift.name}.
           </Text>
         </View>
       )}
@@ -533,6 +611,17 @@ function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: 
         selectedDate={customEndDate}
         onClose={() => setDatePickerVisible(false)}
         onSelect={handleSelectDate}
+      />
+
+      <TierPickerSheet
+        visible={tierPickerVisible}
+        title="Pick a target rank"
+        selectedTier={targetTier}
+        onSelect={(tier) => {
+          setTargetTier(tier);
+          setTierPickerVisible(false);
+        }}
+        onClose={() => setTierPickerVisible(false)}
       />
     </View>
   );
@@ -587,6 +676,7 @@ export default function WhatsMyRankScreen() {
   function handleLogAsPr() {
     if (!selectedLift) return;
     checkAndRecord(selectedLift.exercise.id, selectedLift.name, loggedWeightKg, loggedReps);
+    ensureExerciseTrackedOnRanksBoard(selectedLift.exercise.id);
     setDecision("logged");
   }
 

@@ -1,3 +1,4 @@
+import { useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
@@ -147,19 +148,10 @@ function CrewBanner() {
         </Animated.View>
       </View>
 
-      <View className="mt-4 flex-row items-center justify-between">
+      <View className="mt-4">
         <EditableText id="crew.banner.tagline" className="body-md text-text-secondary">
           {tagline}
         </EditableText>
-
-        <Pressable
-          onPress={() => router.push("/crew/settings")}
-          hitSlop={8}
-          style={PRESSED_STYLE}
-          className="h-8 w-8 items-center justify-center rounded-full border border-divider"
-        >
-          <Ionicons name="settings-outline" size={16} color={colors.neutral.textSecondary} />
-        </Pressable>
       </View>
     </View>
   );
@@ -525,7 +517,9 @@ export default function CrewScreen() {
   const [activitySheetOpen, setActivitySheetOpen] = useState(false);
   const [todayModalOpen, setTodayModalOpen] = useState(false);
 
+  const { user } = useUser();
   const session = useLedWorkoutStore((state) => state.session);
+  const refreshLiveSession = useLedWorkoutStore((state) => state.refresh);
   const hasWorkoutInProgress = useActiveWorkoutStore((state) => state.startedAt !== null);
   const setTodayOverride = useTodayTrainingStore((state) => state.setTodayOverride);
   const clearTodayOverride = useTodayTrainingStore((state) => state.clearTodayOverride);
@@ -535,14 +529,20 @@ export default function CrewScreen() {
   const fetchCrewActivity = useCrewActivityStore((state) => state.fetchForCrew);
   const hasSyncedOnce = useSyncStatusStore((state) => state.hasSyncedOnce);
 
-  const iAmLeader = session?.leaderId === CURRENT_MEMBER_ID;
-  const iHaveJoined = session?.participantIds.includes(CURRENT_MEMBER_ID) ?? false;
+  // `session.leaderId`/`participantIds` are real Clerk ids from the backend, not the local
+  // CURRENT_MEMBER_ID alias crew-store.ts remaps "me" to within `members` — see its doc comment.
+  const iAmLeader = !!user && session?.leaderId === user.id;
+  const iHaveJoined = !!user && (session?.participantIds.includes(user.id) ?? false);
 
   // Real crewmate workouts/PRs for MuscleBalanceCard/RecentAchievementCard (see
   // crew-activity-store.ts) — fetched once the real crew id is known, not before.
   useEffect(() => {
     if (crewId) fetchCrewActivity(crewId);
   }, [crewId, fetchCrewActivity]);
+
+  useEffect(() => {
+    if (crewId) refreshLiveSession();
+  }, [crewId, refreshLiveSession]);
 
   // Same "wait for the real database pull before showing anything" gate as (tabs)/home.tsx — see
   // sync-status-store.ts. Blocks on the same sign-in sync, so a stale/local crew state (or none at

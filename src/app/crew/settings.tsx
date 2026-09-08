@@ -1,17 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
+import { AvatarActionSheet } from "@/components/AvatarActionSheet";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { CrewAvatarGeneratorModal } from "@/components/CrewAvatarGeneratorModal";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { EditableText } from "@/components/EditableText";
 import { InviteMembersModal } from "@/components/InviteMembersModal";
 import { SearchableSelectField } from "@/components/SearchableSelectField";
-import { CREW_ICONS } from "@/data/crew-icons";
 import { CREW_TRAINING_TYPES } from "@/data/crew-training-types";
 import { useCrewStore, type CrewPrivacy } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
@@ -98,10 +99,10 @@ export default function CrewSettingsScreen() {
   const privacy = useCrewStore((state) => state.privacy);
   const joinRequestsEnabled = useCrewStore((state) => state.joinRequestsEnabled);
   const trainingType = useCrewStore((state) => state.trainingType);
-  const subscriptionActive = useCrewStore((state) => state.subscriptionActive);
   const notifications = useCrewStore((state) => state.notifications);
   const updateInfo = useCrewStore((state) => state.updateInfo);
   const setIcon = useCrewStore((state) => state.setIcon);
+  const uploadIcon = useCrewStore((state) => state.uploadIcon);
   const setPrivacy = useCrewStore((state) => state.setPrivacy);
   const toggleJoinRequests = useCrewStore((state) => state.toggleJoinRequests);
   const setTrainingType = useCrewStore((state) => state.setTrainingType);
@@ -115,10 +116,9 @@ export default function CrewSettingsScreen() {
   const [editOpen, setEditOpen] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [generatorOpen, setGeneratorOpen] = useState(false);
-  const isGeneratedIcon = !CREW_ICONS.some((item) => item.key === icon);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
@@ -148,6 +148,31 @@ export default function CrewSettingsScreen() {
     setEditOpen(false);
   }
 
+  async function handleChooseCrewPhoto() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission needed", "Allow photo library access to set a crew photo.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+    const asset = result.assets?.[0];
+    if (result.canceled || !asset?.base64) return;
+
+    setUploadingIcon(true);
+    const uploadResult = await uploadIcon(asset.base64, asset.mimeType ?? "image/jpeg");
+    setUploadingIcon(false);
+    if (!uploadResult.ok) {
+      Alert.alert("Couldn't update crew photo", uploadResult.error);
+    }
+  }
+
   function handleLeaveCrew() {
     setLeaveConfirmVisible(true);
   }
@@ -174,7 +199,9 @@ export default function CrewSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="flex-row items-center gap-3">
-          <CrewIconBadge iconKey={icon} size={56} />
+          <Pressable onPress={() => setIconPickerOpen(true)} disabled={uploadingIcon} style={{ opacity: uploadingIcon ? 0.5 : 1 }}>
+            <CrewIconBadge iconKey={icon} size={56} />
+          </Pressable>
           <View className="flex-1 gap-0.5">
             <EditableText id="crew.settings.name" className="body-lg font-body-bold text-text-primary">
               {name.toUpperCase()}
@@ -183,8 +210,8 @@ export default function CrewSettingsScreen() {
               {`Est. ${new Date(createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`}
             </EditableText>
           </View>
-          <Pressable onPress={() => setIconPickerOpen(true)} hitSlop={8}>
-            <Text className="body-sm font-body-bold text-brand-yellow">Change</Text>
+          <Pressable onPress={() => setIconPickerOpen(true)} disabled={uploadingIcon} hitSlop={8}>
+            <Text className="body-sm font-body-bold text-brand-yellow">{uploadingIcon ? "Uploading…" : "Change"}</Text>
           </Pressable>
         </View>
 
@@ -194,7 +221,6 @@ export default function CrewSettingsScreen() {
           <SettingsRow label="Privacy" value={PRIVACY_LABEL[privacy]} onPress={() => setPrivacyOpen(true)} />
           <SettingsRow label="Join Requests" value={joinRequestsEnabled ? "On" : "Off"} onPress={() => setJoinRequestsOpen(true)} />
           <SettingsRow label="Notifications" onPress={() => setNotificationsOpen(true)} />
-          <SettingsRow label="Subscription" value={subscriptionActive ? "Active" : "Inactive"} onPress={() => setSubscriptionOpen(true)} />
           <SettingsRow label="Manage Members" onPress={() => router.push("/crew/members")} />
           <SettingsRow label="Invite Members" onPress={() => setInviteOpen(true)} />
           <SettingsRow label="Roles & Permissions" onPress={() => setRolesOpen(true)} />
@@ -242,42 +268,18 @@ export default function CrewSettingsScreen() {
         </View>
       </SheetModal>
 
-      <SheetModal visible={iconPickerOpen} onClose={() => setIconPickerOpen(false)} title="Change Crew Logo">
-        <View className="flex-row flex-wrap gap-3">
-          {CREW_ICONS.map((item) => {
-            const active = item.key === icon;
-            return (
-              <Pressable
-                key={item.key}
-                onPress={() => {
-                  setIcon(item.key);
-                  setIconPickerOpen(false);
-                }}
-                className={`h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 ${
-                  active ? "border-brand-yellow" : "border-divider"
-                }`}
-              >
-                <CrewIconBadge iconKey={item.key} size={60} tint={active ? colors.brand.yellow : colors.neutral.textPrimary} />
-              </Pressable>
-            );
-          })}
-          <Pressable
-            onPress={() => {
-              setIconPickerOpen(false);
-              setGeneratorOpen(true);
-            }}
-            className={`h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 ${
-              isGeneratedIcon ? "border-brand-yellow" : "border-dashed border-divider"
-            }`}
-          >
-            {isGeneratedIcon ? (
-              <CrewIconBadge iconKey={icon} size={60} />
-            ) : (
-              <Ionicons name="sparkles-outline" size={22} color={colors.neutral.textSecondary} />
-            )}
-          </Pressable>
-        </View>
-      </SheetModal>
+      <AvatarActionSheet
+        visible={iconPickerOpen}
+        onClose={() => setIconPickerOpen(false)}
+        onChoosePhoto={() => {
+          setIconPickerOpen(false);
+          handleChooseCrewPhoto();
+        }}
+        onGenerateAvatar={() => {
+          setIconPickerOpen(false);
+          setGeneratorOpen(true);
+        }}
+      />
 
       <CrewAvatarGeneratorModal visible={generatorOpen} onClose={() => setGeneratorOpen(false)} onPick={setIcon} />
 
@@ -304,23 +306,6 @@ export default function CrewSettingsScreen() {
         onConfirm={confirmLeaveCrew}
         onCancel={() => setLeaveConfirmVisible(false)}
       />
-
-      <SheetModal visible={subscriptionOpen} onClose={() => setSubscriptionOpen(false)} title="Subscription">
-        <View className="gap-4">
-          <View className="flex-row items-center gap-3 rounded-2xl border border-divider bg-background p-4">
-            <Ionicons name="card" size={22} color={subscriptionActive ? colors.semantic.success : colors.neutral.textSecondary} />
-            <View className="flex-1">
-              <Text className="body-md font-body-semibold text-text-primary">Crew Plan</Text>
-              <Text className="body-sm text-text-secondary">
-                {subscriptionActive ? "Active — unlocks ranks, leaderboards & crew challenges" : "Inactive — upgrade to unlock the competitive layer"}
-              </Text>
-            </View>
-          </View>
-          <Text className="body-sm text-text-secondary">
-            Your crew can split the subscription cost between members. Manage billing from your profile.
-          </Text>
-        </View>
-      </SheetModal>
 
       <SheetModal visible={joinRequestsOpen} onClose={() => setJoinRequestsOpen(false)} title="Join Requests">
         <View className="flex-row items-center justify-between rounded-xl border border-divider bg-background px-4 py-3.5">

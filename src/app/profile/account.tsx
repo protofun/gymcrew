@@ -8,12 +8,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { api, isApiConfigured } from "@/lib/api";
 import { resetLocalStateForAccountSwitch } from "@/lib/reset-local-state";
-import { DEVELOPER_MODE_USER_ID, useDeveloperModeStore } from "@/store/developer-mode-store";
+import { DEVELOPER_MODE_EMAILS, useDeveloperModeStore } from "@/store/developer-mode-store";
 import { colors } from "@/theme";
 
-/** The only account allowed to create/edit/delete app-wide challenges (see profile/admin-challenges.tsx
- * and backend/routes/admin-challenges.php, which re-checks this same email server-side). */
-const ADMIN_CHALLENGE_EMAIL = "jaimy.mathon@gmail.com";
+/** The only accounts allowed to create/edit/delete app-wide challenges (see
+ * profile/admin-challenges.tsx and backend/routes/admin-challenges.php, which re-checks this same
+ * list server-side). */
+const ADMIN_CHALLENGE_EMAILS = ["jaimy.mathon@gmail.com", "akb.koycu@gmail.com"];
 
 function PasswordField({ label, value, onChangeText }: { label: string; value: string; onChangeText: (value: string) => void }) {
   return (
@@ -46,8 +47,9 @@ export default function AccountScreen() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [signOutConfirmVisible, setSignOutConfirmVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
-  const isDeveloper = user?.id === DEVELOPER_MODE_USER_ID;
-  const isChallengeAdmin = user?.primaryEmailAddress?.emailAddress?.toLowerCase() === ADMIN_CHALLENGE_EMAIL;
+  const email = user?.primaryEmailAddress?.emailAddress?.toLowerCase();
+  const isDeveloper = !!email && DEVELOPER_MODE_EMAILS.includes(email);
+  const isChallengeAdmin = !!email && ADMIN_CHALLENGE_EMAILS.includes(email);
   const developerModeEnabled = useDeveloperModeStore((state) => state.enabled);
   const toggleDeveloperMode = useDeveloperModeStore((state) => state.toggleEnabled);
   const clearAllOverrides = useDeveloperModeStore((state) => state.clearAllOverrides);

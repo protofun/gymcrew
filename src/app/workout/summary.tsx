@@ -17,15 +17,47 @@ import { images } from "@/constants/images";
 import { EXERCISE_BY_ID, formatMuscleName } from "@/data/exercises";
 import { formatElapsed } from "@/hooks/use-elapsed-timer";
 import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
+import { formatMuscleLabel } from "@/lib/muscle-groups";
+import { formatReadyAt, formatRecoveryLabel, recoveryStatusForWorkout, type MuscleRecoveryStatus } from "@/lib/muscle-recovery";
 import { RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
 import { estimateOneRepMax } from "@/lib/workout-metrics";
 import { estimateCalories } from "@/lib/workout-sessions";
+import { warAttackScore } from "@/lib/war";
 import type { WorkoutPr } from "@/lib/workout-finish";
 import { workoutXpEarned } from "@/lib/xp";
 import type { LoggedExercise } from "@/store/active-workout-store";
+import { useCrewWarStore } from "@/store/crew-war-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutHistoryStore, type CompletedWorkout } from "@/store/workout-history-store";
 import { colors } from "@/theme";
+
+/** Shown right after finishing (see `justFinished`) — the War-attack score for this workout,
+ * computed instantly client-side (see lib/war.ts) since the real attack call is fire-and-forget
+ * and shouldn't block finishing. `war` itself is read reactively from the store, so the standing
+ * line below fills in a moment later once that call actually resolves. Renders nothing without a
+ * crew (war stays null) or without any real volume to attack with. */
+function WarAttackSummary({ volumeKg, prCount }: { volumeKg: number; prCount: number }) {
+  const war = useCrewWarStore((state) => state.war);
+  if (!war || war.status !== "active" || volumeKg <= 0) return null;
+
+  const score = warAttackScore(volumeKg, prCount);
+  const leading = war.myScore >= war.opponentScore;
+
+  return (
+    <View className="mx-4 mb-4 flex-row items-center gap-3 rounded-2xl border border-brand-yellow/30 bg-brand-yellow/5 p-3.5">
+      <View className="h-10 w-10 items-center justify-center rounded-full bg-brand-yellow/15">
+        <Ionicons name="flash" size={18} color={colors.brand.yellow} />
+      </View>
+      <View className="flex-1 gap-0.5">
+        <Text className="body-md font-body-semibold text-text-primary">War Attack: +{score.toLocaleString("en-US")}</Text>
+        <Text className="caption text-text-secondary">
+          Crew {leading ? "leads" : "trails"} {Math.round(war.myScore).toLocaleString("en-US")} vs{" "}
+          {Math.round(war.opponentScore).toLocaleString("en-US")} · {war.opponent.name}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 /** The single heaviest completed (non-warmup) set of the workout — the "highlight" lift to call
  * out on the results screen, separate from `lib/workout-sessions.ts`'s `primaryExercise` (which
@@ -133,6 +165,24 @@ function ExerciseAccordionRow({ exercise, unit, hasPr }: { exercise: LoggedExerc
   );
 }
 
+function MuscleRecoveryRow({ status }: { status: MuscleRecoveryStatus }) {
+  const dotColor = status.isRecovered ? colors.semantic.success : colors.semantic.warning;
+  return (
+    <View className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface px-3.5 py-3">
+      <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: dotColor }} />
+      <Text className="body-sm flex-1 font-body-semibold text-text-primary">{formatMuscleLabel(status.group)}</Text>
+      <View className="items-end">
+        <Text className="caption font-body-semibold" style={{ color: dotColor }}>
+          {formatRecoveryLabel(status)}
+        </Text>
+        {status.readyAt !== null && !status.isRecovered && (
+          <Text className="caption text-text-secondary">{formatReadyAt(status.readyAt)}</Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
 function PrRow({ pr, tier, unit, onPress }: { pr: WorkoutPr; tier: RankTier; unit: string; onPress: () => void }) {
   return (
     <Pressable
@@ -198,6 +248,17 @@ export default function WorkoutSummaryScreen() {
     prsWithTier.length > 0
       ? prsWithTier.reduce((best, cur) => (RANK_TIERS.indexOf(cur.tier) > RANK_TIERS.indexOf(best) ? cur.tier : best), prsWithTier[0].tier)
       : null;
+  // A plain call, not useMemo — this is cheap (10 muscle groups) and `workout` is only known-defined
+  // past the early return above, so a hook here would be called conditionally between renders.
+  const recoveryStatuses = recoveryStatusForWorkout(workout);
+
+  // `router.back()` alone silently does nothing without real navigation history — the finish flow
+  // reaches this screen via `router.replace()` (active.tsx / pr-celebration.tsx), which can leave
+  // nothing to go back to, especially after a web/PWA reload. Same fix as workout/active.tsx.
+  function handleBack() {
+    if (router.canGoBack()) router.back();
+    else router.replace("/home");
+  }
 
   function handleOpenShare() {
     posthog.capture("workout_shared", {
@@ -220,7 +281,7 @@ export default function WorkoutSummaryScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="flex-row items-center justify-between px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8}>
+        <Pressable onPress={handleBack} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Workout Summary</Text>
@@ -266,6 +327,8 @@ export default function WorkoutSummaryScreen() {
             </View>
           </View>
         ))}
+
+      {justFinished === "1" && <WarAttackSummary volumeKg={workout.volumeKg} prCount={workout.prs.length} />}
 
       <View className="flex-row gap-6 border-b border-divider px-4">
         {TABS.map((t) => {
@@ -373,8 +436,24 @@ export default function WorkoutSummaryScreen() {
           (Object.keys(workout.muscleIntensity).length === 0 ? (
             <Text className="body-md py-10 text-center text-text-secondary">No muscle data for this workout.</Text>
           ) : (
-            <View className="items-center gap-4">
-              <MuscleHeatmap muscleIntensity={workout.muscleIntensity} height={300} gender={gender} />
+            <View className="gap-6">
+              <View className="items-center">
+                <MuscleHeatmap muscleIntensity={workout.muscleIntensity} height={300} gender={gender} />
+              </View>
+
+              {recoveryStatuses.length > 0 && (
+                <View className="gap-2.5">
+                  <View className="gap-0.5">
+                    <Text className="body-md font-body-semibold text-text-primary">Muscle Recovery</Text>
+                    <Text className="caption text-text-secondary">When each trained muscle should be ready to train hard again.</Text>
+                  </View>
+                  <View className="gap-2">
+                    {recoveryStatuses.map((status) => (
+                      <MuscleRecoveryRow key={status.group} status={status} />
+                    ))}
+                  </View>
+                </View>
+              )}
             </View>
           ))}
 
@@ -398,6 +477,14 @@ export default function WorkoutSummaryScreen() {
               ))}
             </View>
           ))}
+
+        <Pressable
+          onPress={() => router.replace("/home")}
+          className="flex-row items-center justify-center gap-2 rounded-full border border-divider py-4"
+        >
+          <Ionicons name="home-outline" size={18} color={colors.neutral.textPrimary} />
+          <Text className="body-md font-body-semibold text-text-primary">Go to Home</Text>
+        </Pressable>
       </ScrollView>
 
       <ShareCardModal visible={shareModalVisible} onClose={() => setShareModalVisible(false)} fallbackMessage={shareFallbackMessage}>

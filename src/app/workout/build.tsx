@@ -62,6 +62,7 @@ export default function BuildWorkoutScreen() {
   const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
   const cards = useMemo(() => buildLiftRankCards(records, profile, "gym"), [records, profile]);
 
+  const discardWorkout = useActiveWorkoutStore((state) => state.discardWorkout);
   const startWorkout = useActiveWorkoutStore((state) => state.startWorkout);
   const setName = useActiveWorkoutStore((state) => state.setName);
   const addExercise = useActiveWorkoutStore((state) => state.addExercise);
@@ -73,6 +74,10 @@ export default function BuildWorkoutScreen() {
   }
 
   function handleStartExisting(name: string, exerciseIds: string[]) {
+    // Starting a saved workout always starts fresh — discard first since `startWorkout` now
+    // leaves an already-in-progress workout untouched rather than overwriting it (see
+    // active-workout-store.ts).
+    discardWorkout();
     startWorkout();
     setName(name);
     for (const exerciseId of exerciseIds) {
@@ -118,6 +123,7 @@ export default function BuildWorkoutScreen() {
   function handleSaveAndStart() {
     const name = persistDraft();
     if (!name) return;
+    discardWorkout();
     startWorkout();
     setName(name);
     for (const exercise of draftExercises) addExercise(exercise);

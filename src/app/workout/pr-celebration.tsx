@@ -8,8 +8,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { captureRef } from "react-native-view-shot";
 
 import { RankRevealCard } from "@/components/RankRevealCard";
-import { calculateLiftRankDetail, majorLiftForExerciseId } from "@/lib/rank";
+import { EXERCISE_BY_ID } from "@/data/exercises";
+import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
+import type { RankProfile } from "@/lib/rank";
 import { formatTimeSince } from "@/lib/time-since";
+import { useCustomExercisesStore } from "@/store/custom-exercises-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors } from "@/theme";
@@ -19,6 +22,7 @@ export default function PrCelebrationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const workout = useWorkoutHistoryStore((state) => state.workouts.find((w) => w.id === id));
   const onboarding = useOnboardingStore((state) => state.onboarding);
+  const customExercises = useCustomExercisesStore((state) => state.exercises);
   const [index, setIndex] = useState(0);
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef<View>(null);
@@ -26,21 +30,17 @@ export default function PrCelebrationScreen() {
   const hasPrs = !!workout && workout.prs.length > 0;
   const pr = hasPrs ? workout.prs[index] : null;
 
-  // Only the four major lifts have established strength standards to rank against, and the
-  // calculation needs bodyweight + gender from onboarding — anything else falls back to Gold
-  // rather than presenting a tier we can't actually justify (and skips the percentile/progress
-  // bar on the card, same as `RankRevealCard` does for any exercise it can't rank precisely).
-  const majorLift = pr ? majorLiftForExerciseId(pr.exerciseId) : null;
-  const canCalculateRank = majorLift !== null && !!onboarding.weightKg && !!onboarding.gender;
-  const rankDetail =
-    canCalculateRank && pr
-      ? calculateLiftRankDetail(majorLift!, pr.weightKg, {
-          bodyWeightKg: onboarding.weightKg!,
-          gender: onboarding.gender!,
-          age: onboarding.age,
-        })
-      : null;
-  const rankTier = rankDetail?.tier ?? "gold";
+  // Same generic muscle-group-proxy tier lookup used by the summary screen's PRs tab and the
+  // Personal Records screen (`genericExerciseRankDetail`) — every exercise gets a real tier this
+  // way, not just the 4 major lifts, so this card never falls back to a made-up default.
+  const rankProfile: RankProfile = {
+    gender: onboarding.gender ?? "male",
+    bodyWeightKg: onboarding.weightKg ?? 85,
+    age: onboarding.age,
+  };
+  const exercise = pr ? (EXERCISE_BY_ID[pr.exerciseId] ?? customExercises.find((candidate) => candidate.id === pr.exerciseId)) : null;
+  const rankDetail = exercise && pr ? genericExerciseRankDetail(exercise, pr.weightKg, pr.reps, rankProfile) : null;
+  const rankTier = rankDetail?.tier ?? "rookie";
   const topPercent = rankDetail ? Math.max(1, 100 - Math.round(rankDetail.progressToNextTier * 100)) : null;
 
   if (!workout || !pr) {

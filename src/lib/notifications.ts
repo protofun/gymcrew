@@ -80,15 +80,22 @@ export function buildNotifications(
 /**
  * A daily nudge to take your creatine — gated behind the "Creatine Reminder" toggle in Profile ->
  * Notifications (see onboarding-store.ts's `creatineReminders`; the header bell has no setting of
- * its own, it only ever reflects that toggle). The id is date-keyed rather than tracked in its own
- * dismissal store, so it naturally reappears as unread the next day once read via the existing
- * notifications-store `readIds` mechanism.
+ * its own, it only ever reflects that toggle) and only appears once the user's chosen time of day
+ * (`creatineReminderTime`, "HH:mm") has actually passed — before that it just isn't in the list
+ * yet. The id is date-keyed rather than tracked in its own dismissal store, so it naturally
+ * reappears as unread the next day once read via the existing notifications-store `readIds`
+ * mechanism.
  */
-export function buildCreatineReminderNotification(enabled: boolean, now: number = Date.now()): AppNotification[] {
+export function buildCreatineReminderNotification(enabled: boolean, time: string = "09:00", now: number = Date.now()): AppNotification[] {
   if (!enabled) return [];
+  const nowDate = new Date(now);
+  const [hour, minute] = time.split(":").map(Number);
+  const dueToday = new Date(nowDate);
+  dueToday.setHours(hour, minute, 0, 0);
+  if (nowDate.getTime() < dueToday.getTime()) return [];
   return [
     {
-      id: `creatine-${toDateKey(new Date(now))}`,
+      id: `creatine-${toDateKey(nowDate)}`,
       icon: navIcons.nutrition,
       title: "Don't forget your creatine today.",
       time: "Today",

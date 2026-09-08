@@ -70,9 +70,10 @@ type MuscleHeatmapProps = {
   legendIcon?: (group: MuscleGroup, value: number) => ImageSourcePropType | undefined;
   /** Called with the tapped muscle group — e.g. to open a details sheet for it. */
   onPressGroup?: (group: MuscleGroup) => void;
-  /** "front" renders just the front silhouette, half the width — for tight spaces like a calendar
-   * day cell where a full front+back pair would never fit. Defaults to "both". */
-  view?: "both" | "front";
+  /** "front"/"back" render just that one silhouette, half the width — for tight spaces like a
+   * calendar day cell or a workout-split day slot where a full front+back pair would never fit.
+   * Defaults to "both". */
+  view?: "both" | "front" | "back";
   /** Hides the "Front"/"Back" caption under each silhouette — off by default for the same
    * tight-space cases `view="front"` is for. */
   showViewLabel?: boolean;
@@ -80,6 +81,10 @@ type MuscleHeatmapProps = {
    * mind (e.g. a crew-wide aggregate). Pass the real onboarding gender when the heatmap represents
    * one specific person's body. */
   gender?: Gender;
+  /** Horizontal space between the front and back silhouettes when `view="both"` — defaults to 24
+   * (the full-size legend views' spacing). Tight contexts (e.g. a workout-split day slot) pass a
+   * smaller value so a front+back pair still fits. */
+  gap?: number;
 };
 
 export function MuscleHeatmap({
@@ -93,6 +98,7 @@ export function MuscleHeatmap({
   view = "both",
   showViewLabel = true,
   gender = "male",
+  gap = 24,
 }: MuscleHeatmapProps) {
   const width = Math.round(height * BODY_ASPECT_RATIO);
   const trainedGroups = (Object.entries(muscleIntensity) as [MuscleGroup, number][]).sort(
@@ -101,19 +107,21 @@ export function MuscleHeatmap({
 
   return (
     <View className="gap-4">
-      <View className="flex-row items-start justify-center gap-6">
-        <BodyView
-          label="Front"
-          muscles={FRONT_MUSCLES_BY_GENDER[gender]}
-          viewBox={FRONT_VIEW_BOX}
-          width={width}
-          height={height}
-          muscleIntensity={muscleIntensity}
-          colorForIntensity={colorForIntensity}
-          onPressGroup={onPressGroup}
-          showLabel={showViewLabel}
-        />
-        {view === "both" && (
+      <View className="flex-row items-start justify-center" style={{ gap }}>
+        {view !== "back" && (
+          <BodyView
+            label="Front"
+            muscles={FRONT_MUSCLES_BY_GENDER[gender]}
+            viewBox={FRONT_VIEW_BOX}
+            width={width}
+            height={height}
+            muscleIntensity={muscleIntensity}
+            colorForIntensity={colorForIntensity}
+            onPressGroup={onPressGroup}
+            showLabel={showViewLabel}
+          />
+        )}
+        {view !== "front" && (
           <BodyView
             label="Back"
             muscles={BACK_MUSCLES_BY_GENDER[gender]}

@@ -6,7 +6,10 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 import { dicebearAvatarUrl, randomAvatarSeeds } from "@/lib/avatar";
 import { colors } from "@/theme";
 
-const BATCH_SIZE = 50;
+// 10 fits without scrolling inside the sheet's own maxHeight — the previous 50 ran past the bottom
+// of the sheet with no visible scroll affordance, reading as "the rest are just missing". Shuffle
+// covers wanting to see more instead of showing them all at once.
+const BATCH_SIZE = 10;
 const THUMB_SIZE = 56;
 /** Staggered per-thumbnail entrance, capped so item 50 doesn't wait nearly a second to appear. */
 const MAX_STAGGER_MS = 240;

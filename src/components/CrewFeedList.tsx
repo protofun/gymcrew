@@ -4,7 +4,9 @@ import { useEffect } from "react";
 import { Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
+import { DivisionBadge } from "@/components/DivisionBadge";
 import type { ApiCrewActivityEvent, CrewActivityEventType } from "@/lib/api";
+import { DIVISIONS, type Division } from "@/lib/division";
 import { formatShortAgo } from "@/lib/time-since";
 import { useCrewFeedStore } from "@/store/crew-feed-store";
 import { colors } from "@/theme";
@@ -47,6 +49,14 @@ function describeEvent(event: ApiCrewActivityEvent, isMe: boolean): string {
   }
 }
 
+/** The real division the "reached X" event is for, if the payload holds a recognized division name
+ * — used so the feed row can show the actual medal instead of a generic ribbon icon. */
+function divisionFromEvent(event: ApiCrewActivityEvent): Division | null {
+  if (event.eventType !== "division_up") return null;
+  const { division } = event.payload as { division: string };
+  return (DIVISIONS as readonly string[]).includes(division) ? (division as Division) : null;
+}
+
 /** The crew-internal motivation feed — real, timestamped crewmate moments (PR / streak milestone /
  * long session / division up), logged from workout/active.tsx and profile-level-store.ts right when
  * each is detected. See backend/routes/crew-activity-events.php. Renders nothing until there's at
@@ -77,20 +87,27 @@ export function CrewFeedList() {
       </View>
 
       <View className="gap-3">
-        {events.slice(0, 5).map((event) => (
-          <View key={event.id} className="flex-row items-center gap-3">
-            <View
-              className="h-9 w-9 items-center justify-center rounded-full"
-              style={{ backgroundColor: `${EVENT_TINT[event.eventType]}26` }}
-            >
-              <Ionicons name={EVENT_ICON[event.eventType]} size={16} color={EVENT_TINT[event.eventType]} />
+        {events.slice(0, 5).map((event) => {
+          const division = divisionFromEvent(event);
+          return (
+            <View key={event.id} className="flex-row items-center gap-3">
+              {division ? (
+                <DivisionBadge division={division} size={36} />
+              ) : (
+                <View
+                  className="h-9 w-9 items-center justify-center rounded-full"
+                  style={{ backgroundColor: `${EVENT_TINT[event.eventType]}26` }}
+                >
+                  <Ionicons name={EVENT_ICON[event.eventType]} size={16} color={EVENT_TINT[event.eventType]} />
+                </View>
+              )}
+              <Text className="body-sm flex-1 text-text-secondary" numberOfLines={2}>
+                {describeEvent(event, event.userId === user?.id)}
+              </Text>
+              <Text className="caption text-text-secondary">{formatShortAgo(event.createdAt)}</Text>
             </View>
-            <Text className="body-sm flex-1 text-text-secondary" numberOfLines={2}>
-              {describeEvent(event, event.userId === user?.id)}
-            </Text>
-            <Text className="caption text-text-secondary">{formatShortAgo(event.createdAt)}</Text>
-          </View>
-        ))}
+          );
+        })}
       </View>
     </Animated.View>
   );

@@ -3,7 +3,9 @@ import { useMemo } from "react";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 import { usePostHog } from "posthog-react-native";
 
+import { BiggestOpportunityCard } from "@/components/BiggestOpportunityCard";
 import { CrewCard } from "@/components/CrewCard";
+import { CrewWarWidget } from "@/components/CrewWarWidget";
 import { GoalsWidget } from "@/components/GoalsWidget";
 import { LastWorkoutWidget } from "@/components/LastWorkoutWidget";
 import { MuscleSuggestions } from "@/components/MuscleSuggestions";
@@ -47,10 +49,12 @@ export default function HomeScreen() {
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
       <WelcomeWidget name={firstName} onPressStartWorkout={handleStartWorkout} />
+      <CrewWarWidget />
       <View className="mx-4 mt-8">
         <VisualTrainingCalendar workouts={workouts} gender={gender} />
       </View>
       <MuscleSuggestions sessions={sessions} />
+      <BiggestOpportunityCard />
       <LastWorkoutWidget sessions={sessions} />
       <GoalsWidget sessions={sessions} />
       <CrewCard />

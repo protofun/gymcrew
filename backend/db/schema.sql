@@ -14,20 +14,28 @@ CREATE TABLE IF NOT EXISTS users (
   gym_name VARCHAR(255) NULL,
   goal VARCHAR(255) NULL,
   experience_level VARCHAR(255) NULL,
+  -- Set once, the moment this account's email is first seen to match a marketing-site
+  -- founding_athletes row (see routes/profile.php's maybeLinkFoundingAthlete) — doubles as both the
+  -- link and the "is this a Founding Athlete" flag (non-null = yes). Never re-checked once set.
+  founding_athlete_id VARCHAR(64) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_users_username (username)
+  UNIQUE KEY uniq_users_username (username),
+  UNIQUE KEY uniq_users_founding_athlete (founding_athlete_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Upgrades a database created before `username`/`avatar_url` existed on `users` — CREATE TABLE IF
--- NOT EXISTS above only fires on a brand-new database, it doesn't add a column to a table that
--- already exists. These are no-ops (via IF NOT EXISTS) on both a fresh install (already created
--- above) and an already-upgraded one, so it's safe for this whole file to keep being re-imported as
--- one script, same as the README promises. Needs MySQL 8.0.29+ for `ADD ... IF NOT EXISTS`; on an
--- older server, run these by hand once instead (phpMyAdmin -> SQL tab) with that clause removed.
+-- Upgrades a database created before `username`/`avatar_url`/`founding_athlete_id` existed on
+-- `users` — CREATE TABLE IF NOT EXISTS above only fires on a brand-new database, it doesn't add a
+-- column to a table that already exists. These are no-ops (via IF NOT EXISTS) on both a fresh
+-- install (already created above) and an already-upgraded one, so it's safe for this whole file to
+-- keep being re-imported as one script, same as the README promises. Needs MySQL 8.0.29+ for
+-- `ADD ... IF NOT EXISTS`; on an older server, run these by hand once instead (phpMyAdmin -> SQL
+-- tab) with that clause removed.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(32) NULL AFTER full_name;
 ALTER TABLE users ADD UNIQUE KEY IF NOT EXISTS uniq_users_username (username);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(512) NULL AFTER username;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS founding_athlete_id VARCHAR(64) NULL AFTER experience_level;
+ALTER TABLE users ADD UNIQUE KEY IF NOT EXISTS uniq_users_founding_athlete (founding_athlete_id);
 
 -- One row per completed workout. `exercises_json` / `muscle_intensity_json` / `prs_json` mirror the
 -- app's CompletedWorkout shape exactly (LoggedExercise[], Partial<Record<MuscleGroup,number>>,
@@ -123,8 +131,13 @@ CREATE TABLE IF NOT EXISTS crews (
   division_history_json JSON NOT NULL,
   created_by VARCHAR(64) NOT NULL,
   created_at BIGINT NOT NULL,
+  -- Set only when this real crew was auto-created from a marketing-site founding_crews row (see
+  -- routes/profile.php's maybeLinkFoundingAthlete) — lets a second, third, etc. Founding Athlete
+  -- from that same pre-launch crew land in this SAME real crew instead of each minting their own.
+  founding_crew_id VARCHAR(64) NULL,
   UNIQUE KEY uniq_crews_invite_code (invite_code),
   UNIQUE KEY uniq_crews_name (name),
+  UNIQUE KEY uniq_crews_founding_crew (founding_crew_id),
   CONSTRAINT fk_crews_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -133,6 +146,9 @@ CREATE TABLE IF NOT EXISTS crews (
 -- re-running this whole file is still always safe. If this specific line ever fails on an existing
 -- database, it means two crews already share a name (case-insensitively) — rename one manually first.
 ALTER TABLE crews ADD UNIQUE KEY IF NOT EXISTS uniq_crews_name (name);
+
+ALTER TABLE crews ADD COLUMN IF NOT EXISTS founding_crew_id VARCHAR(64) NULL AFTER created_at;
+ALTER TABLE crews ADD UNIQUE KEY IF NOT EXISTS uniq_crews_founding_crew (founding_crew_id);
 
 -- Widens `icon` on a database created before it needed to fit a DiceBear URL, not just a short
 -- preset key — MODIFY COLUMN has no IF NOT EXISTS form, but re-running the same target width is
@@ -153,6 +169,28 @@ CREATE TABLE IF NOT EXISTS crew_members (
   CONSTRAINT fk_crewmembers_crew FOREIGN KEY (crew_id) REFERENCES crews(id) ON DELETE CASCADE,
   CONSTRAINT fk_crewmembers_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- A synthetic account existing purely to satisfy `crews.created_by`'s FK for the bot crews seeded
+-- below — never a real login, never surfaced anywhere a real user's own account would be (no
+-- crew_members row exists for it, which is what keeps every bot crew invisible to member-scoped
+-- queries like findMyCrewId or /crews/mine, with no extra filtering needed anywhere).
+INSERT IGNORE INTO users (id, full_name) VALUES ('bot-system', 'GymCrew');
+
+-- Permanent illustrative "bot" opponent crews for Crew War (see crew_wars below) — real rows so
+-- `crew_wars.crew_b_id`'s FK is satisfied and a War (plus its attack log) is genuinely persisted,
+-- never computed client-side. Same names the Weekly League already shows as illustrative rivals
+-- (src/data/crew-leaderboard.ts's OTHER_CREWS_POWER) so a crew's War opponent reads as the same
+-- "known rival" it already sees there — spread across divisions so real crews at very different
+-- strengths still get a same-ish-division match (see crew-wars.php's nearest-division pick).
+INSERT IGNORE INTO crews (id, name, tagline, icon, division, xp, division_history_json, invite_code, created_by, created_at) VALUES
+  ('bot-crew-beast-mode', 'Beast Mode', 'Always training. Always watching.', 'tiger', 'Rookie', 200, '[]', 'BOT-BEASTMODE', 'bot-system', 0),
+  ('bot-crew-iron-addicts', 'Iron Addicts', 'One more rep. Always one more.', 'elephant', 'Bronze', 1200, '[]', 'BOT-IRONADDICT', 'bot-system', 0),
+  ('bot-crew-gym-kings', 'Gym Kings', 'We run this floor.', 'dumbbell', 'Silver', 2800, '[]', 'BOT-GYMKINGS', 'bot-system', 0),
+  ('bot-crew-lifting-legends', 'Lifting Legends', 'History in the making.', 'cat-yellow', 'Gold', 5200, '[]', 'BOT-LIFTLEGEND', 'bot-system', 0),
+  ('bot-crew-reps-over-rest', 'Reps Over Rest', 'Sleep is for rest days.', 'cat-green', 'Platinum', 9000, '[]', 'BOT-REPSOVREST', 'bot-system', 0),
+  ('bot-crew-muscle-mafia', 'Muscle Mafia', 'You don''t leave this crew undefeated.', 'cat-red', 'Diamond', 14000, '[]', 'BOT-MUSCLEMAFI', 'bot-system', 0),
+  ('bot-crew-no-days-off', 'No Days Off', 'Every single day. No exceptions.', 'cat-brown', 'Champion', 21000, '[]', 'BOT-NODAYSOFF', 'bot-system', 0),
+  ('bot-crew-titan-forge', 'Titan Forge', 'Forged, not born.', 'cat-coral', 'Titan', 30000, '[]', 'BOT-TITANFORGE', 'bot-system', 0);
 
 -- Crews waiting to be matched into a War. A row here means "looking for an opponent" — matching
 -- happens synchronously in backend/routes/crew-wars.php right when a crew joins (no cron job in
@@ -186,8 +224,8 @@ CREATE TABLE IF NOT EXISTS crew_wars (
   INDEX idx_wars_crew_b (crew_b_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Append-only per-workout contribution toward a War, so the leaderboard of "who's carrying the
--- crew this war" can be shown, not just the aggregate score on crew_wars itself.
+-- Superseded by crew_war_attacks below (kept, unused, same non-destructive precedent as the old
+-- `led-workout` user_state key — see that comment further down).
 CREATE TABLE IF NOT EXISTS crew_war_contributions (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   war_id VARCHAR(64) NOT NULL,
@@ -197,6 +235,29 @@ CREATE TABLE IF NOT EXISTS crew_war_contributions (
   contributed_at BIGINT NOT NULL,
   CONSTRAINT fk_warcontrib_war FOREIGN KEY (war_id) REFERENCES crew_wars(id) ON DELETE CASCADE,
   INDEX idx_warcontrib_war_user (war_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- One row per War "attack" — every completed workout during an active War, on either side,
+-- real or bot. This is the actual attack feed (see CrewWarTab's attack log), not just a running
+-- tally: `score` is stored (not recomputed from volume_kg/pr_count later) so past attacks stay
+-- stable even if the scoring formula changes. `user_id` is NULL for a bot attack — bot crews have
+-- no real member rows to reference, so the attacker's display name is stored directly instead.
+-- Bot attacks are generated lazily on read (see crew-wars.php), same "resolve on next read, no
+-- cron" pattern crew_duels already uses — but written here as real rows, not recomputed per-view.
+CREATE TABLE IF NOT EXISTS crew_war_attacks (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  war_id VARCHAR(64) NOT NULL,
+  crew_id VARCHAR(64) NOT NULL,
+  user_id VARCHAR(64) NULL,
+  attacker_name VARCHAR(255) NOT NULL,
+  workout_name VARCHAR(255) NULL,
+  volume_kg DECIMAL(10,2) NOT NULL,
+  pr_count INT NOT NULL DEFAULT 0,
+  score DECIMAL(10,2) NOT NULL,
+  attacked_at BIGINT NOT NULL,
+  CONSTRAINT fk_warattacks_war FOREIGN KEY (war_id) REFERENCES crew_wars(id) ON DELETE CASCADE,
+  UNIQUE KEY uniq_warattacks_bot_slot (war_id, crew_id, attacked_at),
+  INDEX idx_warattacks_war_time (war_id, attacked_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Append-only feed of crewmate motivational moments (PR / streak milestone / long session /
@@ -262,6 +323,24 @@ CREATE TABLE IF NOT EXISTS admin_challenges (
 -- keep re-running this whole file.
 ALTER TABLE admin_challenges ADD COLUMN IF NOT EXISTS is_summer_challenge TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active;
 
+-- A crew's real, currently-in-progress workout — one row per active session, genuinely shared
+-- (every crew member polls/reads the same row), replacing the old per-account `led-workout` blob
+-- below. See backend/routes/crew-live-sessions.php.
+CREATE TABLE IF NOT EXISTS crew_live_sessions (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  crew_id VARCHAR(64) NOT NULL,
+  leader_id VARCHAR(64) NOT NULL,
+  workout_name VARCHAR(255) NOT NULL,
+  exercises_json JSON NOT NULL,
+  participant_ids_json JSON NOT NULL,
+  started_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  ended_at BIGINT NULL,
+  CONSTRAINT fk_crewlive_crew FOREIGN KEY (crew_id) REFERENCES crews(id) ON DELETE CASCADE,
+  CONSTRAINT fk_crewlive_leader FOREIGN KEY (leader_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_crewlive_crew_active (crew_id, ended_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Generic per-user JSON blob storage: ONE table that holds several smaller features' worth of
 -- data, one ROW per (user, state_key) pair — not one row total. In phpMyAdmin, browse this table
 -- and you'll see one row per user per state_key below, each with its own JSON payload. None of
@@ -288,12 +367,11 @@ ALTER TABLE admin_challenges ADD COLUMN IF NOT EXISTS is_summer_challenge TINYIN
 --                          subset that's also broken out into columns on `users` above)
 --   'challenges'        — store/challenge-store.ts     (weekly + custom Battle challenge progress)
 --   'crew-league'       — store/crew-league-store.ts   (weekly league standings history)
---   'led-workout'       — store/led-workout-store.ts   ("join a live workout" session)
 --
--- IMPORTANT about the last three: same "per-account own view, not yet genuinely shared" caveat
--- that used to apply to crew too (see crews/crew_members above, which now IS genuinely shared).
--- These three still aren't — a real multi-account challenge/league/live-workout system is its own
--- follow-up piece of work, same shape as the crew one just built.
+-- IMPORTANT about the last two: same "per-account own view, not yet genuinely shared" caveat that
+-- used to apply to crew (and to live-workout sessions) too — see crews/crew_members above, and
+-- crew_live_sessions below, both now genuinely shared. Challenges/league aren't yet — a real
+-- multi-account version of those is its own follow-up piece of work, same shape as those two.
 CREATE TABLE IF NOT EXISTS user_state (
   user_id VARCHAR(64) NOT NULL,
   state_key VARCHAR(64) NOT NULL,
@@ -301,4 +379,78 @@ CREATE TABLE IF NOT EXISTS user_state (
   updated_at BIGINT NOT NULL,
   PRIMARY KEY (user_id, state_key),
   CONSTRAINT fk_userstate_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Public waitlist signups from the marketing landing page (landingpage/GymCrew Landing
+-- (standalone).html) — deliberately NOT tied to `users`: a visitor joining the waitlist has no
+-- account yet (that's the whole point of a pre-launch waitlist). Written by the one public,
+-- no-auth route this backend has besides username-available — see routes/waitlist.php.
+CREATE TABLE IF NOT EXISTS waitlist_signups (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(255) NOT NULL,
+  source VARCHAR(64) NULL,
+  created_at BIGINT NOT NULL,
+  UNIQUE KEY uniq_waitlist_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Pre-launch "Founding Athlete" signups from the marketing site's dedicated signup page
+-- (landingpage/athlete-signup.html) — a real account (email + password), separate from the real
+-- app's `users` table since these people have no Clerk account yet. `email` is the field a future
+-- "claim your Founding Athlete badge" step in the real app would join on. See
+-- routes/athlete-signup.php.
+CREATE TABLE IF NOT EXISTS founding_athletes (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  full_name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  username VARCHAR(32) NOT NULL,
+  profile_picture_url VARCHAR(512) NULL,
+  auth_token VARCHAR(128) NOT NULL,
+  -- The matching real Clerk user, created via Clerk's Backend API the moment this row is (see
+  -- routes/athlete-signup.php's createClerkUserForFoundingAthlete) — lets /athlete-app-link mint a
+  -- sign-in ticket so opening the app signs this same account straight in, no second signup, no
+  -- re-entering credentials. NULL if that Backend API call wasn't configured (CLERK_SECRET_KEY) or
+  -- failed — never blocks the marketing-site signup itself either way.
+  clerk_user_id VARCHAR(64) NULL,
+  created_at BIGINT NOT NULL,
+  UNIQUE KEY uniq_foundingathletes_email (email),
+  UNIQUE KEY uniq_foundingathletes_username (username),
+  UNIQUE KEY uniq_foundingathletes_token (auth_token),
+  UNIQUE KEY uniq_foundingathletes_clerk_user (clerk_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE founding_athletes ADD COLUMN IF NOT EXISTS clerk_user_id VARCHAR(64) NULL AFTER auth_token;
+ALTER TABLE founding_athletes ADD UNIQUE KEY IF NOT EXISTS uniq_foundingathletes_clerk_user (clerk_user_id);
+
+-- One pre-launch Crew per Founding Athlete, created in the same signup flow. Separate from the
+-- real app's `crews` table for the same reason as founding_athletes above.
+CREATE TABLE IF NOT EXISTS founding_crews (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  athlete_id VARCHAR(64) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  description VARCHAR(500) NOT NULL DEFAULT '',
+  logo_url VARCHAR(512) NULL,
+  invite_code VARCHAR(16) NOT NULL,
+  created_at BIGINT NOT NULL,
+  UNIQUE KEY uniq_foundingcrews_athlete (athlete_id),
+  UNIQUE KEY uniq_foundingcrews_name (name),
+  UNIQUE KEY uniq_foundingcrews_invite_code (invite_code),
+  CONSTRAINT fk_foundingcrews_athlete FOREIGN KEY (athlete_id) REFERENCES founding_athletes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- A regular member of someone else's founding_crews row — created by a visitor who registers
+-- through an invite link (landingpage/join.html -> POST /athlete-join) rather than by creating
+-- their own crew. The crew's own leader is NOT duplicated in here — founding_crews.athlete_id
+-- already is the leader; a crew's full roster is that leader plus every row here for its id.
+-- uniq_foundingcrewmembers_athlete keeps membership 1-crew-per-athlete, mirroring the 1-crew-per-
+-- leader constraint above.
+CREATE TABLE IF NOT EXISTS founding_crew_members (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  crew_id VARCHAR(64) NOT NULL,
+  athlete_id VARCHAR(64) NOT NULL,
+  joined_at BIGINT NOT NULL,
+  UNIQUE KEY uniq_foundingcrewmembers_athlete (athlete_id),
+  KEY idx_foundingcrewmembers_crew (crew_id),
+  CONSTRAINT fk_foundingcrewmembers_crew FOREIGN KEY (crew_id) REFERENCES founding_crews(id) ON DELETE CASCADE,
+  CONSTRAINT fk_foundingcrewmembers_athlete FOREIGN KEY (athlete_id) REFERENCES founding_athletes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

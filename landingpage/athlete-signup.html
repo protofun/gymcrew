@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0D1117">
+<link rel="icon" type="image/png" href="images/gymcrew_favicon.png">
+<title>Become a Founding Athlete — GymCrew</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --yellow: #E3FF00;
+    --green: #00C853;
+    --white: #FFFFFF;
+    --iron: #1F2328;
+    --warning: #FFB800;
+    --streak: #FF6D00;
+    --error: #FF3B30;
+    --info: #2979FF;
+    --text-primary: #EDEFF2;
+    --text-secondary: #8B929E;
+    --divider: #2C3138;
+    --surface: #161A20;
+    --background: #0D1117;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    /* iOS Safari zooms in on tapping any input/textarea whose computed font-size is under 16px —
+       every field below sits at exactly 16px because of this, not by accident. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .heading {
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.5px;
+    line-height: 1.05;
+  }
+
+  /* Purely decorative spotlight behind the content — fixed so it doesn't add scroll height. */
+  .bg-glow {
+    position: fixed;
+    top: -140px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 520px;
+    height: 520px;
+    background: radial-gradient(circle, rgba(227,255,0,0.10), transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ===== Shell ===== */
+  .shell {
+    position: relative;
+    z-index: 1;
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 20px 32px;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 32px;
+    margin-bottom: 24px;
+  }
+
+  .back-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 4px 8px;
+    visibility: hidden;
+    transition: color 0.2s;
+  }
+  .back-btn.visible { visibility: visible; }
+  .back-btn:hover { color: var(--text-primary); }
+
+  .wordmark {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.5px;
+  }
+  .wordmark span { color: var(--yellow); }
+
+  .login-toggle {
+    background: none;
+    border: none;
+    color: var(--yellow);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  main { flex: 1; display: flex; flex-direction: column; }
+
+  .step { display: none; flex-direction: column; flex: 1; }
+  .step.active { display: flex; }
+
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .step > * { animation: fadeSlideUp 0.5s cubic-bezier(.16,1,.3,1) both; }
+  .step > *:nth-child(1)  { animation-delay: .02s; }
+  .step > *:nth-child(2)  { animation-delay: .07s; }
+  .step > *:nth-child(3)  { animation-delay: .12s; }
+  .step > *:nth-child(4)  { animation-delay: .17s; }
+  .step > *:nth-child(5)  { animation-delay: .22s; }
+  .step > *:nth-child(6)  { animation-delay: .27s; }
+  .step > *:nth-child(7)  { animation-delay: .32s; }
+  .step > *:nth-child(8)  { animation-delay: .37s; }
+  .step > *:nth-child(9)  { animation-delay: .42s; }
+  .step > *:nth-child(10) { animation-delay: .47s; }
+  .step > *:nth-child(11) { animation-delay: .52s; }
+  .step > *:nth-child(12) { animation-delay: .57s; }
+
+  /* The success/preview screen has too many direct children for a per-child stagger to feel good
+     (it's a reveal moment, not a form) — it fades in as a single block instead. */
+  .success-shell { animation: fadeSlideUp 0.45s cubic-bezier(.16,1,.3,1) both; }
+  .success-shell > * { animation: none; }
+
+  .eyebrow {
+    color: var(--yellow);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin: 0 0 6px;
+  }
+
+  h1.step-title {
+    font-size: 34px;
+    margin: 0 0 8px;
+    color: var(--text-primary);
+    text-transform: uppercase;
+  }
+
+  p.step-subtitle {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0 0 28px;
+  }
+
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .field-input-wrap { position: relative; }
+  .field-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    color: var(--text-secondary);
+    pointer-events: none;
+    transition: color 0.2s;
+  }
+  .field-input-wrap.textarea-wrap .field-icon { top: 16px; transform: none; }
+  .field-input-wrap:focus-within .field-icon { color: var(--yellow); }
+  .field-icon svg { width: 100%; height: 100%; display: block; }
+
+  .field input, .field textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: 10px;
+    padding: 14px 16px 14px 44px;
+    color: var(--text-primary);
+    font-size: 16px;
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .field input:focus, .field textarea:focus {
+    border-color: var(--yellow);
+    box-shadow: 0 0 0 3px rgba(227,255,0,0.12);
+  }
+  .field textarea { resize: vertical; min-height: 96px; padding-top: 14px; }
+  .field .error-text { color: var(--error); font-size: 12px; margin-top: 6px; display: none; }
+  .field.has-error input, .field.has-error textarea { border-color: var(--error); }
+  .field.has-error .error-text { display: block; }
+
+  .field-status { font-size: 12px; margin-top: 6px; min-height: 15px; transition: color 0.2s; }
+  .field-status.checking { color: var(--text-secondary); }
+  .field-status.available { color: var(--green); }
+  .field-status.taken { color: var(--error); }
+  .field.has-error .field-status { display: none; }
+
+  .spacer { flex: 1; min-height: 24px; }
+
+  /* ===== Buttons ===== */
+  .btn-primary {
+    width: 100%;
+    background: var(--yellow);
+    color: var(--iron);
+    border: none;
+    border-radius: 999px;
+    padding: 17px 20px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 17px;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    box-shadow: 0 10px 24px -10px rgba(227,255,0,0.5);
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+  }
+  .btn-primary:hover { box-shadow: 0 14px 28px -10px rgba(227,255,0,0.65); }
+  .btn-primary:active { transform: scale(0.97); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  .btn-ghost {
+    width: 100%;
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    padding: 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    transition: color 0.2s;
+  }
+  .btn-ghost:hover { color: var(--text-primary); }
+
+  /* ===== Dots ===== */
+  .dots { display: flex; justify-content: center; gap: 7px; margin-top: 22px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--divider); transition: all 0.3s ease; }
+  .dot.active { background: var(--yellow); width: 20px; border-radius: 4px; }
+
+  /* ===== Avatar upload (mirrors the app's profile-photo pattern: a circular photo with a
+     yellow camera badge overlapping its bottom-right corner) ===== */
+  .avatar-upload { position: relative; width: 128px; height: 128px; margin: 0 auto; cursor: pointer; }
+  .avatar-upload.hero-avatar { width: 96px; height: 96px; }
+  .avatar-upload.uploading { opacity: 0.6; pointer-events: none; }
+  .avatar-circle {
+    width: 100%; height: 100%; border-radius: 50%;
+    background: var(--surface); border: 2px solid var(--divider);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; transition: border-color 0.2s;
+  }
+  .avatar-upload:hover .avatar-circle { border-color: var(--yellow); }
+  .avatar-circle.crew-shape { border-radius: 26px; }
+  .avatar-circle img { width: 100%; height: 100%; object-fit: cover; }
+  .avatar-placeholder { width: 36px; height: 36px; color: var(--text-secondary); }
+  .avatar-placeholder svg { width: 100%; height: 100%; display: block; }
+  .avatar-edit-badge {
+    position: absolute; bottom: 0; right: 0; width: 32px; height: 32px;
+    border-radius: 50%; background: var(--yellow); border: 3px solid var(--background);
+    display: flex; align-items: center; justify-content: center; color: var(--iron);
+  }
+  .avatar-upload.hero-avatar .avatar-edit-badge { width: 28px; height: 28px; border-color: var(--surface); }
+  .avatar-edit-badge svg { width: 14px; height: 14px; display: block; }
+  .avatar-hint { text-align: center; color: var(--text-secondary); font-size: 12px; margin: 14px 0 0; }
+
+  /* ===== Celebration / transition steps ===== */
+  .celebrate { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 20px; }
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(227,255,0,0.28); }
+    50% { box-shadow: 0 0 0 16px rgba(227,255,0,0); }
+  }
+  .badge-ring {
+    width: 120px; height: 120px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(227,255,0,0.18), transparent 70%);
+    border: 2px solid var(--yellow);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 52px; margin-bottom: 24px;
+    animation: pulseGlow 2.2s ease-out infinite;
+  }
+
+  /* ===== Success screen ===== */
+  .success-shell { max-width: 520px; }
+
+  .section-skew {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.5px;
+    font-style: italic;
+    transform: skewX(-8deg);
+    display: inline-block;
+    color: var(--white);
+    text-transform: uppercase;
+    margin: 0 0 14px;
+  }
+
+  .copy-btn {
+    background: var(--yellow); color: var(--iron); border: none; border-radius: 8px;
+    padding: 10px 14px; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap;
+    transition: transform 0.15s ease;
+  }
+  .copy-btn:active { transform: scale(0.95); }
+
+  /* Mirrors the app's profile hero card exactly: a 4px accent bar, a centered avatar with an edit
+     badge, a pill row, then banded sections (divider-separated) — here the invite link stands in
+     for the app's division/XP band, followed by the same 3-column stat row. */
+  .hero-card {
+    border-radius: 24px; border: 1px solid var(--divider); background: var(--surface);
+    overflow: hidden; margin-bottom: 24px;
+  }
+  .hero-accent { height: 4px; background: var(--yellow); }
+  .hero-top { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 26px 20px 20px; text-align: center; }
+  .hero-card h2 { font-family: 'Bebas Neue', sans-serif; font-size: 28px; margin: 14px 0 0; text-transform: uppercase; letter-spacing: 0.5px; }
+  .crew-leader { color: var(--text-secondary); font-size: 13px; margin-top: 2px; }
+  .pill-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 14px; }
+  .pill {
+    display: flex; align-items: center; gap: 6px; background: var(--background);
+    border-radius: 999px; padding: 8px 14px; font-size: 12px; font-weight: 700; color: var(--yellow);
+    border: none; font-family: 'Inter', sans-serif; transition: background 0.2s;
+  }
+  .pill svg { width: 13px; height: 13px; display: block; }
+  button.pill { cursor: pointer; }
+  button.pill:hover { background: rgba(227,255,0,0.14); }
+  button.pill:active { transform: scale(0.97); }
+
+  .hero-divider { height: 1px; background: var(--divider); }
+
+  .invite-band { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .invite-band-top { display: flex; align-items: center; justify-content: space-between; }
+  .invite-band-top .section-skew { margin: 0; font-size: 17px; }
+  .invite-code-box { background: var(--background); border: 1px solid var(--divider); border-radius: 10px; padding: 12px 14px; }
+  .invite-code-box code { color: var(--yellow); font-size: 14px; font-weight: 700; word-break: break-all; }
+  .invite-hint { color: var(--text-secondary); font-size: 11px; margin: 0; }
+
+  .hero-stats { display: flex; align-items: stretch; padding: 18px 18px; }
+  .hero-stat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .hero-stat svg { width: 15px; height: 15px; color: var(--yellow); display: block; }
+  .hero-stat .val { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--text-primary); }
+  .hero-stat .lbl { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+  .hero-stat-sep { width: 1px; background: var(--divider); }
+
+  .countdown-box {
+    text-align: center; margin-bottom: 24px; border: 1px solid var(--divider); border-radius: 24px;
+    background: var(--surface); padding: 26px 20px; overflow: hidden; position: relative;
+  }
+  .countdown-box .eyebrow { text-align: center; }
+  .countdown-grid { display: flex; justify-content: center; gap: 10px; margin: 12px 0; }
+  .countdown-cell { background: var(--background); border: 1px solid var(--divider); border-radius: 14px; padding: 12px 14px; min-width: 60px; }
+  .countdown-cell .num { font-family: 'Bebas Neue', sans-serif; font-size: 26px; color: var(--yellow); }
+  .countdown-cell .unit { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; }
+  .launch-date { color: var(--text-secondary); font-size: 13px; }
+
+  /* Mirrors the app's bordered SettingsRow list: an icon circle, a label, no chevron since these
+     rows aren't tappable — just information. */
+  .settings-list { border: 1px solid var(--divider); border-radius: 16px; overflow: hidden; background: var(--surface); margin-bottom: 28px; }
+  .settings-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--divider); }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-row .icon-circle {
+    width: 34px; height: 34px; border-radius: 50%; background: var(--background);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .settings-row .icon-circle svg { width: 16px; height: 16px; color: var(--text-secondary); display: block; }
+  .settings-row .label { font-size: 14px; color: var(--text-primary); font-weight: 500; }
+
+  /* ===== Founding Athlete Benefits — swipeable card carousel (pure CSS scroll-snap, so it works
+     even if the JS below never runs — the dot indicator is the only part JS enhances). ===== */
+  .benefits-carousel {
+    display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
+    padding: 4px 20px 10px 4px; margin: 0 -4px 0 -20px; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .benefits-carousel::-webkit-scrollbar { display: none; }
+  .benefit-card {
+    scroll-snap-align: center; flex: 0 0 auto; width: 72%; max-width: 250px; box-sizing: border-box;
+    border: 1px solid var(--divider); background: var(--surface); border-radius: 20px;
+    padding: 20px; display: flex; flex-direction: column; gap: 10px;
+    animation: benefitPop 0.5s cubic-bezier(.16,1,.3,1) both;
+  }
+  @keyframes benefitPop { from { opacity: 0; transform: translateY(14px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .benefit-card .icon-circle-lg { width: 44px; height: 44px; border-radius: 14px; background: var(--background); display: flex; align-items: center; justify-content: center; }
+  .benefit-card .icon-circle-lg svg { width: 20px; height: 20px; color: var(--yellow); display: block; }
+  .benefit-card h4 { font-family: 'Bebas Neue', sans-serif; font-size: 19px; margin: 0; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.3px; }
+  .benefit-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 0; }
+  .benefits-dots { display: flex; justify-content: center; gap: 6px; margin: 4px 0 28px; }
+  .benefits-dots .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--divider); transition: all 0.25s ease; cursor: pointer; }
+  .benefits-dots .dot.active { background: var(--yellow); width: 18px; border-radius: 3px; }
+
+  /* ===== About GymCrew — same recipe as the app's bordered Settings list, but each row expands
+     (native <details>/<summary>, no JS required at all) to answer a question instead of navigating
+     away — info for a visitor who hasn't used the real app yet. ===== */
+  .info-list { border: 1px solid var(--divider); border-radius: 16px; overflow: hidden; background: var(--surface); margin-bottom: 28px; }
+  .info-row { border-bottom: 1px solid var(--divider); }
+  .info-row:last-child { border-bottom: none; }
+  .info-row summary { display: flex; align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer; list-style: none; }
+  .info-row summary::-webkit-details-marker { display: none; }
+  .info-row .icon-circle { width: 34px; height: 34px; border-radius: 50%; background: var(--background); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .info-row .icon-circle svg { width: 16px; height: 16px; color: var(--text-secondary); display: block; }
+  .info-row .label { font-size: 14px; color: var(--text-primary); font-weight: 500; flex: 1; }
+  .info-row .chevron { width: 16px; height: 16px; color: var(--text-secondary); transition: transform 0.25s ease; flex-shrink: 0; }
+  .info-row[open] .chevron { transform: rotate(90deg); }
+  .info-row .answer { padding: 0 16px 16px 62px; margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+
+  .disclaimer {
+    background: rgba(255,184,0,0.08); border: 1px solid var(--warning); border-radius: 14px;
+    padding: 16px 18px; margin-bottom: 28px;
+  }
+  .disclaimer .disclaimer-title {
+    display: flex; align-items: center; gap: 8px; font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px; color: var(--warning); letter-spacing: 0.5px; margin-bottom: 6px; text-transform: uppercase;
+  }
+  .disclaimer p { color: var(--text-primary); font-size: 13px; line-height: 1.6; margin: 0; }
+
+  .form-error {
+    background: rgba(255,59,48,0.1); border: 1px solid var(--error); color: var(--error);
+    border-radius: 10px; padding: 12px 14px; font-size: 13px; margin-bottom: 16px; display: none;
+  }
+  .form-error.visible { display: block; }
+</style>
+</head>
+<body>
+
+<div class="bg-glow"></div>
+
+<div class="shell" id="shell">
+
+  <div class="topbar">
+    <button class="back-btn" id="backBtn" onclick="goBack()">&#8592;</button>
+    <div class="wordmark">GYM<span>CREW</span></div>
+    <button class="login-toggle" id="loginToggle" onclick="toggleLogin()">Log in</button>
+  </div>
+
+  <main id="main">
+
+    <!-- Step 1: Account (signup) -->
+    <div class="step active" data-step="1" id="stepAccount">
+      <p class="eyebrow">Founding Athlete · Step 1 of 8</p>
+      <h1 class="step-title">Create Your Account</h1>
+      <p class="step-subtitle">You're about to become one of GymCrew's first Founding Athletes. Let's get you set up.</p>
+
+      <div class="form-error" id="signupError"></div>
+
+      <div class="field" id="f-fullName">
+        <label>Full Name</label>
+        <div class="field-input-wrap">
+          <span class="field-icon icon-mount" data-icon="user"></span>
+          <input type="text" id="fullName" placeholder="Enter your full name" autocomplete="name">
+        </div>
+        <div class="error-text">Full name is required.</div>
+      </div>
+      <div class="field" id="f-email">
+        <label>Email</label>
+        <div class="field-input-wrap">
+          <span class="field-icon icon-mount" data-icon="mail"></span>
+          <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="error-text">Enter a valid email address.</div>
+      </div>
+      <div class="field" id="f-password">
+        <label>Password</label>
+        <div class="field-input-wrap">
+          <span class="field-icon icon-mount" data-icon="lock"></span>
+          <input type="password" id="password" placeholder="At least 8 characters" autocomplete="new-password">
+        </div>
+        <div class="error-text">Password must be at least 8 characters.</div>
+      </div>
+      <div class="field" id="f-confirmPassword">
+        <label>Confirm Password</label>
+        <div class="field-input-wrap">
+          <span class="field-icon icon-mount" data-icon="lock"></span>
+          <input type="password" id="confirmPassword" placeholder="Repeat your password" autocomplete="new-password">
+        </div>
+        <div class="error-text">Passwords don't match.</div>
+      </div>
+
+      <div class="spacer"></div>
+      <button class="btn-primary" onclick="submitAccountStep()">Continue &#8594;</button>
+      <div class="dots">
+        <span class="dot active"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+    </div>
+
+    <!-- Login form (hidden unless toggled) -->
+    <div class="step" data-step="login" id="stepLogin">
+      <p class="eyebrow">Welcome Back</p>
+      <h1 class="step-title">Log In</h1>
+      <p class="step-subtitle">Already a Founding Athlete? Sign back in to see your Crew.</p>
+
+      <div class="form-error" id="loginError"></div>
+
+      <div class="field" id="f-loginEmail">
+        <label>Email</label>
+        <div class="field-input-wrap">
+          <span class="field-icon icon-mount" data-icon="mail"></span>
+          <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="error-text">Enter your email.</div>
+      </div>
+      <div class="field" id="f-loginPassword">
+        <label>Password</label>
+        <div class="field-input-wrap">
+          <span class="field-icon icon-mount" data-icon="lock"></span>
+          <input type="password" id="loginPassword" placeholder="Your password" autocomplete="current-password">
+        </div>
+        <div class="error-text">Enter your password.</div>
+      </div>
+
+      <div class="spacer"></div>
+      <button class="btn-primary" id="loginBtn" onclick="submitLogin()">Log In &#8594;</button>
+    </div>
+
+    <!-- Step 2: Username -->
+    <div class="step" data-step="2" id="stepUsername">
+      <p class="eyebrow">Founding Athlete · Step 2 of 8</p>
+      <h1 class="step-title">Choose a Username</h1>
+      <p class="step-subtitle">This is how the rest of the crew will find you.</p>
+
+      <div class="field" id="f-username">
+        <label>Username</label>
+        <div class="field-input-wrap">
+          <span class="field-icon icon-mount" data-icon="at-sign"></span>
+          <input type="text" id="username" placeholder="lowercase_no_spaces" autocomplete="username">
+        </div>
+        <div class="error-text">3-20 characters — lowercase letters, numbers, underscores only.</div>
+        <div class="field-status" id="usernameStatus"></div>
+      </div>
+
+      <div class="spacer"></div>
+      <button class="btn-primary" onclick="submitUsernameStep()">Continue &#8594;</button>
+      <div class="dots">
+        <span class="dot"></span><span class="dot active"></span><span class="dot"></span><span class="dot"></span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+    </div>
+
+    <!-- Step 3: Profile picture -->
+    <div class="step" data-step="3" id="stepProfilePic">
+      <p class="eyebrow">Founding Athlete · Step 3 of 8</p>
+      <h1 class="step-title">Add a Profile Picture</h1>
+      <p class="step-subtitle">Show the crew who they're training with. You can always change this later.</p>
+
+      <div class="avatar-upload" id="profilePicUpload" onclick="triggerFileInput('profilePicInput')">
+        <div class="avatar-circle">
+          <span class="avatar-placeholder icon-mount" data-icon="user"></span>
+          <img id="profilePicPreview" style="display:none">
+        </div>
+        <div class="avatar-edit-badge icon-mount" data-icon="camera"></div>
+      </div>
+      <p class="avatar-hint">Tap to upload a photo</p>
+      <input type="file" id="profilePicInput" accept="image/*" style="display:none" onchange="handleImageSelect(event, 'profile')">
+
+      <div class="spacer"></div>
+      <button class="btn-primary" onclick="goToStep(4)">Continue &#8594;</button>
+      <button class="btn-ghost" onclick="goToStep(4)">Skip for now</button>
+      <div class="dots">
+        <span class="dot"></span><span class="dot"></span><span class="dot active"></span><span class="dot"></span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+    </div>
+
+    <!-- Step 4: Founding Athlete celebration -->
+    <div class="step" data-step="4" id="stepCelebrate">
+      <div class="celebrate">
+        <div class="badge-ring">&#127942;</div>
+        <p class="eyebrow">You're In</p>
+        <h1 class="step-title">You're a Founding Athlete!</h1>
+        <p class="step-subtitle">You've just locked in Founding Athlete status — a badge that stays on your profile forever, from day one of GymCrew.</p>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn-primary" onclick="goToStep(5)">Continue &#8594;</button>
+      <div class="dots">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot active"></span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+    </div>
+
+    <!-- Step 5: Build your crew transition -->
+    <div class="step" data-step="5" id="stepCrewIntro">
+      <div class="celebrate">
+        <div class="badge-ring">&#128737;</div>
+        <p class="eyebrow">Next Up</p>
+        <h1 class="step-title">Now, Build Your Crew</h1>
+        <p class="step-subtitle">Every Founding Athlete leads their own Crew. Give it a name, an image, and a description — your first members will join through your invite link.</p>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn-primary" onclick="goToStep(6)">Continue &#8594;</button>
+      <div class="dots">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="dot active"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+    </div>
+
+    <!-- Step 6: Crew name -->
+    <div class="step" data-step="6" id="stepCrewName">
+      <p class="eyebrow">Founding Athlete · Step 6 of 8</p>
+      <h1 class="step-title">Name Your Crew</h1>
+      <p class="step-subtitle">Make it count — this is what everyone else will see.</p>
+
+      <div class="field" id="f-crewName">
+        <label>Crew Name</label>
+        <div class="field-input-wrap">
+          <span class="field-icon icon-mount" data-icon="users"></span>
+          <input type="text" id="crewName" placeholder="e.g. Iron Wolves">
+        </div>
+        <div class="error-text">Crew name is required.</div>
+        <div class="field-status" id="crewNameStatus"></div>
+      </div>
+
+      <div class="spacer"></div>
+      <button class="btn-primary" onclick="submitCrewNameStep()">Continue &#8594;</button>
+      <div class="dots">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="dot"></span><span class="dot active"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+    </div>
+
+    <!-- Step 7: Crew image -->
+    <div class="step" data-step="7" id="stepCrewImage">
+      <p class="eyebrow">Founding Athlete · Step 7 of 8</p>
+      <h1 class="step-title">Choose a Crew Image</h1>
+      <p class="step-subtitle">Your Crew's logo — shown wherever your Crew shows up.</p>
+
+      <div class="avatar-upload" id="crewImageUpload" onclick="triggerFileInput('crewImageInput')">
+        <div class="avatar-circle crew-shape">
+          <span class="avatar-placeholder icon-mount" data-icon="users"></span>
+          <img id="crewImagePreview" style="display:none">
+        </div>
+        <div class="avatar-edit-badge icon-mount" data-icon="camera"></div>
+      </div>
+      <p class="avatar-hint">Tap to upload an image</p>
+      <input type="file" id="crewImageInput" accept="image/*" style="display:none" onchange="handleImageSelect(event, 'crew')">
+
+      <div class="spacer"></div>
+      <button class="btn-primary" onclick="goToStep(8)">Continue &#8594;</button>
+      <button class="btn-ghost" onclick="goToStep(8)">Skip for now</button>
+      <div class="dots">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="dot"></span><span class="dot"></span><span class="dot active"></span><span class="dot"></span>
+      </div>
+    </div>
+
+    <!-- Step 8: Crew description -->
+    <div class="step" data-step="8" id="stepCrewDescription">
+      <p class="eyebrow">Founding Athlete · Step 8 of 8</p>
+      <h1 class="step-title">Describe Your Crew</h1>
+      <p class="step-subtitle">What's your Crew about? What kind of athletes are you looking for?</p>
+
+      <div class="form-error" id="submitError"></div>
+
+      <div class="field">
+        <label>Crew Description</label>
+        <div class="field-input-wrap textarea-wrap">
+          <span class="field-icon icon-mount" data-icon="message-square"></span>
+          <textarea id="crewDescription" placeholder="e.g. We train hard, push each other, and don't miss leg day."></textarea>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+      <button class="btn-primary" id="submitBtn" onclick="submitEverything()">Create My Crew &#8594;</button>
+      <div class="dots">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot active"></span>
+      </div>
+    </div>
+
+    <!-- Success / preview screen -->
+    <div class="step success-shell" data-step="success" id="stepSuccess">
+      <div class="celebrate" style="padding-top:0">
+        <p class="eyebrow">Welcome, Founding Athlete</p>
+        <h1 class="step-title" id="successName">You're All Set</h1>
+      </div>
+
+      <button class="btn-primary" id="openAppBtn" onclick="openApp()" style="margin-bottom:24px">Open the App &#8594;</button>
+
+      <div class="hero-card">
+        <div class="hero-accent"></div>
+        <div class="hero-top">
+          <div class="avatar-upload hero-avatar" id="crewLogoUpload" onclick="triggerFileInput('crewLogoEditInput')">
+            <div class="avatar-circle crew-shape">
+              <span class="avatar-placeholder icon-mount" data-icon="users"></span>
+              <img id="crewLogoPreview" style="display:none">
+            </div>
+            <div class="avatar-edit-badge icon-mount" data-icon="camera" id="crewLogoEditBadge"></div>
+          </div>
+          <input type="file" id="crewLogoEditInput" accept="image/*" style="display:none" onchange="handleCrewLogoEdit(event)">
+          <h2 id="previewCrewName">—</h2>
+          <div class="crew-leader">Led by <span id="previewLeaderName">—</span></div>
+          <div class="pill-row">
+            <span class="pill"><span class="icon-mount" data-icon="award"></span> Founding Crew</span>
+            <button class="pill pill-action" onclick="shareInvite()"><span class="icon-mount" data-icon="link"></span> Share Invite</button>
+          </div>
+        </div>
+
+        <div class="hero-divider"></div>
+
+        <div class="invite-band">
+          <div class="invite-band-top">
+            <p class="section-skew">Invite Link</p>
+            <button class="copy-btn" onclick="copyInviteLink()" id="copyBtn">COPY</button>
+          </div>
+          <div class="invite-code-box">
+            <code id="inviteLink">—</code>
+          </div>
+          <p class="invite-hint">Share this so your first Crew members can join.</p>
+        </div>
+
+        <div class="hero-divider"></div>
+
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <span class="icon-mount" data-icon="users"></span>
+            <div class="val" id="previewMemberCount">1</div>
+            <div class="lbl">Members</div>
+          </div>
+          <div class="hero-stat-sep"></div>
+          <div class="hero-stat">
+            <span class="icon-mount" data-icon="shield"></span>
+            <div class="val">—</div>
+            <div class="lbl">Crew Rank</div>
+          </div>
+          <div class="hero-stat-sep"></div>
+          <div class="hero-stat">
+            <span class="icon-mount" data-icon="flag"></span>
+            <div class="val">#1</div>
+            <div class="lbl">Founded</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="countdown-box">
+        <div class="hero-accent" style="position:absolute;top:0;left:0;right:0"></div>
+        <p class="eyebrow">GymCrew Launches In</p>
+        <div class="countdown-grid" id="countdownGrid">
+          <div class="countdown-cell"><div class="num" id="cdDays">--</div><div class="unit">Days</div></div>
+          <div class="countdown-cell"><div class="num" id="cdHours">--</div><div class="unit">Hrs</div></div>
+          <div class="countdown-cell"><div class="num" id="cdMinutes">--</div><div class="unit">Min</div></div>
+          <div class="countdown-cell"><div class="num" id="cdSeconds">--</div><div class="unit">Sec</div></div>
+        </div>
+        <div class="launch-date" id="launchDateLabel">Launch date TBD</div>
+      </div>
+
+      <p class="section-skew">Founding Athlete Benefits</p>
+      <div class="benefits-carousel" id="benefitsCarousel">
+        <div class="benefit-card">
+          <div class="icon-circle-lg icon-mount" data-icon="award"></div>
+          <h4>Founding Athlete</h4>
+          <p>One of the very first — locked in before anyone else.</p>
+        </div>
+        <div class="benefit-card">
+          <div class="icon-circle-lg icon-mount" data-icon="shield"></div>
+          <h4>Founding Badge</h4>
+          <p>Stays on your profile forever, even after thousands join.</p>
+        </div>
+        <div class="benefit-card">
+          <div class="icon-circle-lg icon-mount" data-icon="users"></div>
+          <h4>Your Own Crew</h4>
+          <p>Lead your own Crew from day one, not someone else's.</p>
+        </div>
+        <div class="benefit-card">
+          <div class="icon-circle-lg icon-mount" data-icon="link"></div>
+          <h4>Your Invite Link</h4>
+          <p>Everyone who joins through it joins your Crew.</p>
+        </div>
+        <div class="benefit-card">
+          <div class="icon-circle-lg icon-mount" data-icon="zap"></div>
+          <h4>Early Access</h4>
+          <p>Try new features before they're ever public.</p>
+        </div>
+        <div class="benefit-card">
+          <div class="icon-circle-lg icon-mount" data-icon="message-square"></div>
+          <h4>Private Discord</h4>
+          <p>Direct line to the team and the first athletes.</p>
+        </div>
+        <div class="benefit-card">
+          <div class="icon-circle-lg icon-mount" data-icon="sliders"></div>
+          <h4>Shape Features</h4>
+          <p>What ships next gets shaped by what you ask for.</p>
+        </div>
+        <div class="benefit-card">
+          <div class="icon-circle-lg icon-mount" data-icon="flag"></div>
+          <h4>Run Challenges</h4>
+          <p>Organize your own competitions inside your Crew.</p>
+        </div>
+        <div class="benefit-card">
+          <div class="icon-circle-lg icon-mount" data-icon="star"></div>
+          <h4>Get Featured</h4>
+          <p>Spotlighted the day GymCrew goes live.</p>
+        </div>
+        <div class="benefit-card">
+          <div class="icon-circle-lg icon-mount" data-icon="dollar-sign"></div>
+          <h4>Revenue Share</h4>
+          <p>Eventually, a cut of what your Crew brings in.</p>
+        </div>
+      </div>
+      <div class="benefits-dots" id="benefitsDots">
+        <span class="dot active"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
+
+      <p class="section-skew">About GymCrew</p>
+      <div class="info-list">
+        <details class="info-row">
+          <summary>
+            <span class="icon-circle icon-mount" data-icon="award"></span>
+            <span class="label">How Ranks Work</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><path d="M9 6l6 6-6 6"></path></svg>
+          </summary>
+          <p class="answer">Every major lift gets its own rank — Bronze to Immortal — based on your strength relative to people at your own level, not the strongest in the world. Normalized for bodyweight and gender so it stays fair.</p>
+        </details>
+        <details class="info-row">
+          <summary>
+            <span class="icon-circle icon-mount" data-icon="users"></span>
+            <span class="label">How Crews Work</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><path d="M9 6l6 6-6 6"></path></svg>
+          </summary>
+          <p class="answer">Your Crew shares one score built from everyone's real training. Weekly Crew Challenges pit your Crew head-to-head against another crew for the win.</p>
+        </details>
+        <details class="info-row">
+          <summary>
+            <span class="icon-circle icon-mount" data-icon="zap"></span>
+            <span class="label">What Happens at Launch</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><path d="M9 6l6 6-6 6"></path></svg>
+          </summary>
+          <p class="answer">Every Founding Athlete gets their badge, their Crew, and early access the moment GymCrew goes live — before it's public to anyone else.</p>
+        </details>
+        <details class="info-row">
+          <summary>
+            <span class="icon-circle icon-mount" data-icon="shield"></span>
+            <span class="label">Founding Athlete FAQ</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><path d="M9 6l6 6-6 6"></path></svg>
+          </summary>
+          <p class="answer">Founding Athlete spots are limited to people who join before launch. Status is permanent once granted, as long as you stay active and keep posting.</p>
+        </details>
+        <details class="info-row">
+          <summary>
+            <span class="icon-circle icon-mount" data-icon="mail"></span>
+            <span class="label">Contact & Support</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><path d="M9 6l6 6-6 6"></path></svg>
+          </summary>
+          <p class="answer">Questions before launch? Reach out any time at hello@gymcrew.site — a real person will get back to you.</p>
+        </details>
+      </div>
+
+      <div class="disclaimer">
+        <div class="disclaimer-title">&#9888;&nbsp; Athletes Post Content</div>
+        <p>Founding Athlete status comes with an expectation: post content and stay active. Athletes who go quiet and stop posting risk losing Founding Athlete status and their spot in the program. This is for people who actually want to show up.</p>
+      </div>
+
+      <div class="disclaimer" style="border-color:var(--divider);background:var(--surface)">
+        <div class="disclaimer-title" style="color:var(--text-secondary)">&#128274;&nbsp; Coming Soon</div>
+        <p>Your Crew page, feed, and ranks aren't live yet — this is a preview of what's coming. We'll email you the moment GymCrew launches.</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // ===== Icons (small stroke-based set, mounted into every [data-icon] span below — keeps the
+  // markup above free of repeated inline SVG path data) =====
+  const ICONS = {
+    'user': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"></path></svg>',
+    'mail': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg>',
+    'lock': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>',
+    'at-sign': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M16 12v1.2a2.8 2.8 0 0 0 5.6 0V12a9.6 9.6 0 1 0-4.2 7.9"></path></svg>',
+    'users': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"></circle><path d="M2.5 20c0-3.4 2.9-5.2 6.5-5.2s6.5 1.8 6.5 5.2"></path><circle cx="17.5" cy="8.6" r="2.4"></circle><path d="M15.8 15c2.7.4 4.7 1.9 4.7 5"></path></svg>',
+    'message-square': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4v4l5-4h7a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1z"></path></svg>',
+    'camera': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.6-2.4h6.8L17 8h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"></path><circle cx="12" cy="14" r="3.4"></circle></svg>',
+    'award': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"></circle><path d="M8.5 13.2 7 21l5-2.8L17 21l-1.5-7.8"></path></svg>',
+    'shield': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3.2v5.4c0 5-3.4 8.2-7 9.4-3.6-1.2-7-4.4-7-9.4V6.2z"></path></svg>',
+    'link': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5l5-5"></path><path d="M8.2 7.8H6.5a4 4 0 0 0 0 8h1.7"></path><path d="M15.8 16.2h1.7a4 4 0 0 0 0-8h-1.7"></path></svg>',
+    'zap': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"></path></svg>',
+    'sliders': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"></path><path d="M4 12h16"></path><path d="M4 18h16"></path><circle cx="8" cy="6" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="16" cy="12" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="10" cy="18" r="1.8" fill="currentColor" stroke="none"></circle></svg>',
+    'flag': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"></path><path d="M5 4.5h13l-3 4 3 4H5"></path></svg>',
+    'star': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.9 6 6.6.6-5 4.4 1.5 6.4L12 17l-5.9 3.4L7.6 14 2.6 9.6l6.6-.6z"></path></svg>',
+    'dollar-sign': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"></path><path d="M17 7a4 4 0 0 0-4-2h-2a3 3 0 0 0 0 6h2a3 3 0 0 1 0 6h-2a4 4 0 0 1-4-2"></path></svg>',
+  };
+  document.querySelectorAll('[data-icon]').forEach((el) => {
+    el.innerHTML = ICONS[el.dataset.icon] || '';
+  });
+
+  // Founding Athlete Benefits carousel — pure CSS scroll-snap does the actual swiping (works with
+  // zero JS); this only syncs the dot indicator to whichever card is centered, and makes the dots
+  // tappable. If it never runs for any reason, the carousel still works, just without synced dots.
+  function setupBenefitsCarousel() {
+    const carousel = document.getElementById('benefitsCarousel');
+    const dotsContainer = document.getElementById('benefitsDots');
+    if (!carousel || !dotsContainer) return;
+    const cards = Array.from(carousel.children);
+    const dots = Array.from(dotsContainer.children);
+
+    dots.forEach((dot, i) => {
+      dot.addEventListener('click', () => {
+        cards[i].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      });
+    });
+
+    function updateActiveDot() {
+      const carouselRect = carousel.getBoundingClientRect();
+      const center = carouselRect.left + carouselRect.width / 2;
+      let closestIndex = 0;
+      let closestDist = Infinity;
+      cards.forEach((card, i) => {
+        const rect = card.getBoundingClientRect();
+        const dist = Math.abs(rect.left + rect.width / 2 - center);
+        if (dist < closestDist) { closestDist = dist; closestIndex = i; }
+      });
+      dots.forEach((dot, i) => dot.classList.toggle('active', i === closestIndex));
+    }
+
+    let ticking = false;
+    carousel.addEventListener('scroll', () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => { updateActiveDot(); ticking = false; });
+    }, { passive: true });
+  }
+  setupBenefitsCarousel();
+
+
+
+
+  // ===== Config =====
+  const API_BASE = 'https://slateblue-mole-244715.hostingersite.com/api';
+  // TODO: set the real launch date once known — everything below reads from this one constant.
+  const LAUNCH_DATE = new Date('2026-10-01T00:00:00Z');
+
+  // ===== State =====
+  const state = {
+    fullName: '', email: '', password: '',
+    username: '',
+    profilePictureBase64: null, profilePictureContentType: null,
+    crewName: '', crewDescription: '',
+    crewImageBase64: null, crewImageContentType: null,
+  };
+  let currentStep = 1;
+  const stepOrder = [1, 2, 3, 4, 5, 6, 7, 8];
+
+  // Live availability state for username/crew name — null means "unknown" (not checked yet, or the
+  // check failed), which the submit handlers below treat as "let it through" so a flaky network
+  // never blocks the wizard; the real uniqueness check still runs server-side at final submit either way.
+  let usernameAvailable = null;
+  let crewNameAvailable = null;
+
+  function showStep(stepEl) {
+    document.querySelectorAll('.step').forEach((el) => el.classList.remove('active'));
+    stepEl.classList.add('active');
+  }
+
+  function goToStep(n) {
+    currentStep = n;
+    const el = document.querySelector('.step[data-step="' + n + '"]');
+    showStep(el);
+    document.getElementById('backBtn').classList.toggle('visible', n > 1);
+    document.getElementById('loginToggle').style.visibility = 'visible';
+  }
+
+  function goBack() {
+    const idx = stepOrder.indexOf(currentStep);
+    if (idx > 0) goToStep(stepOrder[idx - 1]);
+  }
+
+  function toggleLogin() {
+    const loginStep = document.getElementById('stepLogin');
+    const isLoginVisible = loginStep.classList.contains('active');
+    if (isLoginVisible) {
+      goToStep(1);
+      document.getElementById('loginToggle').textContent = 'Log in';
+    } else {
+      showStep(loginStep);
+      document.getElementById('backBtn').classList.remove('visible');
+      document.getElementById('loginToggle').textContent = 'Sign up';
+    }
+  }
+
+  function setFieldError(fieldId, show) {
+    document.getElementById(fieldId).classList.toggle('has-error', show);
+  }
+
+  function showFormError(elId, message) {
+    const el = document.getElementById(elId);
+    el.textContent = message;
+    el.classList.add('visible');
+  }
+  function hideFormError(elId) {
+    document.getElementById(elId).classList.remove('visible');
+  }
+
+  function triggerFileInput(id) {
+    document.getElementById(id).click();
+  }
+
+  // ===== Step validation + advance =====
+  function submitAccountStep() {
+    hideFormError('signupError');
+    const fullName = document.getElementById('fullName').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+
+    let ok = true;
+    setFieldError('f-fullName', fullName === ''); if (fullName === '') ok = false;
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    setFieldError('f-email', !emailOk); if (!emailOk) ok = false;
+    setFieldError('f-password', password.length < 8); if (password.length < 8) ok = false;
+    setFieldError('f-confirmPassword', password !== confirmPassword); if (password !== confirmPassword) ok = false;
+    if (!ok) return;
+
+    state.fullName = fullName; state.email = email; state.password = password;
+    goToStep(2);
+  }
+
+  function submitUsernameStep() {
+    const username = document.getElementById('username').value.trim().toLowerCase();
+    const usernameOk = /^[a-z0-9_]{3,20}$/.test(username);
+    setFieldError('f-username', !usernameOk);
+    if (!usernameOk) return;
+    if (usernameAvailable === false) {
+      document.getElementById('usernameStatus').textContent = '✕ Already taken — try another one.';
+      document.getElementById('usernameStatus').className = 'field-status taken';
+      return;
+    }
+    state.username = username;
+    goToStep(3);
+  }
+
+  function submitCrewNameStep() {
+    const crewName = document.getElementById('crewName').value.trim();
+    setFieldError('f-crewName', crewName === '');
+    if (crewName === '') return;
+    if (crewNameAvailable === false) {
+      document.getElementById('crewNameStatus').textContent = '✕ Already taken — try another one.';
+      document.getElementById('crewNameStatus').className = 'field-status taken';
+      return;
+    }
+    state.crewName = crewName;
+    goToStep(7);
+  }
+
+  // Debounced live-availability check, shared by the username and crew-name steps — types into the
+  // field, waits for a pause, then asks the backend and updates a small status line underneath.
+  function setupAvailabilityCheck(inputId, statusId, isFormatValid, buildCheckUrl, setAvailable) {
+    const input = document.getElementById(inputId);
+    const status = document.getElementById(statusId);
+    let debounceTimer = null;
+    let requestToken = 0;
+
+    input.addEventListener('input', function () {
+      clearTimeout(debounceTimer);
+      const value = input.value.trim();
+      setAvailable(null);
+
+      if (!isFormatValid(value)) {
+        status.textContent = '';
+        status.className = 'field-status';
+        return;
+      }
+
+      status.textContent = 'Checking…';
+      status.className = 'field-status checking';
+      const token = ++requestToken;
+
+      debounceTimer = setTimeout(async function () {
+        try {
+          const res = await fetch(buildCheckUrl(value));
+          const data = await res.json();
+          if (token !== requestToken) return; // a newer keystroke already superseded this check
+          setAvailable(!!data.available);
+          if (data.available) {
+            status.textContent = '✓ Available';
+            status.className = 'field-status available';
+          } else {
+            status.textContent = '✕ Already taken';
+            status.className = 'field-status taken';
+          }
+        } catch (err) {
+          if (token !== requestToken) return;
+          status.textContent = '';
+          status.className = 'field-status';
+        }
+      }, 500);
+    });
+  }
+
+  setupAvailabilityCheck(
+    'username', 'usernameStatus',
+    (v) => /^[a-z0-9_]{3,20}$/.test(v.toLowerCase()),
+    (v) => API_BASE + '/athlete-username-available?username=' + encodeURIComponent(v.toLowerCase()),
+    (v) => { usernameAvailable = v; },
+  );
+  setupAvailabilityCheck(
+    'crewName', 'crewNameStatus',
+    (v) => v.length > 0,
+    (v) => API_BASE + '/athlete-crewname-available?name=' + encodeURIComponent(v),
+    (v) => { crewNameAvailable = v; },
+  );
+
+  function handleImageSelect(event, kind) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const prefix = kind === 'profile' ? 'profilePic' : 'crewImage';
+    const reader = new FileReader();
+    reader.onload = function () {
+      const dataUrl = reader.result;
+      if (kind === 'profile') {
+        state.profilePictureBase64 = dataUrl;
+        state.profilePictureContentType = file.type;
+      } else {
+        state.crewImageBase64 = dataUrl;
+        state.crewImageContentType = file.type;
+      }
+      const img = document.getElementById(prefix + 'Preview');
+      img.src = dataUrl;
+      img.style.display = 'block';
+      const upload = document.getElementById(prefix + 'Upload');
+      const placeholder = upload.querySelector('.avatar-placeholder');
+      if (placeholder) placeholder.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function submitEverything() {
+    hideFormError('submitError');
+    state.crewDescription = document.getElementById('crewDescription').value.trim();
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Creating…';
+
+    try {
+      const res = await fetch(API_BASE + '/athlete-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showFormError('submitError', data.error || "Something went wrong. Please try again.");
+        btn.disabled = false;
+        btn.textContent = 'Create My Crew →';
+        return;
+      }
+      localStorage.setItem('gymcrew_athlete_token', data.token);
+      showSuccess(data.athlete, data.crew, data.role);
+    } catch (err) {
+      showFormError('submitError', "Couldn't reach the server. Check your connection and try again.");
+      btn.disabled = false;
+      btn.textContent = 'Create My Crew →';
+    }
+  }
+
+  async function submitLogin() {
+    hideFormError('loginError');
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    let ok = true;
+    setFieldError('f-loginEmail', email === ''); if (email === '') ok = false;
+    setFieldError('f-loginPassword', password === ''); if (password === '') ok = false;
+    if (!ok) return;
+
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    btn.textContent = 'Logging in…';
+
+    try {
+      const res = await fetch(API_BASE + '/athlete-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showFormError('loginError', data.error || "Couldn't log in.");
+        btn.disabled = false;
+        btn.textContent = 'Log In →';
+        return;
+      }
+      localStorage.setItem('gymcrew_athlete_token', data.token);
+      showSuccess(data.athlete, data.crew, data.role);
+    } catch (err) {
+      showFormError('loginError', "Couldn't reach the server. Check your connection and try again.");
+      btn.disabled = false;
+      btn.textContent = 'Log In →';
+    }
+  }
+
+  // ===== Success screen =====
+  function defaultAvatarUrl(seed) {
+    return 'https://api.dicebear.com/9.x/avataaars/png?seed=' + encodeURIComponent(seed || 'gymcrew') + '&size=200';
+  }
+  function defaultCrewLogoUrl(seed) {
+    return 'https://api.dicebear.com/9.x/avataaars/png?seed=' + encodeURIComponent(seed || 'gymcrew') + '&size=200';
+  }
+
+  function showSuccess(athlete, crew, role) {
+    document.getElementById('backBtn').classList.remove('visible');
+    document.getElementById('loginToggle').style.visibility = 'hidden';
+    document.getElementById('successName').textContent = "You're All Set, " + (athlete.fullName || athlete.username).split(' ')[0] + '!';
+    document.getElementById('previewLeaderName').textContent = (crew && crew.leaderName) || athlete.fullName || athlete.username;
+    document.getElementById('previewMemberCount').textContent = (crew && crew.memberCount) || 1;
+
+    const logoImg = document.getElementById('crewLogoPreview');
+    logoImg.src = (crew && crew.logoUrl) || defaultCrewLogoUrl(crew ? crew.name : athlete.username);
+    logoImg.style.display = 'block';
+    const logoPlaceholder = document.querySelector('#crewLogoUpload .avatar-placeholder');
+    if (logoPlaceholder) logoPlaceholder.style.display = 'none';
+
+    // Only the crew's leader can change its photo — a joined member sees the same avatar with the
+    // edit badge and click handler removed, same as the app restricting this to leader/co-leader.
+    const logoUpload = document.getElementById('crewLogoUpload');
+    const logoEditBadge = document.getElementById('crewLogoEditBadge');
+    const isLeader = role === 'leader';
+    logoUpload.onclick = isLeader ? function () { triggerFileInput('crewLogoEditInput'); } : null;
+    logoUpload.style.cursor = isLeader ? 'pointer' : 'default';
+    logoEditBadge.style.display = isLeader ? 'flex' : 'none';
+
+    if (crew) {
+      document.getElementById('previewCrewName').textContent = crew.name;
+      document.getElementById('inviteLink').textContent = 'gymcrew.site/join.html?code=' + crew.inviteCode;
+    }
+
+    goToStep('success');
+    startCountdown();
+  }
+
+  async function handleCrewLogoEdit(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const token = localStorage.getItem('gymcrew_athlete_token');
+    if (!token) return;
+
+    const upload = document.getElementById('crewLogoUpload');
+    const img = document.getElementById('crewLogoPreview');
+    const previousSrc = img.src;
+
+    const reader = new FileReader();
+    reader.onload = async function () {
+      const dataUrl = reader.result;
+      img.src = dataUrl;
+      img.style.display = 'block';
+      upload.classList.add('uploading');
+
+      try {
+        const res = await fetch(API_BASE + '/athlete-crew-icon', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ imageBase64: dataUrl, contentType: file.type }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          img.src = previousSrc;
+          alert(data.error || "Couldn't update your Crew photo. Please try again.");
+          return;
+        }
+        img.src = data.logoUrl;
+      } catch (err) {
+        img.src = previousSrc;
+        alert("Couldn't reach the server. Check your connection and try again.");
+      } finally {
+        upload.classList.remove('uploading');
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function copyInviteLink() {
+    const text = document.getElementById('inviteLink').textContent;
+    navigator.clipboard.writeText(text).then(function () {
+      const btn = document.getElementById('copyBtn');
+      const original = btn.textContent;
+      btn.textContent = 'COPIED';
+      setTimeout(function () { btn.textContent = original; }, 1500);
+    });
+  }
+
+  function shareInvite() {
+    const text = document.getElementById('inviteLink').textContent;
+    const crewName = document.getElementById('previewCrewName').textContent;
+    const url = 'https://' + text;
+    if (navigator.share) {
+      navigator.share({ title: 'Join ' + crewName + ' on GymCrew', text: 'Join my Crew on GymCrew:', url: url }).catch(function () {});
+    } else {
+      copyInviteLink();
+    }
+  }
+
+  // Mints a fresh one-time Clerk sign-in ticket and hands it to the app via a gymcrew:// deep link
+  // (see backend/routes/athlete-signup.php's /athlete-app-link and src/app/auth-handoff.tsx) — the
+  // whole reason this exists: opening the app after signing up here should sign the SAME account
+  // straight in, not show a fresh sign-up screen.
+  async function openApp() {
+    const token = localStorage.getItem('gymcrew_athlete_token');
+    if (!token) return;
+    const btn = document.getElementById('openAppBtn');
+    const original = btn.textContent;
+    btn.textContent = 'Opening…';
+    btn.disabled = true;
+    try {
+      const res = await fetch(API_BASE + '/athlete-app-link', { headers: { Authorization: 'Bearer ' + token } });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Couldn't open the app yet. Download GymCrew and sign in with this email instead.");
+        btn.textContent = original;
+        btn.disabled = false;
+        return;
+      }
+      window.location.href = data.appUrl;
+    } catch (err) {
+      alert("Couldn't reach the server. Check your connection and try again.");
+    } finally {
+      setTimeout(function () { btn.textContent = original; btn.disabled = false; }, 2000);
+    }
+  }
+
+  function startCountdown() {
+    const label = document.getElementById('launchDateLabel');
+    label.textContent = 'Launching ' + LAUNCH_DATE.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    function tick() {
+      const diff = LAUNCH_DATE.getTime() - Date.now();
+      if (diff <= 0) {
+        document.getElementById('cdDays').textContent = '0';
+        document.getElementById('cdHours').textContent = '0';
+        document.getElementById('cdMinutes').textContent = '0';
+        document.getElementById('cdSeconds').textContent = '0';
+        return;
+      }
+      const days = Math.floor(diff / 86400000);
+      const hours = Math.floor((diff % 86400000) / 3600000);
+      const minutes = Math.floor((diff % 3600000) / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      document.getElementById('cdDays').textContent = days;
+      document.getElementById('cdHours').textContent = hours;
+      document.getElementById('cdMinutes').textContent = minutes;
+      document.getElementById('cdSeconds').textContent = seconds;
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  // ===== Restore a session from a stored token, if any =====
+  (async function restoreSession() {
+    const token = localStorage.getItem('gymcrew_athlete_token');
+    if (!token) return;
+    try {
+      const res = await fetch(API_BASE + '/athlete-profile', {
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      if (!res.ok) {
+        localStorage.removeItem('gymcrew_athlete_token');
+        return;
+      }
+      const data = await res.json();
+      showSuccess(data.athlete, data.crew, data.role);
+    } catch (err) {
+      // Offline or unreachable — fall back to the normal signup/login flow silently.
+    }
+  })();
+</script>
+
+</body>
+</html>

@@ -12,6 +12,7 @@ import { useThemeStore } from "@/store/theme-store";
 import { useTodayTrainingStore } from "@/store/today-training-store";
 import { useTrackedLiftsStore } from "@/store/tracked-lifts-store";
 import { useWorkoutNotesStore } from "@/store/workout-notes-store";
+import { useWorkoutSplitStore } from "@/store/workout-split-store";
 
 /**
  * Pushes every already-collected local store to the backend once, unconditionally — not just on
@@ -75,4 +76,7 @@ export function flushLocalStateToServer(): void {
 
   const notifications = useNotificationsStore.getState();
   pushState("notifications", { readIds: notifications.readIds });
+
+  const workoutSplit = useWorkoutSplitStore.getState();
+  pushState("workout-split", { preferences: workoutSplit.preferences, plan: workoutSplit.plan, acceptedAt: workoutSplit.acceptedAt });
 }

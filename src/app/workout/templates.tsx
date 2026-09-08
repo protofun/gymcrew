@@ -14,6 +14,7 @@ import { colors } from "@/theme";
 export default function WorkoutTemplatesScreen() {
   const insets = useSafeAreaInsets();
   const trainingSplit = useOnboardingStore((state) => state.onboarding.trainingSplit);
+  const discardWorkout = useActiveWorkoutStore((state) => state.discardWorkout);
   const startWorkout = useActiveWorkoutStore((state) => state.startWorkout);
   const setName = useActiveWorkoutStore((state) => state.setName);
   const addExercise = useActiveWorkoutStore((state) => state.addExercise);
@@ -24,6 +25,9 @@ export default function WorkoutTemplatesScreen() {
   const otherTemplates = ALL_TEMPLATES.filter((t) => !splitTemplateKeys.has(t.key));
 
   function handleStartTemplate(template: WorkoutTemplate) {
+    // Picking a template always starts fresh — discard first since `startWorkout` now leaves an
+    // already-in-progress workout untouched rather than overwriting it (see active-workout-store.ts).
+    discardWorkout();
     startWorkout();
     setName(template.name);
     for (const exerciseId of template.exerciseIds) {

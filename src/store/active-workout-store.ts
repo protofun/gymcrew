@@ -108,8 +108,13 @@ export const useActiveWorkoutStore = create<ActiveWorkoutStore>()(
       restDurationSeconds: 90,
       autoFillPreviousSet: true,
 
-      // Defaults to the user's Profile > Units preference rather than always "kg".
+      // Defaults to the user's Profile > Units preference rather than always "kg". A no-op when a
+      // workout is already in progress — every "Start Workout" button on Home/Log calls this
+      // unconditionally, so without this guard, leaving the app mid-workout (backgrounding it,
+      // closing the tab) and then tapping "Start Workout" again to get back in would silently wipe
+      // everything logged so far instead of resuming it.
       startWorkout: () => {
+        if (get().startedAt !== null) return;
         set({ ...initialState(), unit: useOnboardingStore.getState().weightUnit, startedAt: Date.now() });
         syncPush(get);
       },

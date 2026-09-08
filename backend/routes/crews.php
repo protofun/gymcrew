@@ -10,6 +10,10 @@
  *   POST   /crews                      -> create a crew (fails if already in one)
  *   POST   /crews/join                 -> join via invite code (fails if already in one, full, etc.)
  *   PUT    /crews/:id                  -> update settings (leader/co-leader only)
+ *   POST   /crews/:id/icon             -> upload a real photo as the crew icon (leader/co-leader
+ *                                          only) — saves the decoded image under uploads/crew-icons/
+ *                                          and stores its public URL in `icon`, same field a preset
+ *                                          key or a DiceBear-generated URL already used.
  *   POST   /crews/:id/leave            -> leave (auto-deletes the crew if it was the last member)
  *   DELETE /crews/:id/members/:userId  -> kick a member (leader/co-leader only)
  *   GET    /crews/:id/activity         -> every member's real recent workouts/PRs/profile — powers
@@ -59,6 +63,11 @@ function handleCrews(PDO $pdo, string $userId, string $method, ?array $body, arr
 
     if (count($segments) === 2 && $method === 'PUT') {
         updateCrew($pdo, $userId, $crewId, $body ?? []);
+        return;
+    }
+
+    if (count($segments) === 3 && $segments[2] === 'icon' && $method === 'POST') {
+        uploadCrewIcon($pdo, $userId, $crewId, $body ?? []);
         return;
     }
 
@@ -387,6 +396,35 @@ function updateCrew(PDO $pdo, string $userId, string $crewId, array $data): void
     }
 
     jsonResponse(crewWithMembersJson($pdo, $crewId));
+}
+
+/** Accepts a base64-encoded photo (client sends a data URI or bare base64 via expo-image-picker's
+ * `base64: true` option), saves it under uploads/crew-icons/ (see config.php's saveUploadedImage,
+ * shared with every other upload-a-photo endpoint), and stores the resulting public URL as the
+ * crew's icon — the same `icon` field a preset key or DiceBear URL already occupies, so every
+ * reader (CrewIconBadge) already handles it via its existing "starts with http" branch. */
+function uploadCrewIcon(PDO $pdo, string $userId, string $crewId, array $data): void
+{
+    $role = myRoleInCrew($pdo, $userId, $crewId);
+    if ($role !== 'leader' && $role !== 'co-leader') {
+        errorResponse('Only the crew leader or co-leader can change the crew photo', 403);
+        return;
+    }
+
+    $raw = (string) ($data['imageBase64'] ?? '');
+    if ($raw === '') {
+        errorResponse('imageBase64 is required');
+        return;
+    }
+
+    $contentType = (string) ($data['contentType'] ?? 'image/jpeg');
+    $url = saveUploadedImage('crew-icons', $crewId, $raw, $contentType);
+    if ($url === null) {
+        return; // saveUploadedImage already sent the error response
+    }
+
+    $pdo->prepare('UPDATE crews SET icon = ? WHERE id = ?')->execute([$url, $crewId]);
+    jsonResponse(['icon' => $url]);
 }
 
 function leaveCrew(PDO $pdo, string $userId, string $crewId): void

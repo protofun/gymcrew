@@ -6,13 +6,13 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View, type ImageSourcePropType } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
+import { AvatarActionSheet } from "@/components/AvatarActionSheet";
 import { AvatarGeneratorModal } from "@/components/AvatarGeneratorModal";
 import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { EditableText } from "@/components/EditableText";
 import { ProgressBar } from "@/components/ProgressBar";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
-import { StatTile } from "@/components/StatTile";
 import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
 import { images, navIcons } from "@/constants/images";
 import { FLEX_TAGS } from "@/data/flex-tags";
@@ -66,7 +66,8 @@ type SettingsRoute =
   | "/profile/all-stats"
   | "/profile/workout-split"
   | "/profile/rewards"
-  | "/crew/settings";
+  | "/crew/settings"
+  | "/workout-split/intro";
 
 type ProgressCard = { icon: ImageSourcePropType; label: string; caption: string; route: SettingsRoute | "/(tabs)/ranks" };
 
@@ -100,6 +101,21 @@ function SettingsRow({
         <Ionicons name="chevron-forward" size={16} color={danger ? colors.semantic.error : colors.neutral.textSecondary} />
       </View>
     </Pressable>
+  );
+}
+
+/** A stat readout inline within the profile hero card — deliberately not `StatTile` (the shared
+ * grid-tile look used elsewhere, e.g. Crew Stats), since a bordered box per number would read as
+ * three more disconnected pieces exactly where the goal is one unified card. */
+function HeroStatColumn({ icon, value, label, id }: { icon: keyof typeof Ionicons.glyphMap; value: string; label: string; id: string }) {
+  return (
+    <View className="flex-1 items-center gap-1.5">
+      <Ionicons name={icon} size={15} color={colors.brand.yellow} />
+      <EditableText id={id} style={{ fontFamily: fontFamily.heading, fontSize: 20, lineHeight: 22 }} className="text-text-primary">
+        {value}
+      </EditableText>
+      <Text className="caption font-body-semibold text-text-secondary">{label}</Text>
+    </View>
   );
 }
 
@@ -148,6 +164,7 @@ export default function ProfileScreen() {
   const { user } = useUser();
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [todayModalOpen, setTodayModalOpen] = useState(false);
+  const [avatarActionsOpen, setAvatarActionsOpen] = useState(false);
   const [avatarGeneratorOpen, setAvatarGeneratorOpen] = useState(false);
 
   const today = useTodayWorkout();
@@ -189,11 +206,7 @@ export default function ProfileScreen() {
   }
 
   function handlePressAvatar() {
-    Alert.alert("Change Photo", undefined, [
-      { text: "Choose from Library", onPress: handleChangePhoto },
-      { text: "Generate an Avatar", onPress: () => setAvatarGeneratorOpen(true) },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setAvatarActionsOpen(true);
   }
 
   async function handleChangePhoto() {
@@ -223,96 +236,107 @@ export default function ProfileScreen() {
         <SnapshotBanner asOfMs={snapshotAsOfMs} weightKg={snapshotWeightKg} weightUnit={weightUnit} onExit={clearSnapshot} />
       )}
       <ScrollView className="flex-1" contentContainerClassName="pb-10" showsVerticalScrollIndicator={false}>
-      <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="items-center gap-3 px-4 pt-6">
-        <Pressable onPress={handlePressAvatar} disabled={uploadingPhoto} style={PRESSED_STYLE}>
-          <DivisionAvatarFrame source={user?.imageUrl ? { uri: user.imageUrl } : images.iconGorilla} division={displayDivision} size={88} />
-          <View
-            className="absolute bottom-0 right-0 items-center justify-center rounded-full border-2 border-background bg-brand-yellow"
-            style={{ width: 28, height: 28 }}
-          >
-            {uploadingPhoto ? <ActivityIndicator size="small" color={colors.brand.iron} /> : <Ionicons name="camera" size={14} color={colors.brand.iron} />}
+      <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="mx-4 mt-4 overflow-hidden rounded-3xl border border-divider bg-surface">
+        {/* Ties the whole card to the division color it's reporting on, the same way the old
+            left-accent-bar sub-card did — just spanning the header this whole card shares now,
+            instead of being scoped to one piece of it. */}
+        <View style={{ height: 4, backgroundColor: DIVISION_COLOR[displayDivision] }} />
+
+        <View className="items-center gap-3 px-5 pb-5 pt-5">
+          <Pressable onPress={handlePressAvatar} disabled={uploadingPhoto} style={PRESSED_STYLE}>
+            <DivisionAvatarFrame source={user?.imageUrl ? { uri: user.imageUrl } : images.iconGorilla} division={displayDivision} size={88} />
+            <View
+              className="absolute bottom-0 right-0 items-center justify-center rounded-full border-2 border-background bg-brand-yellow"
+              style={{ width: 28, height: 28 }}
+            >
+              {uploadingPhoto ? <ActivityIndicator size="small" color={colors.brand.iron} /> : <Ionicons name="camera" size={14} color={colors.brand.iron} />}
+            </View>
+          </Pressable>
+
+          <View className="items-center gap-0.5">
+            <View className="flex-row items-center gap-1.5">
+              <EditableText id="profile.header.name" className="heading-3 text-text-primary">
+                {displayName}
+              </EditableText>
+              {equippedTag && <Text style={{ fontSize: 18 }}>{equippedTag.emoji}</Text>}
+            </View>
+            {email && <Text className="body-sm text-text-secondary">{email}</Text>}
           </View>
-        </Pressable>
-        <View className="items-center gap-0.5">
-          <View className="flex-row items-center gap-1.5">
-            <EditableText id="profile.header.name" className="heading-4 text-text-primary">
-              {displayName}
-            </EditableText>
-            {equippedTag && <Text style={{ fontSize: 16 }}>{equippedTag.emoji}</Text>}
+
+          <View className="flex-row flex-wrap items-center justify-center gap-2">
+            <Pressable
+              onPress={() => setTodayModalOpen(true)}
+              style={PRESSED_STYLE}
+              className="flex-row items-center gap-1.5 rounded-full bg-background px-4 py-2"
+            >
+              <Ionicons
+                name={today.isRestDay ? "moon-outline" : "barbell-outline"}
+                size={14}
+                color={today.isOverridden ? colors.brand.yellow : colors.neutral.textSecondary}
+              />
+              <Text className={`body-sm font-body-semibold ${today.isOverridden ? "text-brand-yellow" : "text-text-primary"}`}>
+                {today.workoutName}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => goTo("/profile/edit")}
+              style={PRESSED_STYLE}
+              className="flex-row items-center gap-1.5 rounded-full bg-background px-4 py-2"
+            >
+              <Ionicons name="create-outline" size={14} color={colors.brand.yellow} />
+              <Text className="body-sm font-body-semibold text-brand-yellow">Edit Profile</Text>
+            </Pressable>
           </View>
-          {email && <Text className="body-sm text-text-secondary">{email}</Text>}
         </View>
 
-        <Pressable
-          onPress={() => setTodayModalOpen(true)}
-          style={PRESSED_STYLE}
-          className="flex-row items-center gap-1.5 rounded-full border border-divider bg-surface px-4 py-2"
-        >
-          <Ionicons
-            name={today.isRestDay ? "moon-outline" : "barbell-outline"}
-            size={14}
-            color={today.isOverridden ? colors.brand.yellow : colors.neutral.textSecondary}
-          />
-          <Text className={`body-sm font-body-semibold ${today.isOverridden ? "text-brand-yellow" : "text-text-primary"}`}>
-            {today.workoutName}
-          </Text>
-        </Pressable>
+        <View className="h-px bg-divider" />
 
-        <Pressable
-          onPress={() => goTo("/profile/edit")}
-          style={PRESSED_STYLE}
-          className="flex-row items-center gap-1.5 rounded-full border border-divider bg-surface px-4 py-2"
-        >
-          <Ionicons name="create-outline" size={14} color={colors.brand.yellow} />
-          <Text className="body-sm font-body-semibold text-brand-yellow">Edit Profile</Text>
-        </Pressable>
-      </Animated.View>
-
-      <Animated.View entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)} className="mx-4 mt-6">
-        <View className="flex-row items-stretch overflow-hidden rounded-2xl border border-divider bg-surface">
-          <View style={{ width: 4, backgroundColor: DIVISION_COLOR[displayDivision] }} />
-          <View className="flex-1 gap-2.5 p-4">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2.5">
-                <DivisionBadge division={displayDivision} size={36} />
-                <EditableText id="profile.division.name" style={cardTitleStyle} className="text-text-primary">
-                  {displayDivision.toUpperCase()}
-                </EditableText>
-              </View>
-              {snapshot == null && (
-                <EditableText id="profile.division.percent" className="body-sm font-body-bold" style={{ color: DIVISION_COLOR[displayDivision] }}>
-                  {`${Math.min(100, Math.round((xp / xpToNextLevel) * 100))}%`}
-                </EditableText>
-              )}
+        <View className="gap-2.5 px-5 py-4">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center gap-2.5">
+              <DivisionBadge division={displayDivision} size={32} />
+              <EditableText id="profile.division.name" style={cardTitleStyle} className="text-text-primary">
+                {displayDivision.toUpperCase()}
+              </EditableText>
             </View>
-
-            {snapshot == null ? (
-              <>
-                <ProgressBar ratio={xp / xpToNextLevel} color={DIVISION_COLOR[displayDivision]} height={7} />
-
-                <View className="flex-row items-center justify-between">
-                  <EditableText id="profile.division.xpProgress" className="caption font-body-semibold text-text-secondary">
-                    {`${xp.toLocaleString("en-US")} / ${xpToNextLevel.toLocaleString("en-US")} XP`}
-                  </EditableText>
-                  <View className="flex-row items-center gap-1">
-                    <Ionicons name="flash" size={11} color={colors.brand.yellow} />
-                    <EditableText id="profile.division.xpToNext" className="caption font-body-semibold text-brand-yellow">
-                      {`${Math.max(0, xpToNextLevel - xp).toLocaleString("en-US")} XP to next`}
-                    </EditableText>
-                  </View>
-                </View>
-              </>
-            ) : (
-              <Text className="caption font-body-semibold text-text-secondary">Division reached as of this date</Text>
+            {snapshot == null && (
+              <EditableText id="profile.division.percent" className="body-sm font-body-bold" style={{ color: DIVISION_COLOR[displayDivision] }}>
+                {`${Math.min(100, Math.round((xp / xpToNextLevel) * 100))}%`}
+              </EditableText>
             )}
           </View>
-        </View>
-      </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)} className="mx-4 mt-3 flex-row gap-3">
-        <StatTile id="profile.stats.workouts" icon="barbell" label="Workouts" value={String(displayWorkoutsCount)} />
-        <StatTile id="profile.stats.prs" icon="ribbon" label="PRs" value={String(displayPrCount)} />
-        <StatTile id="profile.stats.volume" icon="trending-up" label="Volume" value={`${(displayVolumeKg / 1000).toFixed(1)}t`} />
+          {snapshot == null ? (
+            <>
+              <ProgressBar ratio={xp / xpToNextLevel} color={DIVISION_COLOR[displayDivision]} height={7} />
+
+              <View className="flex-row items-center justify-between">
+                <EditableText id="profile.division.xpProgress" className="caption font-body-semibold text-text-secondary">
+                  {`${xp.toLocaleString("en-US")} / ${xpToNextLevel.toLocaleString("en-US")} XP`}
+                </EditableText>
+                <View className="flex-row items-center gap-1">
+                  <Ionicons name="flash" size={11} color={colors.brand.yellow} />
+                  <EditableText id="profile.division.xpToNext" className="caption font-body-semibold text-brand-yellow">
+                    {`${Math.max(0, xpToNextLevel - xp).toLocaleString("en-US")} XP to next`}
+                  </EditableText>
+                </View>
+              </View>
+            </>
+          ) : (
+            <Text className="caption font-body-semibold text-text-secondary">Division reached as of this date</Text>
+          )}
+        </View>
+
+        <View className="h-px bg-divider" />
+
+        <View className="flex-row items-stretch px-5 py-4">
+          <HeroStatColumn id="profile.stats.workouts" icon="barbell" label="Workouts" value={String(displayWorkoutsCount)} />
+          <View className="w-px bg-divider" />
+          <HeroStatColumn id="profile.stats.prs" icon="ribbon" label="PRs" value={String(displayPrCount)} />
+          <View className="w-px bg-divider" />
+          <HeroStatColumn id="profile.stats.volume" icon="trending-up" label="Volume" value={`${(displayVolumeKg / 1000).toFixed(1)}t`} />
+        </View>
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(160).springify().damping(16).mass(0.6)} className="mx-4 mt-6 gap-3">
@@ -332,7 +356,7 @@ export default function ProfileScreen() {
         </Text>
         <View className="overflow-hidden rounded-2xl border border-divider bg-surface">
           <SettingsRow icon="person-outline" label="Edit Profile" onPress={() => goTo("/profile/edit")} />
-          <SettingsRow icon="calendar-outline" label="Workout Split" onPress={() => goTo("/profile/workout-split")} />
+          <SettingsRow icon="calendar-outline" label="Workout Split" onPress={() => goTo("/workout-split/intro")} />
           <SettingsRow icon="swap-vertical-outline" label="Units" value={weightUnit === "kg" ? "Kilograms" : "Pounds"} onPress={() => goTo("/profile/units")} />
           <SettingsRow icon="notifications-outline" label="Notifications" onPress={() => goTo("/profile/notifications")} />
           <SettingsRow icon="people-outline" label="My Crew" value={crewName} onPress={() => goTo("/crew/settings")} />
@@ -348,6 +372,19 @@ export default function ProfileScreen() {
         isOverridden={today.isOverridden}
         onSave={(name) => setTodayOverride(name)}
         onClearOverride={clearTodayOverride}
+      />
+
+      <AvatarActionSheet
+        visible={avatarActionsOpen}
+        onClose={() => setAvatarActionsOpen(false)}
+        onChoosePhoto={() => {
+          setAvatarActionsOpen(false);
+          handleChangePhoto();
+        }}
+        onGenerateAvatar={() => {
+          setAvatarActionsOpen(false);
+          setAvatarGeneratorOpen(true);
+        }}
       />
 
       <AvatarGeneratorModal visible={avatarGeneratorOpen} onClose={() => setAvatarGeneratorOpen(false)} />

@@ -52,7 +52,7 @@ export function MuscleSuggestions({ sessions }: MuscleSuggestionsProps) {
         </View>
 
         <View className="flex-row items-center gap-4">
-          <View className="flex-1 gap-4">
+          <View className="flex-1 gap-4" style={{ minWidth: 0 }}>
             {suggestions.map((suggestion, index) => (
               <View
                 key={suggestion.group}
@@ -79,7 +79,10 @@ export function MuscleSuggestions({ sessions }: MuscleSuggestionsProps) {
             ))}
           </View>
 
-          <MuscleHeatmap muscleIntensity={heatmapIntensity} height={190} showLegend={false} gender={gender} />
+          {/* Tight gap keeps front+back from getting too wide, and the text column next to it has
+              `minWidth: 0` (flex items don't shrink below their content size by default), so it
+              safely cedes width to this instead of the heatmap ever running through the text. */}
+          <MuscleHeatmap muscleIntensity={heatmapIntensity} height={130} gap={6} showLegend={false} gender={gender} />
         </View>
       </View>
     </View>

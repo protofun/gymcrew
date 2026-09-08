@@ -65,12 +65,44 @@ export function simulateRankProgression(
 
 /** Flat 1%/week of the current lift — e.g. 8% (~11kg on a 140kg lift) over 8 weeks, a generous,
  * explainable stand-in for a typical novice/intermediate linear-progression pace. Not lift- or
- * profile-specific on purpose: a simple, obviously-approximate ceiling is more trustworthy here than
- * a falsely precise model. Matches the wizard's own default goal suggestion (+8% of current), so a
- * freshly-opened simulator never flags its own starting default as unrealistic. */
-export const MAX_REALISTIC_WEEKLY_GAIN_RATE = 0.01;
+ * profile-specific on purpose: a simple, obviously-approximate rate is more trustworthy here than a
+ * falsely precise model. Used to auto-estimate a timeline for a goal, not to cap one. */
+export const ASSUMED_WEEKLY_GAIN_RATE = 0.01;
 
-/** The heaviest goal weight a straight-line plan can realistically reach in `periodWeeks`. */
-export function maxRealisticGoalKg(currentWeightKg: number, periodWeeks: number): number {
-  return Math.round(currentWeightKg * (1 + MAX_REALISTIC_WEEKLY_GAIN_RATE * periodWeeks));
+/**
+ * How many weeks a straight-line plan at the assumed weekly gain rate would take to go from
+ * `currentWeightKg` to `goalWeightKg` — the simulator's default "how long will this take?" estimate
+ * (see ranks/whats-my-rank.tsx's "Auto-Estimate" timeline mode). 0 when the goal's already at or
+ * below the current weight (nothing left to gain).
+ */
+export function weeksNeededForGoal(currentWeightKg: number, goalWeightKg: number): number {
+  if (goalWeightKg <= currentWeightKg) return 0;
+  const weeklyGainKg = Math.max(0.1, currentWeightKg * ASSUMED_WEEKLY_GAIN_RATE);
+  return Math.max(1, Math.ceil((goalWeightKg - currentWeightKg) / weeklyGainKg));
+}
+
+/** Ceiling for the binary search below — far past any real lift, just a safe search bound. */
+const WEIGHT_SEARCH_CEILING_KG = 2000;
+const WEIGHT_SEARCH_ITERATIONS = 40; // gives sub-gram precision over a 0-2000kg range, plenty
+
+/**
+ * The lightest weight that reaches `targetTierIndex` — found by binary search rather than
+ * inverting rank.ts's formulas directly, since tier is monotonically non-decreasing in weight
+ * across every rank path this app has (the major-lift bodyweight-ratio formula, the seeded-lift
+ * estimate, and the generic muscle-group proxy alike). That makes one search work for any exercise
+ * without duplicating (and risking drifting from) whichever formula `rankAtWeight` resolves to.
+ * Powers the simulator's "goal by rank" mode (see ranks/whats-my-rank.tsx).
+ */
+export function weightNeededForTier(targetTierIndex: number, rankAtWeight: (weightKg: number) => HypotheticalRankResult): number {
+  let lo = 0;
+  let hi = WEIGHT_SEARCH_CEILING_KG;
+  // Even the ceiling doesn't reach it (e.g. an exotic proxy formula) — cap there rather than loop
+  // toward a misleadingly precise but meaningless number.
+  if (RANK_TIERS.indexOf(rankAtWeight(hi).tier) < targetTierIndex) return hi;
+  for (let i = 0; i < WEIGHT_SEARCH_ITERATIONS; i++) {
+    const mid = (lo + hi) / 2;
+    if (RANK_TIERS.indexOf(rankAtWeight(mid).tier) >= targetTierIndex) hi = mid;
+    else lo = mid;
+  }
+  return Math.round(hi);
 }

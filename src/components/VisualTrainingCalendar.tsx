@@ -7,6 +7,7 @@ import { toDateKey } from "@/lib/date";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { BODY_ASPECT_RATIO } from "@/data/body-muscle-paths";
 import type { MuscleGroup } from "@/data/workout-log";
+import { preferredMuscleView } from "@/lib/muscle-groups";
 import type { Gender } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
@@ -71,7 +72,7 @@ function DayCell({
         <MuscleHeatmap
           muscleIntensity={trained ? info.muscleIntensity : {}}
           height={CELL_HEIGHT}
-          view="front"
+          view={trained ? preferredMuscleView(info.muscleIntensity) : "front"}
           showViewLabel={false}
           showLegend={false}
           gender={gender}

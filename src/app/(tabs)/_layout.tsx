@@ -30,7 +30,6 @@ import { useCustomExercisesStore } from "@/store/custom-exercises-store";
 import { useCustomWorkoutsStore } from "@/store/custom-workouts-store";
 import { useFavoriteExercisesStore } from "@/store/favorite-exercises-store";
 import { useGoalsStore } from "@/store/goals-store";
-import { useLedWorkoutStore } from "@/store/led-workout-store";
 import { useNotificationsStore } from "@/store/notifications-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
@@ -40,6 +39,7 @@ import { useThemeStore } from "@/store/theme-store";
 import { useTodayTrainingStore } from "@/store/today-training-store";
 import { useTrackedLiftsStore } from "@/store/tracked-lifts-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
+import { useWorkoutSplitStore } from "@/store/workout-split-store";
 import { useWorkoutNotesStore } from "@/store/workout-notes-store";
 import { colors } from "@/theme";
 
@@ -59,9 +59,19 @@ export default function TabsLayout() {
   const notifications = useMemo(() => {
     const personal = buildNotifications(workouts, streakDays, { weightKg: onboarding.weightKg, gender: onboarding.gender, age: onboarding.age });
     const crew = buildCrewNotifications(crewFeedEvents, user?.id);
-    const creatine = buildCreatineReminderNotification(onboarding.creatineReminders ?? true);
+    const creatine = buildCreatineReminderNotification(onboarding.creatineReminders ?? true, onboarding.creatineReminderTime ?? "09:00");
     return [...personal, ...crew, ...creatine].sort((a, b) => b.timestamp - a.timestamp).slice(0, NOTIFICATIONS_LIMIT);
-  }, [workouts, streakDays, onboarding.weightKg, onboarding.gender, onboarding.age, onboarding.creatineReminders, crewFeedEvents, user?.id]);
+  }, [
+    workouts,
+    streakDays,
+    onboarding.weightKg,
+    onboarding.gender,
+    onboarding.age,
+    onboarding.creatineReminders,
+    onboarding.creatineReminderTime,
+    crewFeedEvents,
+    user?.id,
+  ]);
   const profileXp = useProfileLevelStore((state) => state.xp);
   const profileDivision = useProfileLevelStore((state) => state.division);
   const crewXp = useCrewStore((state) => state.xp);
@@ -112,9 +122,10 @@ export default function TabsLayout() {
 
   // Once per sign-in: pull the real backend state for every backend-synced store — see lib/api.ts
   // and lib/backend-sync.ts. A no-op until EXPO_PUBLIC_API_BASE_URL is actually configured. Crew,
-  // challenges, the crew league, and led-workout sessions sync too now — but as "this account's own
-  // saved view," not yet a row genuinely shared live with other real members (no invite/membership
-  // system exists yet — see backend/README.md). Waits for a real session first (see
+  // challenges, and the crew league sync too now — but as "this account's own saved view," not yet
+  // a row genuinely shared live with other real members. (Crew live-workout sessions are already
+  // genuinely shared — see led-workout-store.ts's `refresh` — but that's polled from the Crew tab
+  // on demand, not pulled here alongside the rest.) Waits for a real session first (see
   // `waitForAuthToken`) — reaching this tab can happen right on the heels of sign-up/sign-in, before
   // Clerk's session is actually usable yet, which would otherwise make every sync below silently no-op.
   useEffect(() => {
@@ -153,7 +164,7 @@ export default function TabsLayout() {
         useCrewStore.getState().syncFromServer(),
         useChallengeStore.getState().syncFromServer(),
         useCrewLeagueStore.getState().syncFromServer(),
-        useLedWorkoutStore.getState().syncFromServer(),
+        useWorkoutSplitStore.getState().syncFromServer(),
       ]);
       if (cancelled) return;
 

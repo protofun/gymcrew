@@ -3,9 +3,10 @@
 /**
  * App-wide, admin-curated challenges — see db/schema.sql's `admin_challenges`. Same shape as a
  * weekly challenge (data/challenges.ts's ChallengeMetric) but hand-authored and left running until
- * manually stopped instead of rotating weekly. Write access (create/update/delete) is gated to one
- * hardcoded admin account by email — there's no real roles system in this app, this is a stopgap
- * for a single trusted admin, not a permissions model to build on.
+ * manually stopped instead of rotating weekly. Write access (create/update/delete) is gated to a
+ * short hardcoded list of admin accounts by email (ADMIN_CHALLENGE_EMAILS below) — there's no real
+ * roles system in this app, this is a stopgap for a couple of trusted admins, not a permissions
+ * model to build on.
  *
  * Routes (all require auth, see index.php):
  *   GET    /admin-challenges       -> admin caller: every challenge (active + inactive), for the
@@ -16,14 +17,22 @@
  *   DELETE /admin-challenges/:id   -> delete (admin only)
  */
 
-const ADMIN_CHALLENGE_EMAIL = 'jaimy.mathon@gmail.com';
+const ADMIN_CHALLENGE_EMAILS = ['jaimy.mathon@gmail.com', 'akb.koycu@gmail.com'];
 
 function isAdminUser(PDO $pdo, string $userId): bool
 {
     $stmt = $pdo->prepare('SELECT email FROM users WHERE id = ?');
     $stmt->execute([$userId]);
     $row = $stmt->fetch();
-    return $row && $row['email'] && strcasecmp($row['email'], ADMIN_CHALLENGE_EMAIL) === 0;
+    if (!$row || !$row['email']) {
+        return false;
+    }
+    foreach (ADMIN_CHALLENGE_EMAILS as $adminEmail) {
+        if (strcasecmp($row['email'], $adminEmail) === 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function handleAdminChallenges(PDO $pdo, string $userId, string $method, ?array $body, array $segments): void

@@ -13,18 +13,12 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { RankBadge } from "@/components/RankBadge";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { images } from "@/constants/images";
-import { EXERCISE_BY_ID, type Exercise } from "@/data/exercises";
+import type { Exercise } from "@/data/exercises";
 import { MAJOR_LIFT_CARDS, SEEDED_LIFT_CARDS, type LiftCardId } from "@/data/rank-lifts";
-import { genericExerciseRankDetail, tierForExercise } from "@/lib/generic-lift-rank";
-import {
-  applyRankScope,
-  buildLiftRankCards,
-  LIFT_CARD_SORT_OPTIONS,
-  SCORE_PER_BODYWEIGHT_RATIO,
-  type LiftCardSortKey,
-  type RankScope,
-} from "@/lib/lift-rank-cards";
+import { tierForExercise } from "@/lib/generic-lift-rank";
+import { LIFT_CARD_SORT_OPTIONS, type LiftCardSortKey, type RankScope } from "@/lib/lift-rank-cards";
 import { buildSnapshotRecords } from "@/lib/profile-snapshot";
+import { ranksBoardCards, ranksBoardPowerScore, type DisplayLiftCard } from "@/lib/ranks-board";
 import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
 import { useDeveloperModeStore } from "@/store/developer-mode-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
@@ -33,27 +27,6 @@ import { useProfileSnapshotStore } from "@/store/profile-snapshot-store";
 import { useTrackedLiftsStore } from "@/store/tracked-lifts-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
-
-/** A tile on the Ranks overview grid — either one of the 9 default tracked lifts or a custom
- * exercise the user added (see store/tracked-lifts-store.ts). Deliberately not `LiftRankCard`
- * itself: custom exercises don't have a `LiftCardId`, a curated image, or a real PR-delta history,
- * so this only keeps the fields the grid tile and sort actually need. */
-type DisplayLiftCard = {
-  id: string;
-  name: string;
-  exerciseId: string;
-  tier: RankTier;
-  score: number;
-  percentileInTier: number;
-  gymRank: number;
-  gymPoolSize: number;
-  isWeakPoint: boolean;
-  isCustom: boolean;
-  bestWeightKg: number;
-  /** `null` for custom exercises — there's no seeded PR-delta history for anything outside the 9
-   * tracked lifts, so the card shows its best weight instead (see LiftCard). */
-  prDeltaKg: number | null;
-};
 
 const GRID_COLUMNS = 3;
 const GRID_GAP = 12;
@@ -384,10 +357,13 @@ export default function RanksScreen() {
 
   const customExerciseIds = useTrackedLiftsStore((state) => state.customExerciseIds);
   const removedDefaultIds = useTrackedLiftsStore((state) => state.removedDefaultIds);
+  const hiddenAchievementIds = useTrackedLiftsStore((state) => state.hiddenAchievementIds);
   const addCustomLift = useTrackedLiftsStore((state) => state.addCustomLift);
   const removeCustomLift = useTrackedLiftsStore((state) => state.removeCustomLift);
   const removeDefaultLift = useTrackedLiftsStore((state) => state.removeDefaultLift);
   const restoreDefaultLift = useTrackedLiftsStore((state) => state.restoreDefaultLift);
+  const hideAchievement = useTrackedLiftsStore((state) => state.hideAchievement);
+  const unhideAchievement = useTrackedLiftsStore((state) => state.unhideAchievement);
 
   const [scope, setScope] = useState<RankScope>("gym");
   const [sortKey, setSortKey] = useState<LiftCardSortKey>("strongest");
@@ -405,58 +381,18 @@ export default function RanksScreen() {
     () => ({ gender, bodyWeightKg: snapshotAsOfMs != null && snapshotWeightKg != null ? snapshotWeightKg : weightKg, age }),
     [gender, weightKg, age, snapshotAsOfMs, snapshotWeightKg],
   );
-  const builtInCards = useMemo(() => buildLiftRankCards(records, profile, scope), [records, profile, scope]);
-
-  const cards = useMemo<DisplayLiftCard[]>(() => {
-    const defaults: DisplayLiftCard[] = builtInCards
-      .filter((card) => !removedDefaultIds.includes(card.id))
-      .map((card) => ({
-        id: card.id,
-        name: card.name,
-        exerciseId: card.exerciseId,
-        tier: card.tier,
-        score: card.score,
-        percentileInTier: card.percentileInTier,
-        gymRank: card.gymRank,
-        gymPoolSize: card.gymPoolSize,
-        isWeakPoint: card.isWeakPoint,
-        isCustom: false,
-        bestWeightKg: card.bestWeightKg,
-        prDeltaKg: card.prDeltaKg,
-      }));
-
-    const custom: DisplayLiftCard[] = customExerciseIds.flatMap((exerciseId) => {
-      const exercise = EXERCISE_BY_ID[exerciseId];
-      if (!exercise) return [];
-      const bestWeightKg = records[exerciseId]?.bestWeightKg ?? 0;
-      const bestReps = records[exerciseId]?.bestReps ?? 0;
-      const detail = genericExerciseRankDetail(exercise, bestWeightKg, bestReps, profile);
-      const score = Math.round((bestWeightKg / profile.bodyWeightKg) * SCORE_PER_BODYWEIGHT_RATIO);
-      const tierIndex = RANK_TIERS.indexOf(detail.tier);
-      const { percentileInTier, gymRank, gymPoolSize } = applyRankScope(exercise.id, tierIndex, detail.progressToNextTier, scope);
-      return [
-        {
-          id: exercise.id,
-          name: exercise.name,
-          exerciseId: exercise.id,
-          tier: detail.tier,
-          score,
-          percentileInTier,
-          gymRank,
-          gymPoolSize,
-          isWeakPoint: false,
-          isCustom: true,
-          bestWeightKg,
-          prDeltaKg: null,
-        },
-      ];
-    });
-
-    return [...defaults, ...custom];
-  }, [builtInCards, customExerciseIds, removedDefaultIds, records, profile, scope]);
+  // Auto-curated: every exercise with a real record, best-rank-first, capped at 12 — a better
+  // achievement always bumps a worse one out automatically. `customExerciseIds` pins tiles beyond
+  // that (shown even with no record yet); `removedDefaultIds`/`hiddenAchievementIds` keep something
+  // out regardless of rank. See lib/ranks-board.ts — the single source of truth for this board, also
+  // used anywhere else "Overall Power" needs to match what's shown here.
+  const cards = useMemo<DisplayLiftCard[]>(
+    () => ranksBoardCards(records, profile, scope, removedDefaultIds, hiddenAchievementIds, customExerciseIds),
+    [records, profile, scope, removedDefaultIds, hiddenAchievementIds, customExerciseIds],
+  );
 
   const sortedCards = useMemo(() => sortDisplayCards(cards, sortKey), [cards, sortKey]);
-  const power = cards.reduce((sum, card) => sum + card.score, 0);
+  const power = ranksBoardPowerScore(cards);
   const topTier = highestDisplayTier(cards);
   const sortLabel = LIFT_CARD_SORT_OPTIONS.find((option) => option.key === sortKey)?.label ?? "Strongest";
   const cardWidth = gridWidth > 0 ? (gridWidth - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS : 0;
@@ -471,14 +407,21 @@ export default function RanksScreen() {
   }
 
   function handleRemoveCard(card: DisplayLiftCard) {
-    if (card.isCustom) removeCustomLift(card.exerciseId);
-    else removeDefaultLift(card.id as LiftCardId);
+    if (!card.isCustom) {
+      removeDefaultLift(card.id as LiftCardId);
+      return;
+    }
+    // Unpin (no-op if it was never pinned) and hide — otherwise a strong auto-curated achievement
+    // would just reappear in the top 12 immediately after "removing" it.
+    removeCustomLift(card.exerciseId);
+    hideAchievement(card.exerciseId);
   }
 
   function handleAddExercise(exercise: Exercise) {
     const matchingDefault = [...MAJOR_LIFT_CARDS, ...SEEDED_LIFT_CARDS].find((lift) => lift.exerciseId === exercise.id);
     if (matchingDefault) restoreDefaultLift(matchingDefault.id);
     else addCustomLift(exercise.id);
+    unhideAchievement(exercise.id);
     setAddModalVisible(false);
   }
 

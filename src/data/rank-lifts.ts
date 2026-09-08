@@ -17,9 +17,12 @@ export type LiftCardId =
   | "cableCrunch"
   | "calfRaise";
 
+// Deliberately no `name` field on either definition below — the display name always comes from
+// `EXERCISE_BY_ID[exerciseId].name` (see lib/lift-rank-cards.ts) instead of being duplicated here,
+// so a tracked lift's name can never drift from how the same exercise reads in the searchable
+// exercise picker.
 type MajorLiftDefinition = {
   id: LiftCardId;
-  name: string;
   image: ImageSourcePropType;
   exerciseId: string;
   majorLift: MajorLift;
@@ -35,7 +38,6 @@ type MajorLiftDefinition = {
  * mock data it seeds) so a logged PR is real, and lib/lift-rank-cards.ts re-estimates its tier from it. */
 type SeededLiftDefinition = {
   id: LiftCardId;
-  name: string;
   image: ImageSourcePropType;
   exerciseId: string;
   tier: RankTier;
@@ -55,16 +57,14 @@ type SeededLiftDefinition = {
 export const MAJOR_LIFT_CARDS: MajorLiftDefinition[] = [
   {
     id: "benchPress",
-    name: "Bench Press",
     image: exerciseImages.benchPress,
     exerciseId: MAJOR_LIFT_EXERCISE_IDS.benchPress,
     majorLift: "benchPress",
     prDeltaKg: 7.5,
   },
-  { id: "squat", name: "Squat", image: exerciseImages.squat, exerciseId: MAJOR_LIFT_EXERCISE_IDS.squat, majorLift: "squat", prDeltaKg: 2.5 },
+  { id: "squat", image: exerciseImages.squat, exerciseId: MAJOR_LIFT_EXERCISE_IDS.squat, majorLift: "squat", prDeltaKg: 2.5 },
   {
     id: "deadlift",
-    name: "Deadlift",
     image: exerciseImages.deadlift,
     exerciseId: MAJOR_LIFT_EXERCISE_IDS.deadlift,
     majorLift: "deadlift",
@@ -72,7 +72,6 @@ export const MAJOR_LIFT_CARDS: MajorLiftDefinition[] = [
   },
   {
     id: "overheadPress",
-    name: "Overhead Press",
     image: exerciseImages.shoulderPress,
     exerciseId: MAJOR_LIFT_EXERCISE_IDS.overheadPress,
     majorLift: "overheadPress",
@@ -83,7 +82,6 @@ export const MAJOR_LIFT_CARDS: MajorLiftDefinition[] = [
 export const SEEDED_LIFT_CARDS: SeededLiftDefinition[] = [
   {
     id: "pullUp",
-    name: "Pull Up",
     image: exerciseImages.pullUp,
     exerciseId: "Pullups",
     tier: "gold",
@@ -96,7 +94,6 @@ export const SEEDED_LIFT_CARDS: SeededLiftDefinition[] = [
   },
   {
     id: "seatedRow",
-    name: "Seated Row",
     image: exerciseImages.seatedRow,
     exerciseId: "Seated_Cable_Rows",
     tier: "platinum",
@@ -109,7 +106,6 @@ export const SEEDED_LIFT_CARDS: SeededLiftDefinition[] = [
   },
   {
     id: "inclinePress",
-    name: "Incline Press",
     image: exerciseImages.inclineBenchPress,
     exerciseId: "Barbell_Incline_Bench_Press_-_Medium_Grip",
     tier: "silver",
@@ -122,7 +118,6 @@ export const SEEDED_LIFT_CARDS: SeededLiftDefinition[] = [
   },
   {
     id: "legPress",
-    name: "Leg Press",
     image: exerciseImages.legPress,
     exerciseId: "Leg_Press",
     tier: "bronze",
@@ -135,7 +130,6 @@ export const SEEDED_LIFT_CARDS: SeededLiftDefinition[] = [
   },
   {
     id: "lunge",
-    name: "Lunge",
     image: exerciseImages.lunge,
     exerciseId: "Barbell_Lunge",
     tier: "silver",
@@ -150,7 +144,6 @@ export const SEEDED_LIFT_CARDS: SeededLiftDefinition[] = [
   // permanently stuck at "insufficient data" — see MUSCLE_GROUP_WEIGHTS in lib/muscle-group-rank.ts.
   {
     id: "barbellCurl",
-    name: "Barbell Curl",
     image: exerciseImages.barbellCurl,
     exerciseId: "Barbell_Curl",
     tier: "gold",
@@ -163,7 +156,6 @@ export const SEEDED_LIFT_CARDS: SeededLiftDefinition[] = [
   },
   {
     id: "cableCrunch",
-    name: "Cable Crunch",
     image: exerciseImages.absCrunch,
     exerciseId: "Cable_Crunch",
     tier: "gold",
@@ -176,7 +168,6 @@ export const SEEDED_LIFT_CARDS: SeededLiftDefinition[] = [
   },
   {
     id: "calfRaise",
-    name: "Calf Raise",
     image: exerciseImages.calfRaise,
     exerciseId: "Standing_Calf_Raises",
     tier: "platinum",

@@ -2,8 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-/** The only account allowed to see/use Developer Mode (see profile/account.tsx). */
-export const DEVELOPER_MODE_USER_ID = "user_3HriM4eE0Ir7FlM4RCWohr7VV2o";
+/** The only accounts allowed to see/use Developer Mode (see profile/account.tsx), matched against
+ * the signed-in Clerk account's email — same list as ADMIN_CHALLENGE_EMAILS there, kept separate
+ * since the two gate different things and could diverge later. Lowercase: compared against an
+ * already-lowercased email. */
+export const DEVELOPER_MODE_EMAILS = ["jaimy.mathon@gmail.com", "akb.koycu@gmail.com"];
 
 type DeveloperModeStore = {
   enabled: boolean;

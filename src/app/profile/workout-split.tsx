@@ -1,9 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View, type View as RNView } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { FadeInUp, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import { useEffect, useMemo, useState } from "react";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
@@ -42,15 +41,20 @@ const heroShadow = {
   elevation: 6,
 };
 
-// Same tall, narrow aspect as the training-calendar body figures elsewhere — a shape a square
-// slot would waste most of, since the silhouette itself is tall and thin.
-const SLOT_HEIGHT = 62;
-const SLOT_WIDTH = Math.round(SLOT_HEIGHT * BODY_ASPECT_RATIO);
+// The week strip below matches VisualTrainingCalendar's day-cell style (same small silhouette,
+// same flex-1/no-scroll 7-across row) — front and back are stacked vertically per day rather than
+// side by side, so all 7 days still fit on screen at once without scrolling. Side by side (like
+// the tray below) would double each day's width and no longer fit 7-across on a phone screen.
+// Showing only one guessed side isn't good enough here — a leg day trains quads (front) and
+// hamstrings/glutes (back) at once, so picking just one side showed the wrong muscles lit up as
+// often as the right ones.
+const FIGURE_HEIGHT = 46;
 const BADGE_HEIGHT = 60;
-const BADGE_WIDTH = Math.round(BADGE_HEIGHT * BODY_ASPECT_RATIO);
+const BADGE_GAP = 4;
+const BADGE_WIDTH = Math.round(BADGE_HEIGHT * BODY_ASPECT_RATIO) * 2 + BADGE_GAP;
 
-/** What a tray badge drags onto a day — `value` is what actually gets stored (`""` for rest),
- * `label` is only for display. */
+/** One entry in the reference tray below the week — `value` is what actually gets stored (`""`
+ * for rest) once picked, via a day slot's own picker, `label` is only for display. */
 type TrayItem = { key: string; label: string; value: string; isRest?: boolean };
 
 const TRAY_ITEMS: TrayItem[] = [
@@ -98,12 +102,13 @@ function quickFillSchedule(split: string): Partial<Record<Weekday, string>> {
   return next;
 }
 
-/** A tiny gray/blank silhouette for "nothing here yet" — keeps every slot the same shape as a
- * trained one instead of swapping in an unrelated icon-only box. */
+/** A tiny gray/blank front+back pair for "nothing here yet" — keeps every slot the same shape as
+ * a trained one instead of swapping in an unrelated icon-only box. */
 function GhostFigure({ gender }: { gender: Gender }) {
   return (
-    <View className="items-center justify-center" style={{ width: SLOT_WIDTH, height: SLOT_HEIGHT }}>
-      <MuscleHeatmap muscleIntensity={{}} height={SLOT_HEIGHT} view="front" showViewLabel={false} showLegend={false} gender={gender} />
+    <View className="items-center justify-center gap-0.5">
+      <MuscleHeatmap muscleIntensity={{}} height={FIGURE_HEIGHT} view="front" showViewLabel={false} showLegend={false} gender={gender} />
+      <MuscleHeatmap muscleIntensity={{}} height={FIGURE_HEIGHT} view="back" showViewLabel={false} showLegend={false} gender={gender} />
       <View className="absolute items-center justify-center rounded-full bg-background" style={{ width: 16, height: 16 }}>
         <Ionicons name="add" size={10} color={colors.neutral.textSecondary} />
       </View>
@@ -118,7 +123,6 @@ function DaySlot({
   accentColor,
   gender,
   onPress,
-  onMeasureRef,
 }: {
   weekday: Weekday;
   assigned: string | undefined;
@@ -126,25 +130,41 @@ function DaySlot({
   accentColor: string;
   gender: Gender;
   onPress: () => void;
-  onMeasureRef: (node: RNView | null) => void;
 }) {
   const info = describeDay(assigned);
 
   return (
-    <Pressable onPress={onPress} hitSlop={2} className="items-center gap-1.5">
+    <Pressable onPress={onPress} hitSlop={2} className="flex-1 items-center gap-1.5">
       <Text className={`caption ${isToday ? "font-body-bold" : "text-text-secondary"}`} style={isToday ? { color: accentColor } : undefined}>
         {WEEKDAY_SHORT_LABEL[weekday][0]}
       </Text>
       <View
-        ref={onMeasureRef}
-        collapsable={false}
-        className={`items-center justify-center overflow-hidden rounded-xl border ${isToday ? "border-2" : "border border-divider"}`}
-        style={{ width: SLOT_WIDTH + 10, height: SLOT_HEIGHT + 10, borderColor: isToday ? accentColor : undefined }}
+        className={`items-center justify-center gap-0.5 rounded-lg ${isToday ? "border" : ""}`}
+        style={{ padding: isToday ? 3 : 0, borderColor: isToday ? accentColor : undefined }}
       >
         {info.isRest ? (
-          <Ionicons name="moon" size={16} color={colors.neutral.textSecondary} />
+          <View className="items-center justify-center" style={{ height: FIGURE_HEIGHT * 2 + 2 }}>
+            <Ionicons name="moon" size={16} color={colors.neutral.textSecondary} />
+          </View>
         ) : info.isSet ? (
-          <MuscleHeatmap muscleIntensity={intensityForWorkoutName(assigned!)} height={SLOT_HEIGHT} view="front" showViewLabel={false} showLegend={false} gender={gender} />
+          <>
+            <MuscleHeatmap
+              muscleIntensity={intensityForWorkoutName(assigned!)}
+              height={FIGURE_HEIGHT}
+              view="front"
+              showViewLabel={false}
+              showLegend={false}
+              gender={gender}
+            />
+            <MuscleHeatmap
+              muscleIntensity={intensityForWorkoutName(assigned!)}
+              height={FIGURE_HEIGHT}
+              view="back"
+              showViewLabel={false}
+              showLegend={false}
+              gender={gender}
+            />
+          </>
         ) : (
           <GhostFigure gender={gender} />
         )}
@@ -153,71 +173,35 @@ function DaySlot({
   );
 }
 
-function WorkoutTrayBadge({
-  item,
-  dragX,
-  dragY,
-  gender,
-  onDragStart,
-  onDragEnd,
-}: {
-  item: TrayItem;
-  dragX: ReturnType<typeof useSharedValue<number>>;
-  dragY: ReturnType<typeof useSharedValue<number>>;
-  gender: Gender;
-  onDragStart: (item: TrayItem) => void;
-  onDragEnd: (item: TrayItem, x: number, y: number) => void;
-}) {
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const scale = useSharedValue(1);
-
-  // A brief hold before the drag activates — without it, every horizontal swipe meant to scroll
-  // this row gets stolen as a drag instead. A long-press disambiguates the two: a quick swipe
-  // scrolls (the pan below never activates in time and cedes to the parent ScrollView), a hold
-  // means "pick this up".
-  const pan = Gesture.Pan()
-    .activateAfterLongPress(150)
-    .onStart(() => {
-      scale.value = withSpring(1.12);
-      runOnJS(onDragStart)(item);
-    })
-    .onUpdate((event) => {
-      translateX.value = event.translationX;
-      translateY.value = event.translationY;
-      dragX.value = event.absoluteX;
-      dragY.value = event.absoluteY;
-    })
-    .onEnd((event) => {
-      runOnJS(onDragEnd)(item, event.absoluteX, event.absoluteY);
-      translateX.value = withSpring(0);
-      translateY.value = withSpring(0);
-      scale.value = withSpring(1);
-    });
-
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
-  }));
-
+/** A plain reference card — not draggable. A long-press-to-drag gesture living on the same row as
+ * a horizontal ScrollView reliably starved the scroll of most touches (the pan gesture "held" the
+ * touch during its whole activation window even on a quick swipe), and every assignment it could
+ * do is already covered by tapping a day slot above, which opens the same searchable workout list.
+ * Tap a badge here to see what it trains; tap a day to actually assign it. */
+function WorkoutTrayBadge({ item, gender }: { item: TrayItem; gender: Gender }) {
   return (
-    <GestureDetector gesture={pan}>
-      <Animated.View
-        style={[style, { width: 82 }]}
-        collapsable={false}
-        className="items-center gap-1.5 rounded-2xl border border-divider bg-surface p-2"
-      >
-        {item.isRest ? (
-          <View className="items-center justify-center" style={{ width: BADGE_WIDTH, height: BADGE_HEIGHT }}>
-            <Ionicons name="moon" size={22} color={colors.neutral.textSecondary} />
-          </View>
-        ) : (
-          <MuscleHeatmap muscleIntensity={intensityForWorkoutName(item.value)} height={BADGE_HEIGHT} view="front" showViewLabel={false} showLegend={false} gender={gender} />
-        )}
-        <Text className="caption text-center font-body-semibold text-text-primary" numberOfLines={2}>
-          {item.label}
-        </Text>
-      </Animated.View>
-    </GestureDetector>
+    <View
+      style={{ width: BADGE_WIDTH + 20 }}
+      className="items-center gap-1.5 rounded-2xl border border-divider bg-surface p-2"
+    >
+      {item.isRest ? (
+        <View className="items-center justify-center" style={{ width: BADGE_WIDTH, height: BADGE_HEIGHT }}>
+          <Ionicons name="moon" size={22} color={colors.neutral.textSecondary} />
+        </View>
+      ) : (
+        <MuscleHeatmap
+          muscleIntensity={intensityForWorkoutName(item.value)}
+          height={BADGE_HEIGHT}
+          gap={BADGE_GAP}
+          showViewLabel={false}
+          showLegend={false}
+          gender={gender}
+        />
+      )}
+      <Text className="caption text-center font-body-semibold text-text-primary" numberOfLines={2}>
+        {item.label}
+      </Text>
+    </View>
   );
 }
 
@@ -327,14 +311,9 @@ export default function WorkoutSplitScreen() {
   const [schedule, setSchedule] = useState<Partial<Record<Weekday, string>>>(savedSchedule ?? {});
   const [dirty, setDirty] = useState(false);
   const [editingDay, setEditingDay] = useState<Weekday | null>(null);
-  const [draggedItem, setDraggedItem] = useState<TrayItem | null>(null);
   const [confirmingSave, setConfirmingSave] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const today = currentWeekday();
-
-  const dayRefs = useRef<Partial<Record<Weekday, RNView | null>>>({});
-  const dragX = useSharedValue(0);
-  const dragY = useSharedValue(0);
 
   const personalDivision = useProfileLevelStore((state) => state.division);
   const splitThemeKey = useThemeStore((state) => state.splitThemeKey);
@@ -362,19 +341,6 @@ export default function WorkoutSplitScreen() {
     updateSchedule({ ...schedule, [weekday]: workoutName });
   }
 
-  function handleDrop(item: TrayItem, dropX: number, dropY: number) {
-    setDraggedItem(null);
-    for (const weekday of WEEKDAYS) {
-      const node = dayRefs.current[weekday];
-      if (!node) continue;
-      node.measure((_x, _y, width, height, pageX, pageY) => {
-        if (dropX >= pageX && dropX <= pageX + width && dropY >= pageY && dropY <= pageY + height) {
-          assignDay(weekday, item.value);
-        }
-      });
-    }
-  }
-
   const missingGroups = useMemo(() => {
     const covered = weeklyMuscleCoverage(schedule);
     return ALL_MUSCLE_GROUPS.filter((group) => !covered.has(group));
@@ -392,10 +358,6 @@ export default function WorkoutSplitScreen() {
     else commitSave();
   }
 
-  const overlayStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: dragX.value - (BADGE_WIDTH + 16) / 2 }, { translateY: dragY.value - (BADGE_HEIGHT + 16) / 2 }],
-  }));
-
   const trainingDays = WEEKDAYS.filter((day) => schedule[day] && schedule[day] !== "").length;
   const restDays = WEEKDAYS.filter((day) => schedule[day] === "").length;
   const coveredCount = ALL_MUSCLE_GROUPS.length - missingGroups.length;
@@ -403,7 +365,11 @@ export default function WorkoutSplitScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/profile"))}
+          hitSlop={8}
+          style={{ position: "absolute", left: 16 }}
+        >
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Workout Split</Text>
@@ -418,7 +384,7 @@ export default function WorkoutSplitScreen() {
           <Text style={sectionHeaderStyle} className="text-text-primary">
             YOUR WEEK
           </Text>
-          <View style={heroShadow} className="flex-row justify-between rounded-3xl border border-divider bg-surface p-4">
+          <View style={heroShadow} className="flex-row rounded-3xl border border-divider bg-surface p-4">
             {WEEKDAYS.map((weekday) => (
               <DaySlot
                 key={weekday}
@@ -428,13 +394,10 @@ export default function WorkoutSplitScreen() {
                 accentColor={accentColor}
                 gender={gender}
                 onPress={() => setEditingDay(weekday)}
-                onMeasureRef={(node) => {
-                  dayRefs.current[weekday] = node;
-                }}
               />
             ))}
           </View>
-          <Text className="caption text-center text-text-secondary">Tap a day, or hold and drag one below onto it</Text>
+          <Text className="caption text-center text-text-secondary">Tap a day to assign a workout</Text>
         </Animated.View>
 
         <Animated.View entering={FadeInUp.delay(40).springify().damping(16).mass(0.6)} className="gap-3">
@@ -463,11 +426,11 @@ export default function WorkoutSplitScreen() {
 
         <Animated.View entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)} className="gap-3">
           <Text style={sectionHeaderStyle} className="text-text-primary">
-            DRAG A WORKOUT
+            WORKOUT TYPES
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
             {TRAY_ITEMS.map((item) => (
-              <WorkoutTrayBadge key={item.key} item={item} dragX={dragX} dragY={dragY} gender={gender} onDragStart={setDraggedItem} onDragEnd={handleDrop} />
+              <WorkoutTrayBadge key={item.key} item={item} gender={gender} />
             ))}
           </ScrollView>
         </Animated.View>
@@ -509,21 +472,6 @@ export default function WorkoutSplitScreen() {
           </Text>
         </Pressable>
       </View>
-
-      {draggedItem && (
-        <Animated.View pointerEvents="none" style={[{ position: "absolute", top: 0, left: 0 }, overlayStyle]}>
-          <View
-            className="items-center justify-center gap-1 rounded-2xl border-2 bg-surface p-2"
-            style={{ width: BADGE_WIDTH + 16, height: BADGE_HEIGHT + 16, borderColor: accentColor }}
-          >
-            {draggedItem.isRest ? (
-              <Ionicons name="moon" size={22} color={colors.neutral.textSecondary} />
-            ) : (
-              <MuscleHeatmap muscleIntensity={intensityForWorkoutName(draggedItem.value)} height={BADGE_HEIGHT} view="front" showViewLabel={false} showLegend={false} gender={gender} />
-            )}
-          </View>
-        </Animated.View>
-      )}
 
       <TodayWorkoutModal
         visible={editingDay !== null}

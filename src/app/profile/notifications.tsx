@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useState } from "react";
 import { Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { TimePickerModal } from "@/components/TimePickerModal";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
@@ -16,10 +18,19 @@ const TOGGLES: { key: ToggleKey; label: string; description: string }[] = [
   { key: "marketingTips", label: "Tips & Product News", description: "Occasional training tips and app updates" },
 ];
 
+function formatTimeLabel(time: string): string {
+  const [hour, minute] = time.split(":").map(Number);
+  const period = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${hour12}:${minute.toString().padStart(2, "0")} ${period}`;
+}
+
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const onboarding = useOnboardingStore((state) => state.onboarding);
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
+  const creatineReminderTime = onboarding.creatineReminderTime ?? "09:00";
+  const [timePickerVisible, setTimePickerVisible] = useState(false);
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
@@ -31,21 +42,53 @@ export default function NotificationsScreen() {
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
-        {TOGGLES.map((toggle) => (
-          <View key={toggle.key} className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface px-4 py-3.5">
-            <View className="flex-1 pr-3">
-              <Text className="body-md text-text-primary">{toggle.label}</Text>
-              <Text className="body-sm text-text-secondary">{toggle.description}</Text>
+        {TOGGLES.map((toggle) => {
+          const enabled = onboarding[toggle.key] ?? true;
+          return (
+            <View key={toggle.key} className="gap-3 rounded-2xl border border-divider bg-surface px-4 py-3.5">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-3">
+                  <Text className="body-md text-text-primary">{toggle.label}</Text>
+                  <Text className="body-sm text-text-secondary">{toggle.description}</Text>
+                </View>
+                <Switch
+                  value={enabled}
+                  onValueChange={(value) => setOnboardingData({ [toggle.key]: value })}
+                  trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
+                  thumbColor={colors.brand.white}
+                />
+              </View>
+
+              {toggle.key === "creatineReminders" && enabled && (
+                <Pressable
+                  onPress={() => setTimePickerVisible(true)}
+                  className="flex-row items-center justify-between rounded-xl border-t border-divider pt-3"
+                >
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons name="time-outline" size={16} color={colors.neutral.textSecondary} />
+                    <Text className="body-sm text-text-secondary">Remind me at</Text>
+                  </View>
+                  <View className="flex-row items-center gap-1.5">
+                    <Text className="body-sm font-body-semibold text-brand-yellow">{formatTimeLabel(creatineReminderTime)}</Text>
+                    <Ionicons name="chevron-forward" size={14} color={colors.neutral.textSecondary} />
+                  </View>
+                </Pressable>
+              )}
             </View>
-            <Switch
-              value={onboarding[toggle.key] ?? true}
-              onValueChange={(value) => setOnboardingData({ [toggle.key]: value })}
-              trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
-              thumbColor={colors.brand.white}
-            />
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
+
+      <TimePickerModal
+        visible={timePickerVisible}
+        title="Creatine Reminder Time"
+        value={creatineReminderTime}
+        onClose={() => setTimePickerVisible(false)}
+        onSelect={(time) => {
+          setOnboardingData({ creatineReminderTime: time });
+          setTimePickerVisible(false);
+        }}
+      />
     </View>
   );
 }
