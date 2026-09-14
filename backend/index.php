@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/admin-auth.php';
 require_once __DIR__ . '/response.php';
 require_once __DIR__ . '/routes/profile.php';
 require_once __DIR__ . '/routes/account.php';
@@ -14,14 +15,30 @@ require_once __DIR__ . '/routes/crew-wars.php';
 require_once __DIR__ . '/routes/crew-live-sessions.php';
 require_once __DIR__ . '/routes/crew-activity-events.php';
 require_once __DIR__ . '/routes/crew-duels.php';
+require_once __DIR__ . '/routes/leaderboards.php';
+require_once __DIR__ . '/routes/rank-standings.php';
 require_once __DIR__ . '/routes/admin-challenges.php';
 require_once __DIR__ . '/routes/nutrition-meals.php';
 require_once __DIR__ . '/routes/nutrition-logs.php';
 require_once __DIR__ . '/routes/nutrition-off.php';
 require_once __DIR__ . '/routes/nutrition-food-photo.php';
+require_once __DIR__ . '/routes/nutrition-water.php';
 require_once __DIR__ . '/routes/state.php';
+require_once __DIR__ . '/routes/reports.php';
+require_once __DIR__ . '/routes/push-token.php';
+require_once __DIR__ . '/routes/support.php';
 require_once __DIR__ . '/routes/waitlist.php';
 require_once __DIR__ . '/routes/athlete-signup.php';
+require_once __DIR__ . '/routes/admin.php';
+require_once __DIR__ . '/routes/admin-ops.php';
+require_once __DIR__ . '/routes/admin-content.php';
+require_once __DIR__ . '/routes/analytics-events.php';
+require_once __DIR__ . '/routes/launch-analytics.php';
+require_once __DIR__ . '/routes/track.php';
+require_once __DIR__ . '/routes/announcement.php';
+require_once __DIR__ . '/routes/roadmap.php';
+require_once __DIR__ . '/routes/content.php';
+require_once __DIR__ . '/routes/feedback.php';
 
 // Strips a configurable base path (e.g. "/api" when this lives at a domain root alongside other
 // things) so routes below only ever see "profile", "workouts", "workouts/123", etc. Computed before
@@ -43,7 +60,11 @@ $publicMarketingPaths = [
     'waitlist', 'athlete-signup', 'athlete-join', 'athlete-login', 'athlete-profile', 'athlete-crew-icon',
     'athlete-username-available', 'athlete-crewname-available', 'athlete-crew-by-invite', 'athlete-app-link',
 ];
-$corsOrigin = in_array($path, $publicMarketingPaths, true) ? '*' : env('CORS_ORIGIN', '*');
+// The admin panel is a separate static web app (its own origin) with its own auth entirely (see
+// admin-auth.php) — same "not the PWA, needs its own CORS carve-out" reasoning as the marketing
+// paths above, not a loosening of the main app's CORS lock.
+$isAdminPath = $path === 'admin' || str_starts_with($path, 'admin/');
+$corsOrigin = (in_array($path, $publicMarketingPaths, true) || $isAdminPath) ? '*' : env('CORS_ORIGIN', '*');
 header('Access-Control-Allow-Origin: ' . $corsOrigin);
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -121,6 +142,16 @@ if ($path === 'athlete-app-link' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     exit;
 }
 
+// Dispatched here, before the Clerk JWT gate below — the admin panel authenticates with its own
+// self-issued token (see admin-auth.php), never a Clerk session. handleAdmin() does its own auth
+// check internally (every route but POST /admin/login requires it).
+if ($isAdminPath) {
+    $raw = file_get_contents('php://input');
+    $decoded = $raw ? json_decode($raw, true) : [];
+    handleAdmin(getPdo(), $_SERVER['REQUEST_METHOD'], is_array($decoded) ? $decoded : [], explode('/', $path));
+    exit;
+}
+
 $token = getBearerToken();
 if (!$token) {
     errorResponse('Missing Authorization header', 401);
@@ -184,6 +215,12 @@ switch ($resource) {
     case 'crew-duels':
         handleCrewDuels($pdo, $userId, $method, $body, $segments);
         break;
+    case 'leaderboards':
+        handleLeaderboards($pdo, $userId, $method, $segments);
+        break;
+    case 'rank-standings':
+        handleRankStandings($pdo, $userId, $method);
+        break;
     case 'admin-challenges':
         handleAdminChallenges($pdo, $userId, $method, $body, $segments);
         break;
@@ -199,11 +236,48 @@ switch ($resource) {
     case 'nutrition-food-photo':
         handleNutritionFoodPhoto($pdo, $userId, $method, $body);
         break;
+    case 'nutrition-water':
+        handleNutritionWater($pdo, $userId, $method, $body, $resourceId);
+        break;
     case 'state':
         handleState($pdo, $userId, $method, $body, $resourceId);
         break;
     case 'state-batch':
         handleStateBatch($pdo, $userId, $method, $_GET['keys'] ?? null);
+        break;
+    case 'reports':
+        handleReports($pdo, $userId, $method, $body);
+        break;
+    case 'announcement':
+        handleAnnouncement($pdo);
+        break;
+    case 'roadmap':
+        handleRoadmap($pdo, $method);
+        break;
+    case 'changelog':
+        handleChangelog($pdo, $method);
+        break;
+    case 'faq':
+        handleFaq($pdo, $method);
+        break;
+    case 'status':
+        handleStatus($pdo, $method);
+        break;
+    case 'feedback':
+        handleFeedback($pdo, $userId, $method, $body, $segments);
+        break;
+    case 'push-token':
+        handlePushToken($pdo, $userId, $method, $body);
+        break;
+    case 'support':
+        handleSupport($pdo, $userId, $method, $body, $segments);
+        break;
+    // Named "activity", not "track" — ad blockers routinely block any URL path containing
+    // "track" as a generic analytics heuristic, which would silently drop this app's own
+    // first-party telemetry for a meaningful share of real users (confirmed: the admin panel's
+    // near-identical "/event-log" endpoint was blocked this same way before being renamed).
+    case 'activity':
+        handleTrack($pdo, $userId, $method, $body);
         break;
     default:
         errorResponse('Not found', 404);

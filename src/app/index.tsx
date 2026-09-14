@@ -35,6 +35,18 @@ export default function Index() {
     }
   }, [isSignedIn, hasCompletedOnboarding]);
 
+  // Pushes the real, verified Clerk email to the backend on every signed-in visit — not just during
+  // onboarding — so `users.email` gets backfilled for accounts that existed before this existed too
+  // (see onboarding-store.ts's syncEmailToBackend). Fire-and-forget here; build-crew/_layout.tsx
+  // separately awaits its own call to this before deciding whether a Founding Athlete Crew already
+  // exists, so the crew-selection gate never races this one.
+  const email = user?.primaryEmailAddress?.emailAddress;
+  useEffect(() => {
+    if (isSignedIn && email) {
+      useOnboardingStore.getState().syncEmailToBackend(email);
+    }
+  }, [isSignedIn, email]);
+
   if (!isLoaded) {
     return null;
   }

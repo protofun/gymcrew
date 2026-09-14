@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Modal, Pressable, Share, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
+import { usePostHog } from "posthog-react-native";
 
 import { colors } from "@/theme";
 
@@ -14,18 +15,22 @@ type InviteMembersModalProps = {
 };
 
 export function InviteMembersModal({ visible, onClose, crewName, inviteCode }: InviteMembersModalProps) {
+  const posthog = usePostHog();
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
     await Clipboard.setStringAsync(inviteCode);
     setCopied(true);
+    posthog.capture("crew_invite_copied");
     setTimeout(() => setCopied(false), 2000);
   }
 
   function handleShare() {
     Share.share({
       message: `Join my crew "${crewName}" on GymCrew! Use invite code ${inviteCode} to join.`,
-    }).catch((error) => console.warn("Sharing is unavailable on this platform", error));
+    })
+      .then(() => posthog.capture("crew_invite_shared"))
+      .catch((error) => console.warn("Sharing is unavailable on this platform", error));
   }
 
   return (

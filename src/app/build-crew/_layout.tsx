@@ -26,22 +26,27 @@ export default function BuildCrewLayout() {
   // marketing site before ever opening this app gets auto-linked into a real Crew server-side the
   // moment their email reaches the backend (see backend/routes/profile.php's
   // maybeLinkFoundingAthlete) — so a real crew can already exist here despite this flag being
-  // false. Checked once, without blocking the picker below on it — most accounts have no founding
-  // crew, and shouldn't wait on a network round trip just to see the normal picker; the rare
-  // founding case redirects home a beat after this flow's first screen briefly renders.
+  // false. `syncEmailToBackend` is awaited *first* (not just fired from app/index.tsx and hoped to
+  // have landed by now) specifically so that link has actually happened before the crew check below
+  // runs — without this order, a slow network could show the normal create/join/skip picker to
+  // someone who already has a real Crew waiting for them. Most accounts have no founding crew, so
+  // this costs one extra round trip only for the rare founding case; everyone else's picker still
+  // shows promptly once both calls resolve (the email push is cheap and usually already in flight).
   const [hasFoundingCrew, setHasFoundingCrew] = useState(false);
+  const email = user?.primaryEmailAddress?.emailAddress;
   useEffect(() => {
     if (!isSignedIn || hasCompletedCrewSelection || clerkCrewSelected) return;
-    useCrewStore
-      .getState()
-      .syncFromServer()
-      .then(() => {
-        if (useCrewStore.getState().id) {
-          setHasFoundingCrew(true);
-          completeCrewSelection();
-        }
-      });
-  }, [isSignedIn, hasCompletedCrewSelection, clerkCrewSelected, completeCrewSelection]);
+    (async () => {
+      if (email) {
+        await useOnboardingStore.getState().syncEmailToBackend(email);
+      }
+      await useCrewStore.getState().syncFromServer();
+      if (useCrewStore.getState().id) {
+        setHasFoundingCrew(true);
+        completeCrewSelection();
+      }
+    })();
+  }, [isSignedIn, hasCompletedCrewSelection, clerkCrewSelected, completeCrewSelection, email]);
 
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect href="/onboarding" />;

@@ -55,8 +55,11 @@ export const DIVISION_COLOR: Record<Division, string> = {
  * XP needed to climb OUT of each division (i.e. from "Rookie" to "Novice" takes 500 XP). Growth is
  * roughly ×1.44 per tier, so the ladder starts easy and gets meaningfully harder near the top —
  * intentional, so not every crew ends up maxed out. Apex has no next tier, so its value is unused.
+ * Exported so a "here's every division and what it takes" screen (see crew/all-divisions.tsx) can
+ * list real numbers instead of just badges — same ladder backend/routes/crews.php's
+ * `advanceCrewDivision` applies server-side, so keep both in sync if this ever changes.
  */
-const DIVISION_XP_REQUIRED: Record<Division, number> = {
+export const DIVISION_XP_REQUIRED: Record<Division, number> = {
   Rookie: 500,
   Novice: 750,
   Bronze: 1100,
@@ -130,30 +133,38 @@ export function advanceDivision(currentXp: number, currentDivision: Division, xp
 /**
  * Absolute individual-player "power" cutoffs for the Global leaderboard's division grouping —
  * unlike the crew ladder (relative XP per tier), a player's power score is already an absolute
- * number, so divisions here are fixed thresholds on that scale. Top tiers are deliberately out of
- * reach of today's mock leaderboard — nobody's climbed that far yet.
+ * number, so divisions here are fixed thresholds on that scale. Exported for the same "here's every
+ * division and what it takes" screen as `DIVISION_XP_REQUIRED` above — keep both this and
+ * backend/routes/leaderboards.php's `PLAYER_DIVISION_MIN_POWER` in sync if either ever changes.
+ *
+ * Rescaled ×4 from the original values, which were calibrated against the old static mock
+ * leaderboard's illustrative powers (~2,300-9,840 — see the now-deleted data/player-leaderboard.ts)
+ * rather than against how a REAL power score actually accumulates: `userOverallPowerScore` sums up
+ * to 12 lifts, each worth `ratio * 4000` — so even a handful of solid real lifts (e.g. 3 lifts at
+ * ~1.5x bodyweight) already scores ~18,000, past the old Apex cutoff of 46,500 with barely a third
+ * of a real board filled in. Everyone was landing at or near the top division almost immediately.
  */
-const PLAYER_DIVISION_MIN_POWER: Record<Division, number> = {
+export const PLAYER_DIVISION_MIN_POWER: Record<Division, number> = {
   Rookie: 0,
-  Novice: 800,
-  Bronze: 1700,
-  Silver: 2800,
-  Gold: 4000,
-  Platinum: 5300,
-  Diamond: 6700,
-  Elite: 8200,
-  Master: 9800,
-  Grandmaster: 11500,
-  Champion: 13400,
-  Titan: 15500,
-  Mythic: 17800,
-  Immortal: 20400,
-  Legend: 23400,
-  Overlord: 26800,
-  Supreme: 30700,
-  Conqueror: 35200,
-  Dominator: 40400,
-  Apex: 46500,
+  Novice: 3200,
+  Bronze: 6800,
+  Silver: 11200,
+  Gold: 16000,
+  Platinum: 21200,
+  Diamond: 26800,
+  Elite: 32800,
+  Master: 39200,
+  Grandmaster: 46000,
+  Champion: 53600,
+  Titan: 62000,
+  Mythic: 71200,
+  Immortal: 81600,
+  Legend: 93600,
+  Overlord: 107200,
+  Supreme: 122800,
+  Conqueror: 140800,
+  Dominator: 161600,
+  Apex: 186000,
 };
 
 export function divisionForPlayerPower(power: number): Division {

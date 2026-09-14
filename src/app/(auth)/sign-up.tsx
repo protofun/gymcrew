@@ -167,6 +167,18 @@ export default function SignUpScreen() {
             <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
           </Pressable>
 
+          <Text className="body-sm text-center text-text-secondary">
+            By signing up, you agree to our{" "}
+            <Text className="text-brand-yellow" onPress={() => router.push("/legal/terms")}>
+              Terms of Service
+            </Text>{" "}
+            and{" "}
+            <Text className="text-brand-yellow" onPress={() => router.push("/legal/privacy")}>
+              Privacy Policy
+            </Text>
+            .
+          </Text>
+
           {/* Anchor for Clerk's bot-protection widget on web; skipped automatically on iOS/Android. */}
           <View nativeID="clerk-captcha" />
 

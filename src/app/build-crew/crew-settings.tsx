@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal, Pressable, SafeAreaView, ScrollView, Switch, Text, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 
+import { goBack } from "@/lib/navigation";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
@@ -115,7 +116,7 @@ export default function CrewSettingsScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
       <ScrollView className="flex-1" contentContainerClassName="px-6 pb-6 pt-4" showsVerticalScrollIndicator={false}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={8}
           className="mb-2 h-9 w-9 items-center justify-center rounded-full border border-divider"
         >

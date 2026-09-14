@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
 import { images } from "@/constants/images";
 import { api, isApiConfigured } from "@/lib/api";
@@ -18,6 +19,8 @@ const FRAME_SIZE = 240;
  * flow is explicitly designed to handle. */
 export default function ScanBarcodeScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
+  const { date } = useLocalSearchParams<{ date?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
   const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "looking-up" | "not-found" | "error">("idle");
@@ -40,9 +43,10 @@ export default function ScanBarcodeScreen() {
     setStatus("looking-up");
     try {
       const result = await api.lookupBarcode(data);
+      posthog.capture("barcode_scanned", { found: result.found });
       if (result.found) {
         rememberOffFoods([result.food]);
-        router.replace({ pathname: "/nutrition/food/[id]", params: { id: result.food.id } });
+        router.replace({ pathname: "/nutrition/food/[id]", params: { id: result.food.id, date } });
       } else {
         setStatus("not-found");
       }
@@ -58,7 +62,7 @@ export default function ScanBarcodeScreen() {
   }
 
   function handleAddManually() {
-    router.replace({ pathname: "/nutrition/create-food", params: { barcode: scannedCode ?? undefined } });
+    router.replace({ pathname: "/nutrition/create-food", params: { barcode: scannedCode ?? undefined, date } });
   }
 
   if (!permission) {

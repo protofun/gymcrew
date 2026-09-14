@@ -10,18 +10,20 @@ import { AuthDivider } from "@/components/AuthDivider";
 import { AuthHeader } from "@/components/AuthHeader";
 import { FormField } from "@/components/FormField";
 import { SocialAuthButton } from "@/components/SocialAuthButton";
+import { VerificationCodeModal } from "@/components/VerificationCodeModal";
 import { useWarmUpBrowser } from "@/hooks/use-warm-up-browser";
 import { waitForAuthToken } from "@/lib/api";
 import { getClerkErrorMessage } from "@/lib/clerk";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
-/** After a real sign-in (not sign-up), pulls this account's backend profile — `syncProfileFromServer`
- * itself marks onboarding complete when that profile already has real data, so a returning user
- * isn't dragged through the wizard again just because this device's local storage is fresh. Falls
- * back to the normal "/onboarding" gate if there's no backend data yet. Waits for a real session
- * first (see `waitForAuthToken`) — without it, the sync below can silently no-op ("not signed in")
- * even though sign-in just reported success. */
+/** After a real sign-in (not sign-up), pulls this account's backend profile so known fields (e.g. a
+ * Founding Athlete's linked name/username, see profile.php's maybeLinkFoundingAthlete) are already
+ * in the store before the wizard, if it runs, ever gets there. Whether the wizard runs at all is
+ * decided by Clerk's `hasCompletedOnboarding` metadata flag alone (see the redirect gate at "/"),
+ * not by anything here — this call only ever fills in data, never marks onboarding complete. Waits
+ * for a real session first (see `waitForAuthToken`) — without it, the sync below can silently no-op
+ * ("not signed in") even though sign-in just reported success. */
 async function resumeAsReturningUser() {
   await waitForAuthToken();
   await useOnboardingStore.getState().syncProfileFromServer();
@@ -52,6 +54,7 @@ export default function SignInScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [resumeStuck, setResumeStuck] = useState(false);
   const [resumeAttempt, setResumeAttempt] = useState(0);
+  const [verifyingDevice, setVerifyingDevice] = useState(false);
 
   // Landing here already signed in (e.g. a recognized session from before, or the "Log in" link
   // tapped by mistake while already authenticated) — there's nothing to log in to, so just resume
@@ -90,6 +93,18 @@ export default function SignInScreen() {
     );
   }
 
+  /** Shared finalize step, run once `signIn.status` is genuinely "complete" — either right after a
+   * normal password sign-in, or after completing Device Trust's second-factor email code below.
+   * Returns an error message instead of setting form state directly, since the Device Trust path
+   * also feeds this straight into VerificationCodeModal's own inline error display. */
+  async function finalizeSignIn(): Promise<string | void> {
+    const { error } = await signIn.finalize();
+    if (error) return getClerkErrorMessage(error);
+    posthog.capture("user_signed_in", { auth_method: "email" });
+    // Not calling resumeAsReturningUser() here — `isSignedIn` flipping true right about now is what
+    // triggers the timeout-protected effect above to do that, on the one path that can't get stuck.
+  }
+
   async function handleSignIn() {
     setFormError(null);
     setSubmitting(true);
@@ -101,23 +116,40 @@ export default function SignInScreen() {
       return;
     }
 
+    // A new device (or any account with a second factor configured) lands here instead of
+    // "complete" — Clerk's Device Trust requires verifying an email code before it'll let the
+    // sign-in finalize (see https://clerk.com/docs/guides/secure/device-trust). This is the same
+    // `mfa.*` API real MFA uses, since Device Trust is a second-factor requirement under the hood.
+    // Handling it here (instead of just erroring out) means nobody has to be manually exempted in
+    // the Clerk dashboard for sign-in to work.
+    if (signIn.status === "needs_client_trust" || signIn.status === "needs_second_factor") {
+      const { error: sendError } = await signIn.mfa.sendEmailCode();
+      setSubmitting(false);
+      if (sendError) {
+        setFormError(getClerkErrorMessage(sendError));
+        return;
+      }
+      setVerifyingDevice(true);
+      return;
+    }
+
     if (signIn.status !== "complete") {
       setSubmitting(false);
       setFormError("Additional verification is required for this account.");
       return;
     }
 
-    const { error: finalizeError } = await signIn.finalize();
-    if (finalizeError) {
-      setSubmitting(false);
-      setFormError(getClerkErrorMessage(finalizeError));
-      return;
-    }
-
-    posthog.capture("user_signed_in", { auth_method: "email" });
-    // Not calling resumeAsReturningUser() here — `isSignedIn` flipping true right about now is what
-    // triggers the timeout-protected effect above to do that, on the one path that can't get stuck.
+    const finalizeErrorMessage = await finalizeSignIn();
     setSubmitting(false);
+    if (finalizeErrorMessage) setFormError(finalizeErrorMessage);
+  }
+
+  async function handleVerifyDeviceCode(code: string) {
+    const { error } = await signIn.mfa.verifyEmailCode({ code });
+    if (error) return getClerkErrorMessage(error);
+
+    setVerifyingDevice(false);
+    return finalizeSignIn();
   }
 
   async function handleSocialAuth(strategy: "oauth_google" | "oauth_facebook" | "oauth_apple") {
@@ -162,6 +194,10 @@ export default function SignInScreen() {
               }
             />
             {formError && <Text className="body-sm text-error">{formError}</Text>}
+
+            <Pressable hitSlop={8} onPress={() => router.push("/forgot-password")} className="self-end">
+              <Text className="body-sm text-brand-yellow">Forgot password?</Text>
+            </Pressable>
           </View>
 
           <Pressable
@@ -190,6 +226,8 @@ export default function SignInScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <VerificationCodeModal visible={verifyingDevice} email={email || "your email"} onClose={() => setVerifyingDevice(false)} onComplete={handleVerifyDeviceCode} />
     </SafeAreaView>
   );
 }

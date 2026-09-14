@@ -3,7 +3,9 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { OnboardingDots } from "@/components/OnboardingDots";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
@@ -13,6 +15,7 @@ export default function JoinCrewScreen() {
   const setCrewData = useOnboardingStore((state) => state.setCrewData);
   const completeCrewSelection = useOnboardingStore((state) => state.completeCrewSelection);
   const joinCrewByCode = useCrewStore((state) => state.joinCrewByCode);
+  const posthog = usePostHog();
   const [inviteCode, setInviteCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
@@ -33,6 +36,7 @@ export default function JoinCrewScreen() {
     }
     setCrewData({ choice: "join" });
     completeCrewSelection();
+    posthog.capture("crew_joined_via_code");
     router.replace("/home");
   }
 
@@ -40,7 +44,7 @@ export default function JoinCrewScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
       <ScrollView className="flex-1" contentContainerClassName="px-6 pb-6 pt-4" showsVerticalScrollIndicator={false}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={8}
           className="mb-2 h-9 w-9 items-center justify-center rounded-full border border-divider"
         >
@@ -90,6 +94,16 @@ export default function JoinCrewScreen() {
             style={({ pressed }) => ({ opacity: pressed || joining ? 0.85 : 1 })}
           >
             {joining ? <ActivityIndicator color={colors.brand.iron} /> : <Text className="heading-4 text-brand-iron">Join Crew</Text>}
+          </Pressable>
+        </Animated.View>
+
+        <Animated.View entering={FadeInUp.delay(200).springify().damping(14).mass(0.6)} className="mt-4">
+          <Pressable
+            onPress={() => router.push("/build-crew/discover")}
+            className="flex-row items-center justify-center gap-2 rounded-xl border border-divider py-3.5"
+          >
+            <Ionicons name="telescope-outline" size={18} color={colors.neutral.textSecondary} />
+            <Text className="body-md font-body-semibold text-text-secondary">Browse Public Crews</Text>
           </Pressable>
         </Animated.View>
 

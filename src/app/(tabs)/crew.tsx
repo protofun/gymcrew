@@ -3,16 +3,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, View } from "react-native";
-import Animated, {
-  FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-  ZoomIn,
-} from "react-native-reanimated";
+import Animated, { FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, ZoomIn } from "react-native-reanimated";
+import { usePostHog } from "posthog-react-native";
+import { AttachStep } from "react-native-spotlight-tour";
 
+import { ATTACH_INDEXES } from "@/components/AppTourOverlay";
 import { AvatarStack } from "@/components/AvatarStack";
 import { ChallengesTab } from "@/components/ChallengesTab";
 import { CrewActivitySheet } from "@/components/CrewActivitySheet";
@@ -32,15 +27,19 @@ import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
 import { exerciseImages, images, rankTierImages } from "@/constants/images";
 import { WORKOUT_NAME_HERO_IMAGE } from "@/data/workout-templates";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
+import { waitForAuthToken } from "@/lib/api";
 import { mostRecentCrewAchievement } from "@/lib/crew-achievements";
 import { crewMuscleBalance } from "@/lib/crew-muscle-balance";
 import { nextDivision, xpRequiredFor } from "@/lib/division";
 import { intensityToRedGreenColor } from "@/lib/muscle-groups";
 import { formatRankTier } from "@/lib/rank";
 import { formatShortAgo } from "@/lib/time-since";
+import { formatWeight } from "@/lib/units";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { CURRENT_MEMBER_ID, useCrewStore } from "@/store/crew-store";
+import { useCustomExercisesStore } from "@/store/custom-exercises-store";
 import { useLedWorkoutStore } from "@/store/led-workout-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
@@ -252,53 +251,52 @@ function DivisionRankCard() {
   const ratio = Number.isFinite(xpNeeded) ? xp / xpNeeded : 1;
 
   return (
-    <Animated.View
-      entering={FadeInUp.delay(150).springify().damping(16).mass(0.6)}
-      className="relative mx-4 mt-6 gap-4 rounded-3xl border border-divider bg-surface p-4"
-    >
-      <View className="flex-row items-center gap-4">
-        <Pressable onPress={() => router.push("/crew/division")} style={PRESSED_STYLE}>
-          <GoalRing ratio={ratio} color={colors.brand.yellow} size={82} strokeWidth={5}>
-            <DivisionBadge division={division} size={56} />
-          </GoalRing>
-        </Pressable>
+    <AttachStep index={ATTACH_INDEXES.crew} fill>
+      <Animated.View entering={FadeInUp.delay(150).springify().damping(16).mass(0.6)} className="relative mx-4 mt-6 gap-4 rounded-3xl border border-divider bg-surface p-4">
+        <View className="flex-row items-center gap-4">
+          <Pressable onPress={() => router.push("/crew/division")} style={PRESSED_STYLE}>
+            <GoalRing ratio={ratio} color={colors.brand.yellow} size={82} strokeWidth={5}>
+              <DivisionBadge division={division} size={56} />
+            </GoalRing>
+          </Pressable>
 
-        <View className="flex-1 gap-2.5">
-          <Pressable onPress={() => router.push("/crew/division")} style={PRESSED_STYLE} className="gap-0.5">
-            <View className="flex-row items-center gap-1">
-              <Text className="caption text-text-secondary">DIVISION</Text>
+          <View className="flex-1 gap-2.5">
+            <Pressable onPress={() => router.push("/crew/division")} style={PRESSED_STYLE} className="gap-0.5">
+              <View className="flex-row items-center gap-1">
+                <Text className="caption text-text-secondary">DIVISION</Text>
+                <Ionicons name="chevron-forward" size={11} color={colors.neutral.textSecondary} />
+              </View>
+              <EditableText id="crew.division.current" className="heading-3 text-brand-yellow">
+                {division}
+              </EditableText>
+            </Pressable>
+
+            <Pressable onPress={() => router.push("/crew/leaderboard")} style={PRESSED_STYLE} className="flex-row items-center gap-1">
+              <Ionicons name="podium-outline" size={13} color={colors.neutral.textSecondary} />
+              <EditableText id="crew.division.globalRank" className="caption font-body-semibold text-text-primary">
+                {`#${globalRank}`}
+              </EditableText>
+              <EditableText id="crew.division.region" className="caption text-text-secondary">
+                {`in ${region}`}
+              </EditableText>
               <Ionicons name="chevron-forward" size={11} color={colors.neutral.textSecondary} />
-            </View>
-            <EditableText id="crew.division.current" className="heading-3 text-brand-yellow">
-              {division}
-            </EditableText>
-          </Pressable>
-
-          <Pressable onPress={() => router.push("/crew/leaderboard")} style={PRESSED_STYLE} className="flex-row items-center gap-1">
-            <Ionicons name="podium-outline" size={13} color={colors.neutral.textSecondary} />
-            <EditableText id="crew.division.globalRank" className="caption font-body-semibold text-text-primary">
-              {`#${globalRank}`}
-            </EditableText>
-            <EditableText id="crew.division.region" className="caption text-text-secondary">
-              {`in ${region}`}
-            </EditableText>
-            <Ionicons name="chevron-forward" size={11} color={colors.neutral.textSecondary} />
-          </Pressable>
+            </Pressable>
+          </View>
         </View>
-      </View>
 
-      <View className="gap-1.5">
-        <View className="flex-row items-center justify-between">
-          <Text className="caption text-text-secondary">{next ? `Progress to ${next}` : "Top division reached"}</Text>
-          {next && (
-            <EditableText id="crew.division.xpProgress" className="caption font-body-semibold text-text-primary">
-              {`${xp.toLocaleString("en-US")} / ${xpNeeded.toLocaleString("en-US")} XP`}
-            </EditableText>
-          )}
+        <View className="gap-1.5">
+          <View className="flex-row items-center justify-between">
+            <Text className="caption text-text-secondary">{next ? `Progress to ${next}` : "Top division reached"}</Text>
+            {next && (
+              <EditableText id="crew.division.xpProgress" className="caption font-body-semibold text-text-primary">
+                {`${xp.toLocaleString("en-US")} / ${xpNeeded.toLocaleString("en-US")} XP`}
+              </EditableText>
+            )}
+          </View>
+          <ProgressBar ratio={ratio} color={colors.brand.yellow} height={8} />
         </View>
-        <ProgressBar ratio={ratio} color={colors.brand.yellow} height={8} />
-      </View>
-    </Animated.View>
+      </Animated.View>
+    </AttachStep>
   );
 }
 
@@ -448,8 +446,10 @@ function RecentAchievementCard() {
   const myGender = useOnboardingStore((state) => state.onboarding.gender);
   const myWeightKg = useOnboardingStore((state) => state.onboarding.weightKg);
   const membersActivity = useCrewActivityStore((state) => state.membersActivity);
+  const myCustomExercises = useCustomExercisesStore((state) => state.exercises);
+  const weightUnit = useWeightUnit();
 
-  const result = mostRecentCrewAchievement(members, myRecords, myGender, myWeightKg, membersActivity);
+  const result = mostRecentCrewAchievement(members, myRecords, myGender, myWeightKg, membersActivity, myCustomExercises);
   if (!result) return null;
 
   const { member, achievement, rankTier } = result;
@@ -481,7 +481,7 @@ function RecentAchievementCard() {
             {isMe ? "You" : member.name}
           </EditableText>
           <EditableText id="crew.achievement.detail" className="body-sm text-text-secondary">
-            {`${achievement.exerciseName} PR · ${achievement.weightKg} kg × ${achievement.reps} reps`}
+            {`${achievement.exerciseName} PR · ${formatWeight(achievement.weightKg, weightUnit)} × ${achievement.reps} reps`}
           </EditableText>
           <EditableText id="crew.achievement.date" className="caption text-text-secondary">
             {`${achievedDate} · ${formatShortAgo(achievement.achievedAt)}`}
@@ -516,6 +516,7 @@ export default function CrewScreen() {
   const [activeTab, setActiveTab] = useState<CrewTab>("Overview");
   const [activitySheetOpen, setActivitySheetOpen] = useState(false);
   const [todayModalOpen, setTodayModalOpen] = useState(false);
+  const posthog = usePostHog();
 
   const { user } = useUser();
   const session = useLedWorkoutStore((state) => state.session);
@@ -535,13 +536,32 @@ export default function CrewScreen() {
   const iHaveJoined = !!user && (session?.participantIds.includes(user.id) ?? false);
 
   // Real crewmate workouts/PRs for MuscleBalanceCard/RecentAchievementCard (see
-  // crew-activity-store.ts) — fetched once the real crew id is known, not before.
+  // crew-activity-store.ts) — fetched once the real crew id is known, not before. `crewId` comes
+  // from crew-store.ts's persisted state, so it can already be populated from a *previous* session
+  // the instant this screen mounts after a hard refresh — well before Clerk's session/token has
+  // finished restoring. Firing the request at that instant sends it with no (or a stale) token,
+  // which the backend correctly rejects (401, or 403 from the crew-membership check landing on a
+  // token that doesn't resolve to this user yet). `waitForAuthToken` closes exactly that gap.
   useEffect(() => {
-    if (crewId) fetchCrewActivity(crewId);
+    if (!crewId) return;
+    let cancelled = false;
+    waitForAuthToken().then(() => {
+      if (!cancelled) fetchCrewActivity(crewId);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [crewId, fetchCrewActivity]);
 
   useEffect(() => {
-    if (crewId) refreshLiveSession();
+    if (!crewId) return;
+    let cancelled = false;
+    waitForAuthToken().then(() => {
+      if (!cancelled) refreshLiveSession();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [crewId, refreshLiveSession]);
 
   // Same "wait for the real database pull before showing anything" gate as (tabs)/home.tsx — see
@@ -629,7 +649,10 @@ export default function CrewScreen() {
         visible={todayModalOpen}
         onClose={() => setTodayModalOpen(false)}
         isOverridden={today.isOverridden}
-        onSave={(name) => setTodayOverride(name)}
+        onSave={(name) => {
+          setTodayOverride(name);
+          posthog.capture("crew_todays_training_set");
+        }}
         onClearOverride={clearTodayOverride}
       />
     </ScrollView>

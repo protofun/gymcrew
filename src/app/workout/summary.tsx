@@ -18,19 +18,21 @@ import { WorkoutStatsTabs } from "@/components/WorkoutStatsTabs";
 import { images } from "@/constants/images";
 import { EXERCISE_BY_ID, formatMuscleName } from "@/data/exercises";
 import { formatElapsed } from "@/hooks/use-elapsed-timer";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { toDateKey } from "@/lib/date";
 import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
 import { formatMuscleLabel } from "@/lib/muscle-groups";
 import { formatReadyAt, formatRecoveryLabel, recoveryStatusForWorkout, type MuscleRecoveryStatus } from "@/lib/muscle-recovery";
 import { sumMacros } from "@/lib/nutrition-macros";
 import { RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
+import { displayWeight, formatWeight } from "@/lib/units";
 import { estimateOneRepMax } from "@/lib/workout-metrics";
 import { estimateCalories } from "@/lib/workout-sessions";
 import { warAttackScore } from "@/lib/war";
 import type { WorkoutPr } from "@/lib/workout-finish";
 import { workoutXpEarned } from "@/lib/xp";
-import type { LoggedExercise } from "@/store/active-workout-store";
 import { useCrewWarStore } from "@/store/crew-war-store";
+import type { LoggedExercise, WeightUnit } from "@/store/active-workout-store";
 import { useNutritionLogStore } from "@/store/nutrition-log-store";
 import { useNutritionTargetsStore } from "@/store/nutrition-targets-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
@@ -155,7 +157,7 @@ function VDivider() {
   return <View className="h-10 w-px bg-divider" />;
 }
 
-function ExerciseAccordionRow({ exercise, unit, hasPr }: { exercise: LoggedExercise; unit: string; hasPr: boolean }) {
+function ExerciseAccordionRow({ exercise, unit, hasPr }: { exercise: LoggedExercise; unit: WeightUnit; hasPr: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const completedSets = exercise.sets.filter((set) => set.completed);
 
@@ -193,7 +195,9 @@ function ExerciseAccordionRow({ exercise, unit, hasPr }: { exercise: LoggedExerc
               className={`flex-row items-center gap-2 rounded-lg px-1 py-2 ${set.completed ? "bg-success/20" : ""}`}
             >
               <Text className="body-sm w-8 text-text-secondary">{index + 1}</Text>
-              <Text className="body-sm flex-1 text-center text-text-primary">{set.weightKg ?? "—"}</Text>
+              <Text className="body-sm flex-1 text-center text-text-primary">
+                {set.weightKg !== null ? displayWeight(set.weightKg, unit) : "—"}
+              </Text>
               <Text className="body-sm flex-1 text-center text-text-primary">{set.reps ?? "—"}</Text>
               <View className="w-8 items-center">
                 <Ionicons
@@ -229,7 +233,7 @@ function MuscleRecoveryRow({ status }: { status: MuscleRecoveryStatus }) {
   );
 }
 
-function PrRow({ pr, tier, unit, onPress }: { pr: WorkoutPr; tier: RankTier; unit: string; onPress: () => void }) {
+function PrRow({ pr, tier, unit, onPress }: { pr: WorkoutPr; tier: RankTier; unit: WeightUnit; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
@@ -242,7 +246,9 @@ function PrRow({ pr, tier, unit, onPress }: { pr: WorkoutPr; tier: RankTier; uni
           {pr.exerciseName}
         </EditableText>
         <EditableText id={`workout.summary.pr.${pr.exerciseId}.detail`} className="caption text-text-secondary">
-          {`${pr.weightKg}${unit} × ${pr.reps}${pr.previousBestKg !== null ? ` · +${Math.round((pr.weightKg - pr.previousBestKg) * 10) / 10}${unit}` : ""}`}
+          {`${formatWeight(pr.weightKg, unit)} × ${pr.reps}${
+            pr.previousBestKg !== null ? ` · +${formatWeight(pr.weightKg - pr.previousBestKg, unit)}` : ""
+          }`}
         </EditableText>
       </View>
       <Ionicons name="share-outline" size={18} color={colors.neutral.textSecondary} />
@@ -269,6 +275,7 @@ export default function WorkoutSummaryScreen() {
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const bodyWeightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
   const age = useOnboardingStore((state) => state.onboarding.age);
+  const weightUnit = useWeightUnit();
 
   const rankProfile: RankProfile = useMemo(() => ({ gender, bodyWeightKg, age }), [gender, bodyWeightKg, age]);
 
@@ -316,12 +323,13 @@ export default function WorkoutSummaryScreen() {
     setShareModalVisible(true);
   }
 
-  const shareFallbackMessage = `${workout.name} — ${formatElapsed(workout.durationSeconds)}, ${workout.volumeKg.toLocaleString(
-    "en-US",
-  )} ${workout.unit} lifted across ${workout.completedSets} sets on GymCrew.`;
+  const shareFallbackMessage = `${workout.name} — ${formatElapsed(workout.durationSeconds)}, ${formatWeight(
+    workout.volumeKg,
+    weightUnit,
+  )} lifted across ${workout.completedSets} sets on GymCrew.`;
 
   const prShareFallbackMessage = sharingPr
-    ? `New PR on ${sharingPr.pr.exerciseName}: ${sharingPr.pr.weightKg}${workout.unit} × ${sharingPr.pr.reps} on GymCrew! 💪`
+    ? `New PR on ${sharingPr.pr.exerciseName}: ${formatWeight(sharingPr.pr.weightKg, weightUnit)} × ${sharingPr.pr.reps} on GymCrew! 💪`
     : "";
 
   return (
@@ -374,8 +382,17 @@ export default function WorkoutSummaryScreen() {
           </View>
         ))}
 
-      {justFinished === "1" && <WarAttackSummary volumeKg={workout.volumeKg} prCount={workout.prs.length} />}
+      {justFinished === "1" && !workout.isBackfilled && <WarAttackSummary volumeKg={workout.volumeKg} prCount={workout.prs.length} />}
       {justFinished === "1" && <TodaysFuelCard />}
+
+      {workout.isBackfilled && (
+        <View className="mx-4 mb-4 flex-row items-center gap-2.5 rounded-2xl border border-divider bg-surface p-3.5">
+          <Ionicons name="information-circle-outline" size={18} color={colors.neutral.textSecondary} />
+          <Text className="body-sm flex-1 text-text-secondary">
+            Logged for a past day — this workout doesn&apos;t count toward XP, streaks, personal records, or Crew War.
+          </Text>
+        </View>
+      )}
 
       <View className="flex-row gap-6 border-b border-divider px-4">
         {TABS.map((t) => {
@@ -406,7 +423,7 @@ export default function WorkoutSummaryScreen() {
               <View className="flex-row items-center justify-between">
                 <StatItem id="workout.summary.duration" icon="time-outline" label="Duration" value={formatElapsed(workout.durationSeconds)} />
                 <VDivider />
-                <StatItem id="workout.summary.volume" icon="barbell-outline" label="Volume" value={`${workout.volumeKg.toLocaleString("en-US")} ${workout.unit}`} />
+                <StatItem id="workout.summary.volume" icon="barbell-outline" label="Volume" value={formatWeight(workout.volumeKg, weightUnit)} />
                 <VDivider />
                 <StatItem id="workout.summary.sets" icon="layers-outline" label="Sets" value={String(workout.completedSets)} />
               </View>
@@ -421,9 +438,9 @@ export default function WorkoutSummaryScreen() {
               <View className="flex-row items-center gap-2 rounded-xl border border-divider bg-surface px-3 py-2.5">
                 <Ionicons name="star" size={14} color={colors.brand.yellow} />
                 <Text className="body-sm flex-1 text-text-secondary" numberOfLines={1}>
-                  <Text className="font-body-semibold text-text-primary">Top lift: {topLift.name}</Text> — {topLift.weightKg}
-                  {workout.unit} × {topLift.reps} (est. 1RM {estimateOneRepMax(topLift.weightKg, topLift.reps)}
-                  {workout.unit})
+                  <Text className="font-body-semibold text-text-primary">Top lift: {topLift.name}</Text> —{" "}
+                  {formatWeight(topLift.weightKg, weightUnit)} × {topLift.reps} (est. 1RM{" "}
+                  {formatWeight(estimateOneRepMax(topLift.weightKg, topLift.reps), weightUnit)})
                 </Text>
               </View>
             )}
@@ -473,7 +490,7 @@ export default function WorkoutSummaryScreen() {
               {workout.exercises.map((exercise, index) => (
                 <View key={exercise.exerciseId}>
                   {index > 0 && <View className="h-px bg-divider" />}
-                  <ExerciseAccordionRow exercise={exercise} unit={workout.unit} hasPr={prExerciseIds.has(exercise.exerciseId)} />
+                  <ExerciseAccordionRow exercise={exercise} unit={weightUnit} hasPr={prExerciseIds.has(exercise.exerciseId)} />
                 </View>
               ))}
             </View>
@@ -518,7 +535,7 @@ export default function WorkoutSummaryScreen() {
                   key={pr.exerciseId}
                   pr={pr}
                   tier={tier}
-                  unit={workout.unit}
+                  unit={weightUnit}
                   onPress={() => setSharingPr({ pr, tier, topPercent, progressToNextTier })}
                 />
               ))}
@@ -543,9 +560,9 @@ export default function WorkoutSummaryScreen() {
           <PrShareCard
             tier={sharingPr.tier}
             exerciseName={sharingPr.pr.exerciseName}
-            weightKg={sharingPr.pr.weightKg}
+            weightKg={displayWeight(sharingPr.pr.weightKg, weightUnit)}
             reps={sharingPr.pr.reps}
-            unit={workout.unit}
+            unit={weightUnit}
             topPercent={sharingPr.topPercent}
             progressToNextTier={sharingPr.progressToNextTier}
           />

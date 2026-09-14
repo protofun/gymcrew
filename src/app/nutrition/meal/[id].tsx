@@ -3,11 +3,12 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
 import { MacroTotalsBar } from "@/components/MacroTotalsBar";
 import { MealItemRow } from "@/components/MealItemRow";
 import type { MealItem } from "@/lib/api";
-import { toDateKey } from "@/lib/date";
+import { formatDiaryDate, fromDateKey, toDateKey } from "@/lib/date";
 import { mealSlotForTime } from "@/lib/meal-slot";
 import { scaleMacros, sumMacros } from "@/lib/nutrition-macros";
 import { useNutritionLogStore } from "@/store/nutrition-log-store";
@@ -19,7 +20,9 @@ import { colors } from "@/theme";
  * that, "Use Once" logs the adjusted amounts without touching the original. */
 export default function MealDetailScreen() {
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const posthog = usePostHog();
+  const { id, date } = useLocalSearchParams<{ id: string; date?: string }>();
+  const targetDateKey = date ?? toDateKey(new Date());
 
   const meals = useNutritionMealsStore((state) => state.meals);
   const saveMeal = useNutritionMealsStore((state) => state.saveMeal);
@@ -54,8 +57,9 @@ export default function MealDetailScreen() {
       proteinG: loggedTotals.proteinG,
       carbsG: loggedTotals.carbsG,
       fatG: loggedTotals.fatG,
-      dateKey: toDateKey(new Date()),
+      dateKey: targetDateKey,
     });
+    posthog.capture("meal_logged", { kind: meal.kind, meal_id: meal.id, calories: loggedTotals.calories, modified: isModified });
     router.replace("/nutrition");
   }
 
@@ -73,6 +77,7 @@ export default function MealDetailScreen() {
         onPress: () => {
           const updatedTotals = sumMacros(items.map((item) => scaleMacros(item, item.quantity)));
           saveMeal({ id: meal.id, kind: meal.kind, name: meal.name, description: meal.description, items, totalCalories: updatedTotals.calories, totalProteinG: updatedTotals.proteinG, totalCarbsG: updatedTotals.carbsG, totalFatG: updatedTotals.fatG });
+          posthog.capture("meal_updated", { kind: meal.kind, ingredient_count: items.length, calories: updatedTotals.calories });
           logToday(items);
         },
       },
@@ -83,7 +88,15 @@ export default function MealDetailScreen() {
     if (!meal) return;
     Alert.alert(`Delete ${meal.kind === "shake" ? "Shake" : "Meal"}`, `Remove "${meal.name}" for good?`, [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => { removeMeal(meal.id); router.replace("/nutrition/my-meals"); } },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          removeMeal(meal.id);
+          posthog.capture("meal_deleted", { kind: meal.kind });
+          router.replace("/nutrition/my-meals");
+        },
+      },
     ]);
   }
 
@@ -129,7 +142,7 @@ export default function MealDetailScreen() {
       <View style={{ paddingBottom: insets.bottom + 12 }} className="gap-3 border-t border-divider bg-surface px-4 pt-3">
         <MacroTotalsBar totals={totals} />
         <Pressable onPress={handleAdd} className="items-center rounded-full bg-brand-yellow py-4">
-          <Text className="body-md font-body-semibold text-brand-iron">Add to Today&apos;s Log</Text>
+          <Text className="body-md font-body-semibold text-brand-iron">{`Add to ${formatDiaryDate(fromDateKey(targetDateKey))}'s Log`}</Text>
         </Pressable>
       </View>
     </View>

@@ -99,6 +99,7 @@ function realContributionInRange(
 ): number {
   let total = 0;
   for (const workout of workouts) {
+    if (workout.isBackfilled) continue;
     const dateKey = toDateKey(new Date(workout.completedAt));
     if (dateKey < startKey || dateKey > endKey) continue;
     total += challengeContribution(metric, workout.exercises, records);
@@ -199,6 +200,7 @@ export function challengeFeed(
     const { recentWorkouts, records } = memberActivity(member.id);
     const inRange = recentWorkouts
       .filter((workout) => {
+        if (workout.isBackfilled) return false;
         const dateKey = toDateKey(new Date(workout.completedAt));
         return dateKey >= startKey && dateKey <= endKey;
       })

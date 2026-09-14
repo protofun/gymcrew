@@ -1,12 +1,15 @@
 import { Text, SafeAreaView, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
 import { router } from "expo-router";
+import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
 import { colors } from "@/theme";
 
 export default function OnboardingWelcomeScreen() {
+  const posthog = usePostHog();
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
       <View className="flex-1 px-6 pb-6 pt-4">
@@ -39,7 +42,10 @@ export default function OnboardingWelcomeScreen() {
         <OnboardingFooter
           label="Let's Go"
           activeIndex={1}
-          onPress={() => router.push("/onboarding/personal-info")}
+          onPress={() => {
+            posthog.capture("onboarding_welcome_completed");
+            router.push("/onboarding/personal-info");
+          }}
         />
       </View>
     </SafeAreaView>

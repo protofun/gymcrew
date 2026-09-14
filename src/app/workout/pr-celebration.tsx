@@ -9,9 +9,11 @@ import { captureRef } from "react-native-view-shot";
 
 import { RankRevealCard } from "@/components/RankRevealCard";
 import { EXERCISE_BY_ID } from "@/data/exercises";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
 import type { RankProfile } from "@/lib/rank";
 import { formatTimeSince } from "@/lib/time-since";
+import { displayWeight, formatWeight } from "@/lib/units";
 import { useCustomExercisesStore } from "@/store/custom-exercises-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
@@ -23,6 +25,7 @@ export default function PrCelebrationScreen() {
   const workout = useWorkoutHistoryStore((state) => state.workouts.find((w) => w.id === id));
   const onboarding = useOnboardingStore((state) => state.onboarding);
   const customExercises = useCustomExercisesStore((state) => state.exercises);
+  const weightUnit = useWeightUnit();
   const [index, setIndex] = useState(0);
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef<View>(null);
@@ -58,7 +61,7 @@ export default function PrCelebrationScreen() {
     // (e.g. non-HTTPS or headless contexts) — .catch() it so that never surfaces as an unhandled
     // rejection (a plain try/catch around the call wouldn't catch an async rejection like this).
     Share.share({
-      message: `New PR on ${pr!.exerciseName}: ${pr!.weightKg}${workout!.unit} × ${pr!.reps} reps${
+      message: `New PR on ${pr!.exerciseName}: ${formatWeight(pr!.weightKg, weightUnit)} × ${pr!.reps} reps${
         percentIncrease !== null ? ` (+${percentIncrease.toFixed(1)}%)` : ""
       } on GymCrew! 💪`,
     }).catch((error) => console.warn("Sharing is unavailable on this platform", error));
@@ -115,9 +118,9 @@ export default function PrCelebrationScreen() {
             id={`workout.prCelebration.${pr.exerciseId}`}
             name={pr.exerciseName}
             tier={rankTier}
-            weightKg={pr.weightKg}
+            weightKg={displayWeight(pr.weightKg, weightUnit)}
             reps={pr.reps}
-            unit={workout.unit}
+            unit={weightUnit}
             topPercent={topPercent}
             progressToNextTier={rankDetail?.progressToNextTier ?? null}
             triggerKey={pr.exerciseId}

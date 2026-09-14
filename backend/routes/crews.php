@@ -44,6 +44,16 @@ function handleCrews(PDO $pdo, string $userId, string $method, ?array $body, arr
         return;
     }
 
+    if ($sub === 'discover' && $method === 'GET') {
+        respondWithDiscoverableCrews($pdo, $userId);
+        return;
+    }
+
+    if ($sub === 'leaderboard' && $method === 'GET') {
+        respondWithCrewLeaderboard($pdo, $userId);
+        return;
+    }
+
     if ($sub === 'join' && $method === 'POST') {
         joinCrew($pdo, $userId, $body ?? []);
         return;
@@ -66,6 +76,11 @@ function handleCrews(PDO $pdo, string $userId, string $method, ?array $body, arr
         return;
     }
 
+    if (count($segments) === 3 && $segments[2] === 'xp' && $method === 'POST') {
+        awardCrewXp($pdo, $userId, $crewId, $body ?? []);
+        return;
+    }
+
     if (count($segments) === 3 && $segments[2] === 'icon' && $method === 'POST') {
         uploadCrewIcon($pdo, $userId, $crewId, $body ?? []);
         return;
@@ -73,6 +88,11 @@ function handleCrews(PDO $pdo, string $userId, string $method, ?array $body, arr
 
     if (count($segments) === 3 && $segments[2] === 'leave' && $method === 'POST') {
         leaveCrew($pdo, $userId, $crewId);
+        return;
+    }
+
+    if (count($segments) === 3 && $segments[2] === 'join-public' && $method === 'POST') {
+        joinPublicCrew($pdo, $userId, $crewId);
         return;
     }
 
@@ -147,6 +167,108 @@ function respondWithCrewActivity(PDO $pdo, string $userId, string $crewId): void
     }
 
     jsonResponse(['members' => $members]);
+}
+
+/** Same 20-tier ladder as src/lib/division.ts's `DIVISIONS` — keep both in sync if it ever changes. */
+const CREW_DIVISION_ORDER = [
+    'Rookie', 'Novice', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Elite', 'Master',
+    'Grandmaster', 'Champion', 'Titan', 'Mythic', 'Immortal', 'Legend', 'Overlord', 'Supreme',
+    'Conqueror', 'Dominator', 'Apex',
+];
+
+/** Same as src/lib/division.ts's `DIVISION_XP_REQUIRED` — XP needed to climb OUT of each division. */
+const CREW_DIVISION_XP_REQUIRED = [
+    'Rookie' => 500, 'Novice' => 750, 'Bronze' => 1100, 'Silver' => 1600, 'Gold' => 2300,
+    'Platinum' => 3300, 'Diamond' => 4700, 'Elite' => 6700, 'Master' => 9600, 'Grandmaster' => 13800,
+    'Champion' => 19800, 'Titan' => 28500, 'Mythic' => 41000, 'Immortal' => 59000, 'Legend' => 85000,
+    'Overlord' => 122000, 'Supreme' => 176000, 'Conqueror' => 253000, 'Dominator' => 364000,
+];
+
+/**
+ * Server-side port of src/lib/division.ts's `advanceDivision` — the authority now has to live here
+ * too, since XP grants are applied server-side (see `awardCrewXp`), not just locally. Adds
+ * `$xpGained`, rolling over into however many divisions it covers, and returns
+ * [newXp, newDivision, divisionsNewlyReached] (the last one empty unless it actually climbed).
+ */
+function advanceCrewDivision(int $currentXp, string $currentDivision, int $xpGained): array
+{
+    $xp = $currentXp + $xpGained;
+    $division = in_array($currentDivision, CREW_DIVISION_ORDER, true) ? $currentDivision : 'Rookie';
+    $newlyReached = [];
+
+    while (true) {
+        $index = array_search($division, CREW_DIVISION_ORDER, true);
+        $next = $index < count(CREW_DIVISION_ORDER) - 1 ? CREW_DIVISION_ORDER[$index + 1] : null;
+        $required = CREW_DIVISION_XP_REQUIRED[$division] ?? null;
+        if ($next === null || $required === null || $xp < $required) break;
+        $xp -= $required;
+        $division = $next;
+        $newlyReached[] = $division;
+    }
+
+    return [$xp, $division, $newlyReached];
+}
+
+/**
+ * Adds real crew XP for a completed challenge/battle (see src/components/ChallengesTab.tsx) —
+ * open to any crew member, not just leader/co-leader (unlike `updateCrew`), since any member's
+ * action can earn it. `awardKey` (a stable id for "this specific completion", e.g. a weekly-
+ * challenge instance id, or "<battleId>:battle-win") is the idempotency guard: every crew member's
+ * device independently detects the same completion, so without this the same reward would apply
+ * once per member instead of once per crew. See db/schema.sql's `crew_xp_awards`.
+ */
+function awardCrewXp(PDO $pdo, string $userId, string $crewId, array $data): void
+{
+    $role = myRoleInCrew($pdo, $userId, $crewId);
+    if ($role === null) {
+        errorResponse('Not a member of this crew', 403);
+        return;
+    }
+
+    $awardKey = trim((string) ($data['awardKey'] ?? ''));
+    // Capped well above any real single-completion reward client-side today (a few hundred XP) —
+    // a member's device is trusted for the reward *amount* of a real completion, but not for an
+    // arbitrary number.
+    $amount = min(max(0, (int) ($data['amount'] ?? 0)), 1000);
+    if ($amount <= 0 || $awardKey === '') {
+        errorResponse('amount and awardKey are required');
+        return;
+    }
+
+    $now = (int) round(microtime(true) * 1000);
+    try {
+        $pdo->prepare('INSERT INTO crew_xp_awards (crew_id, award_key, amount, awarded_by, awarded_at) VALUES (?, ?, ?, ?, ?)')
+            ->execute([$crewId, $awardKey, $amount, $userId, $now]);
+    } catch (Throwable $e) {
+        // Duplicate (crew_id, award_key) — another member's device already reported this exact
+        // completion. Not an error: the crew's current state (already reflecting that award) is
+        // exactly what this device should converge to.
+        jsonResponse(crewWithMembersJson($pdo, $crewId));
+        return;
+    }
+
+    $crewStmt = $pdo->prepare('SELECT xp, division, division_history_json FROM crews WHERE id = ?');
+    $crewStmt->execute([$crewId]);
+    $crew = $crewStmt->fetch();
+    if (!$crew) {
+        errorResponse('Crew not found', 404);
+        return;
+    }
+
+    [$newXp, $newDivision, $newlyReached] = advanceCrewDivision((int) $crew['xp'], $crew['division'], $amount);
+
+    if ($newlyReached) {
+        $history = json_decode((string) $crew['division_history_json'], true) ?: [];
+        foreach ($newlyReached as $division) {
+            $history[] = ['division' => $division, 'reachedAt' => $now];
+        }
+        $pdo->prepare('UPDATE crews SET xp = ?, division = ?, division_history_json = ? WHERE id = ?')
+            ->execute([$newXp, $newDivision, json_encode($history), $crewId]);
+    } else {
+        $pdo->prepare('UPDATE crews SET xp = ? WHERE id = ?')->execute([$newXp, $crewId]);
+    }
+
+    jsonResponse(crewWithMembersJson($pdo, $crewId));
 }
 
 function generateInviteCode(): string
@@ -231,6 +353,7 @@ function crewWithMembersJson(PDO $pdo, string $crewId): ?array
         'privacy' => $crew['privacy'],
         'joinRequestsEnabled' => (bool) $crew['join_requests_enabled'],
         'maxMembers' => (int) $crew['max_members'],
+        'warAutoMatchEnabled' => (bool) $crew['war_auto_match_enabled'],
         'inviteCode' => $crew['invite_code'],
         'xp' => (int) $crew['xp'],
         'division' => $crew['division'],
@@ -342,6 +465,100 @@ function joinCrew(PDO $pdo, string $userId, array $data): void
     jsonResponse(crewWithMembersJson($pdo, $crew['id']));
 }
 
+/**
+ * Crews set to "Public" (see crew/settings.tsx's PRIVACY_DESCRIPTION — "Anyone can find and join
+ * this crew instantly") — the browse list for build-crew/discover.tsx. The caller's own crew (if
+ * any) is excluded; joining only makes sense when crew-less, same rule `joinCrew` above enforces.
+ * Lightweight by design (no member list) — just enough to decide whether to join, same shape
+ * CrewCard already renders elsewhere.
+ */
+function respondWithDiscoverableCrews(PDO $pdo, string $userId): void
+{
+    $myCrewId = findMyCrewId($pdo, $userId);
+
+    $stmt = $pdo->prepare(
+        "SELECT c.id, c.name, c.tagline, c.icon, c.training_type, c.max_members,
+                (SELECT COUNT(*) FROM crew_members WHERE crew_id = c.id) AS member_count
+         FROM crews c
+         WHERE c.privacy = 'public' AND c.id != ?
+         ORDER BY c.created_at DESC
+         LIMIT 50"
+    );
+    $stmt->execute([$myCrewId ?? '']);
+
+    $crews = array_map(function (array $row): array {
+        return [
+            'id' => $row['id'],
+            'name' => $row['name'],
+            'tagline' => $row['tagline'],
+            'icon' => $row['icon'],
+            'trainingType' => $row['training_type'],
+            'memberCount' => (int) $row['member_count'],
+            'maxMembers' => (int) $row['max_members'],
+        ];
+    }, $stmt->fetchAll());
+
+    jsonResponse($crews);
+}
+
+/**
+ * Real crews (including the permanent illustrative bot crews seeded above — genuine rows, not
+ * client-side mock data) in the caller's own crew's division, ranked by `xp` — a fair comparison
+ * since every crew in the same division shares the same rolling XP scale (see
+ * `advanceCrewDivision`). Replaces the old client-side static `OTHER_CREWS_POWER` mock — see
+ * src/app/crew/leaderboard.tsx. `myDivision` is `null` when the caller isn't in a crew at all.
+ */
+function respondWithCrewLeaderboard(PDO $pdo, string $userId): void
+{
+    $myCrewId = findMyCrewId($pdo, $userId);
+    if ($myCrewId === null) {
+        jsonResponse(['crews' => [], 'myDivision' => null]);
+        return;
+    }
+
+    $divisionStmt = $pdo->prepare('SELECT division FROM crews WHERE id = ?');
+    $divisionStmt->execute([$myCrewId]);
+    $myDivision = $divisionStmt->fetch()['division'] ?? 'Rookie';
+
+    $stmt = $pdo->prepare('SELECT id, name, icon, xp FROM crews WHERE division = ? ORDER BY xp DESC LIMIT 50');
+    $stmt->execute([$myDivision]);
+    $crews = array_map(function (array $row): array {
+        return ['id' => $row['id'], 'name' => $row['name'], 'icon' => $row['icon'], 'xp' => (int) $row['xp']];
+    }, $stmt->fetchAll());
+
+    jsonResponse(['crews' => $crews, 'myDivision' => $myDivision]);
+}
+
+/** Instant-join for a crew found via Discover — the "public" privacy tier's whole point (see
+ * respondWithDiscoverableCrews above), unlike `joinCrew`'s invite-code gate. */
+function joinPublicCrew(PDO $pdo, string $userId, string $crewId): void
+{
+    if (findMyCrewId($pdo, $userId) !== null) {
+        errorResponse('Already in a crew — leave it first', 409);
+        return;
+    }
+
+    $stmt = $pdo->prepare("SELECT id, max_members FROM crews WHERE id = ? AND privacy = 'public'");
+    $stmt->execute([$crewId]);
+    $crew = $stmt->fetch();
+    if (!$crew) {
+        errorResponse('Crew not found', 404);
+        return;
+    }
+
+    $countStmt = $pdo->prepare('SELECT COUNT(*) AS c FROM crew_members WHERE crew_id = ?');
+    $countStmt->execute([$crew['id']]);
+    if ((int) $countStmt->fetch()['c'] >= (int) $crew['max_members']) {
+        errorResponse('This crew is full', 409);
+        return;
+    }
+
+    $pdo->prepare('INSERT INTO crew_members (crew_id, user_id, role, joined_at) VALUES (?, ?, "member", ?)')
+        ->execute([$crew['id'], $userId, (int) round(microtime(true) * 1000)]);
+
+    jsonResponse(crewWithMembersJson($pdo, $crew['id']));
+}
+
 function updateCrew(PDO $pdo, string $userId, string $crewId, array $data): void
 {
     $role = myRoleInCrew($pdo, $userId, $crewId);
@@ -369,6 +586,7 @@ function updateCrew(PDO $pdo, string $userId, string $crewId, array $data): void
         'trainingType' => 'training_type',
         'joinRequestsEnabled' => 'join_requests_enabled',
         'maxMembers' => 'max_members',
+        'warAutoMatchEnabled' => 'war_auto_match_enabled',
     ];
     $sets = [];
     $values = [':id' => $crewId];
@@ -381,14 +599,6 @@ function updateCrew(PDO $pdo, string $userId, string $crewId, array $data): void
     if (array_key_exists('privacy', $data) && in_array($data['privacy'], ['invite-only', 'open', 'public'], true)) {
         $sets[] = 'privacy = :privacy';
         $values[':privacy'] = $data['privacy'];
-    }
-    // xp/division updates (crew-level progress, e.g. from a completed challenge) — same shape as
-    // profile_level, applied by whichever member's action earned it, not leader-gated.
-    if (isset($data['xp'], $data['division'], $data['divisionHistory'])) {
-        $sets[] = 'xp = :xp, division = :division, division_history_json = :division_history_json';
-        $values[':xp'] = (int) $data['xp'];
-        $values[':division'] = $data['division'];
-        $values[':division_history_json'] = json_encode($data['divisionHistory']);
     }
 
     if ($sets) {

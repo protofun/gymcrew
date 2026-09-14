@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { RankBadge } from "@/components/RankBadge";
 import { TierPickerSheet } from "@/components/TierPickerSheet";
 import { EXERCISE_EQUIPMENT_OPTIONS, formatMuscleName } from "@/data/exercises";
@@ -106,6 +108,7 @@ function SegmentedRow<T extends string>({ options, value, onChange }: { options:
 
 export default function WorkoutSplitSetupScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const { muscle: deepLinkMuscle } = useLocalSearchParams<{ muscle?: MuscleGroup }>();
 
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
@@ -172,13 +175,14 @@ export default function WorkoutSplitSetupScreen() {
       restSecondsBetweenSets,
     };
     setPreferences(preferences);
+    posthog.capture("workout_split_generated", { targetMode, trainingDayCount: trainingDays.length, style, experience });
     router.push("/workout-split/reveal");
   }
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/profile")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Choose Your Target</Text>

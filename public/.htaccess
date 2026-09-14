@@ -1,9 +1,17 @@
 RewriteEngine On
 
-# Real files/directories (assets, _expo/, manifest.json, icons/, ...) are served as-is.
-RewriteCond %{REQUEST_FILENAME} -f [OR]
-RewriteCond %{REQUEST_FILENAME} -d
+# Real files (assets, _expo/ bundles, manifest.json, icons/, ...) are served as-is.
+RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^ - [L]
+
+# Trailing-slash route whose page is a flat file one level up, e.g. /ranks/ -> ranks.html. Expo
+# Router's static export leaves a same-named directory next to that file to hold nested sub-routes
+# (e.g. dist/ranks/history.html) — that directory has no index.html of its own, so without this
+# rule Apache tries to list it and 403s (directory listing is off) instead of falling through to
+# ranks.html. Must run before the plain-directory passthrough below.
+RewriteCond %{REQUEST_URI} ^/(.+)/$
+RewriteCond %{DOCUMENT_ROOT}/%1.html -f
+RewriteRule ^ /%1.html [L]
 
 # Flat routes, e.g. /sign-in -> sign-in.html
 RewriteCond %{REQUEST_FILENAME}.html -f
@@ -12,6 +20,10 @@ RewriteRule ^(.*)$ $1.html [L]
 # Nested routes, e.g. /onboarding -> onboarding/index.html
 RewriteCond %{REQUEST_FILENAME}/index.html -f
 RewriteRule ^(.*)$ $1/index.html [L]
+
+# Any other real directory (assets/, icons/, ...) is served as-is.
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
 
 # Anything else -> the app shell, so the client router can show its own not-found screen instead
 # of a raw Apache 404.

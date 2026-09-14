@@ -161,6 +161,7 @@ function generateYearOfTraining(referenceNow: number): CompletedWorkout[] {
       volumeKg: Math.round(computeVolumeKg(exercises)),
       completedSets: computeCompletedSets(exercises),
       prs,
+      isBackfilled: false,
     });
   }
 

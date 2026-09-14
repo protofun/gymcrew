@@ -3,7 +3,9 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { useLedWorkoutStore } from "@/store/led-workout-store";
@@ -17,6 +19,7 @@ import { colors } from "@/theme";
  */
 export default function LeadWorkoutScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const today = useTodayWorkout();
   const [name, setName] = useState(today.isRestDay ? "" : today.workoutName);
   const [starting, setStarting] = useState(false);
@@ -46,13 +49,14 @@ export default function LeadWorkoutScreen() {
     discardWorkout();
     startWorkout();
     setWorkoutName(trimmedName);
+    posthog.capture("crew_workout_led");
     router.replace({ pathname: "/workout/active", params: { leadingCrew: "1" } });
   }
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/crew")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="close" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Lead a Crew Workout</Text>

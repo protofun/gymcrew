@@ -5,8 +5,10 @@ import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Line, Path, Text as SvgText } from "react-native-svg";
 
+import { goBack } from "@/lib/navigation";
 import { EditableText } from "@/components/EditableText";
 import { RankBadge } from "@/components/RankBadge";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { fromDateKey } from "@/lib/date";
 import {
   crewLiftStandings,
@@ -17,6 +19,8 @@ import {
 } from "@/lib/crew-lift-compare";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
 import { formatRankTier, RANK_TIER_COLOR, type RankProfile } from "@/lib/rank";
+import { displayWeight, formatWeight } from "@/lib/units";
+import type { WeightUnit } from "@/store/active-workout-store";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
@@ -29,7 +33,7 @@ function formatDaysAgo(days: number | null): string {
   return days === 1 ? "1 day ago" : `${days} days ago`;
 }
 
-function CompareColumn({ standing }: { standing: CrewLiftStanding }) {
+function CompareColumn({ standing, weightUnit }: { standing: CrewLiftStanding; weightUnit: WeightUnit }) {
   const tint = RANK_TIER_COLOR[standing.tier];
   const percent = Math.round(standing.percentileInTier * 100);
 
@@ -51,7 +55,7 @@ function CompareColumn({ standing }: { standing: CrewLiftStanding }) {
         {formatRankTier(standing.tier)}
       </EditableText>
       <EditableText id={`ranks.compare.${standing.id}.weight`} className="body-md font-body-bold text-text-primary">
-        {`${standing.weightKg} kg`}
+        {formatWeight(standing.weightKg, weightUnit)}
       </EditableText>
       <EditableText id={`ranks.compare.${standing.id}.percent`} className="caption text-text-secondary">
         {`${percent}%`}
@@ -190,6 +194,7 @@ export default function LiftCompareScreen() {
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
   const age = useOnboardingStore((state) => state.onboarding.age);
+  const weightUnit = useWeightUnit();
   const records = usePersonalRecordsStore((state) => state.records);
   const crewMembers = useCrewStore((state) => state.members);
   const membersActivity = useCrewActivityStore((state) => state.membersActivity);
@@ -209,6 +214,15 @@ export default function LiftCompareScreen() {
     () => (card && me && opponent ? pairedProgressionHistory(card.id, me.weightKg, opponent.id, opponent.weightKg) : []),
     [card, me, opponent],
   );
+  const displayProgressionPoints = useMemo(
+    () =>
+      progressionPoints.map((point) => ({
+        ...point,
+        mineKg: displayWeight(point.mineKg, weightUnit),
+        theirsKg: displayWeight(point.theirsKg, weightUnit),
+      })),
+    [progressionPoints, weightUnit],
+  );
 
   if (!card || !me || !opponent) {
     router.replace(card ? `/ranks/${card.id}` : "/(tabs)/ranks");
@@ -218,7 +232,7 @@ export default function LiftCompareScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/ranks")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">{card.name}</Text>
@@ -230,21 +244,26 @@ export default function LiftCompareScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4">
-          <CompareColumn standing={me} />
+          <CompareColumn standing={me} weightUnit={weightUnit} />
           <Text className="body-lg font-body-bold text-text-secondary">VS</Text>
-          <CompareColumn standing={opponent} />
+          <CompareColumn standing={opponent} weightUnit={weightUnit} />
         </View>
 
         <View className="rounded-2xl border border-divider bg-surface p-4">
           <CompareRow label="Power Score" mine={me.score.toLocaleString("en-US")} theirs={opponent.score.toLocaleString("en-US")} />
-          <CompareRow label="Best Set (1RM)" mine={`${me.weightKg}`} theirs={`${opponent.weightKg}`} unit=" kg" />
+          <CompareRow
+            label="Best Set (1RM)"
+            mine={`${displayWeight(me.weightKg, weightUnit)}`}
+            theirs={`${displayWeight(opponent.weightKg, weightUnit)}`}
+            unit={` ${weightUnit}`}
+          />
           <CompareRow label="Percentile" mine={`${Math.round(me.percentileInTier * 100)}`} theirs={`${Math.round(opponent.percentileInTier * 100)}`} unit="%" />
           <CompareRow label="Last logged" mine={formatDaysAgo(me.daysSinceLogged)} theirs={formatDaysAgo(opponent.daysSinceLogged)} isLast />
         </View>
 
         <View className="gap-3 rounded-2xl border border-divider bg-surface p-4">
           <Text className="body-md font-body-semibold text-text-primary">Progress Over Time</Text>
-          <ProgressionChart points={progressionPoints} myName="You" theirName={opponent.name} />
+          <ProgressionChart points={displayProgressionPoints} myName="You" theirName={opponent.name} />
         </View>
 
         <Pressable

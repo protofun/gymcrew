@@ -17,6 +17,27 @@ const PROFILE_COLUMN_MAP = [
 
 const USERNAME_PATTERN = '/^[a-z0-9_]{3,20}$/';
 
+/** Looks up `$userId`'s actual primary email address directly from Clerk (never from client input
+ * — see the PUT handler below). Returns null if Clerk is unreachable, CLERK_SECRET_KEY isn't
+ * configured, or the account has no primary email yet, in which case the caller should leave the
+ * existing stored email untouched rather than writing an unverified value. */
+function fetchVerifiedClerkEmail(string $userId): ?string
+{
+    $clerkUser = clerkApiRequest('GET', "/users/$userId");
+    if (!$clerkUser) {
+        return null;
+    }
+
+    foreach ($clerkUser['email_addresses'] ?? [] as $emailRow) {
+        if (($emailRow['id'] ?? null) === ($clerkUser['primary_email_address_id'] ?? null)) {
+            $email = strtolower(trim((string) ($emailRow['email_address'] ?? '')));
+            return $email !== '' ? $email : null;
+        }
+    }
+
+    return null;
+}
+
 /** True if `$username` is free to take — either nobody has it, or `$userId` already does (so saving
  * your own unchanged username never trips the uniqueness check). Shared between the PUT handler
  * below and the public availability check in index.php, so the two can never disagree. */
@@ -88,7 +109,11 @@ function maybeLinkFoundingAthlete(PDO $pdo, string $userId): void
 
     $pdo->beginTransaction();
     try {
-        $pdo->prepare('UPDATE users SET founding_athlete_id = ? WHERE id = ?')->execute([$athlete['id'], $userId]);
+        // COALESCE so this never clobbers a full name the person already typed in the app itself
+        // (e.g. re-linking is a no-op past the first time anyway, since founding_athlete_id is set
+        // right after and short-circuits this whole function on every later call).
+        $pdo->prepare('UPDATE users SET founding_athlete_id = ?, full_name = COALESCE(full_name, ?), avatar_url = COALESCE(avatar_url, ?) WHERE id = ?')
+            ->execute([$athlete['id'], $athlete['full_name'], $athlete['profile_picture_url'], $userId]);
 
         if ($resolved['crew'] !== null && findMyCrewId($pdo, $userId) === null) {
             linkOrCreateRealCrewFromFounding($pdo, $userId, $resolved['crew']);
@@ -98,6 +123,20 @@ function maybeLinkFoundingAthlete(PDO $pdo, string $userId): void
     } catch (Throwable $e) {
         $pdo->rollBack();
         throw $e;
+    }
+
+    // Separate from the transaction above: users.username is UNIQUE, so if this athlete's username
+    // happens to already be taken by some other real account (a different domain — founding_athletes
+    // usernames were never checked against users.username), we still want the founding_athlete_id
+    // link and Crew membership above to succeed. Worst case, this account just keeps whatever
+    // username (or none) it already had and can pick a new one in-app.
+    if ($athlete['username']) {
+        try {
+            $pdo->prepare('UPDATE users SET username = COALESCE(username, ?) WHERE id = ?')
+                ->execute([$athlete['username'], $userId]);
+        } catch (Throwable $e) {
+            // Likely a uniqueness collision on username — non-fatal, see comment above.
+        }
     }
 }
 
@@ -183,6 +222,20 @@ function handleUsernameAvailability(PDO $pdo, ?string $username): void
 function handleProfile(PDO $pdo, string $userId, string $method, ?array $body): void
 {
     if ($method === 'GET') {
+        // Ensure a row exists and its email is backfilled before attempting the Founding Athlete
+        // link below — without this, the very first GET /profile for a brand-new account (e.g. right
+        // after sign-in, see sign-in.tsx's syncProfileFromServer) has no row to check yet and silently
+        // no-ops, leaving the link to whichever PUT /profile happens to land first instead.
+        $pdo->prepare('INSERT IGNORE INTO users (id) VALUES (?)')->execute([$userId]);
+        $emailStmt = $pdo->prepare('SELECT email FROM users WHERE id = ?');
+        $emailStmt->execute([$userId]);
+        if (!$emailStmt->fetch()['email']) {
+            $verifiedEmail = fetchVerifiedClerkEmail($userId);
+            if ($verifiedEmail !== null) {
+                $pdo->prepare('UPDATE users SET email = ? WHERE id = ?')->execute([$verifiedEmail, $userId]);
+            }
+        }
+
         maybeLinkFoundingAthlete($pdo, $userId);
         $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
         $stmt->execute([$userId]);
@@ -192,6 +245,20 @@ function handleProfile(PDO $pdo, string $userId, string $method, ?array $body): 
 
     if ($method === 'PUT') {
         $data = $body ?? [];
+
+        // Never trust a client-supplied email as-is — maybeLinkFoundingAthlete() below treats a
+        // matching email as proof this account owns that Founding Athlete signup (and Crew), so
+        // accepting any string here would let one signed-in user hijack another's Crew leadership
+        // just by PUTting their email. Only the authenticated account's own verified email (fetched
+        // straight from Clerk, keyed off $userId from the JWT — never the request body) is ever
+        // actually written. If Clerk can't be reached right now, the field is dropped rather than
+        // trusting the unverified client value.
+        if (array_key_exists('email', $data)) {
+            $data['email'] = fetchVerifiedClerkEmail($userId);
+            if ($data['email'] === null) {
+                unset($data['email']);
+            }
+        }
 
         if (array_key_exists('username', $data) && $data['username'] !== null) {
             $username = strtolower(trim((string) $data['username']));

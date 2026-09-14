@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { StatTile } from "@/components/StatTile";
@@ -305,6 +306,7 @@ function MissingMuscleGroupsModal({
 
 export default function WorkoutSplitScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const savedSchedule = useOnboardingStore((state) => state.onboarding.weeklySchedule);
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
   const gender: Gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
@@ -351,6 +353,7 @@ export default function WorkoutSplitScreen() {
     setDirty(false);
     setConfirmingSave(false);
     setJustSaved(true);
+    posthog.capture("workout_split_saved", { trainingDays, missingMuscleGroups: missingGroups.length });
   }
 
   function handleSavePress() {

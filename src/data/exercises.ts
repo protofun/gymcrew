@@ -44,6 +44,21 @@ export const EXERCISE_BY_ID: Record<string, Exercise> = Object.fromEntries(
   EXERCISE_LIBRARY.map((exercise) => [exercise.id, exercise]),
 );
 
+/** Exact library display-name lookup — e.g. recovering the exercise behind an older stored payload
+ * that only kept the name, not the id (not to be confused with `findExerciseByDisplayName` below,
+ * which maps a handful of mock-data-only names, not real library names). */
+export const EXERCISE_BY_NAME: Record<string, Exercise> = Object.fromEntries(
+  EXERCISE_LIBRARY.map((exercise) => [exercise.name, exercise]),
+);
+
+/** `EXERCISE_BY_ID` only covers the ~870 built-in library exercises — a PR logged against a
+ * user-created exercise (see custom-exercises-store.ts, id `custom-<timestamp>`) needs its id
+ * checked there too, or every tier lookup for it silently fails. Pass the caller's own
+ * `useCustomExercisesStore().exercises`. */
+export function exerciseByIdWithCustom(id: string, customExercises: Exercise[]): Exercise | undefined {
+  return EXERCISE_BY_ID[id] ?? customExercises.find((exercise) => exercise.id === id);
+}
+
 export function formatMuscleName(muscle: string): string {
   return muscle.replace(/\b\w/g, (char) => char.toUpperCase());
 }

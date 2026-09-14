@@ -13,15 +13,21 @@ type CrewWarState = {
 };
 
 type CrewWarActions = {
-  /** Pulls this crew's current War — the backend guarantees one always exists (auto-starts one,
-   * real match or bot fallback, the moment there isn't an active one), so there's no "queued" or
-   * "no War yet" state to handle client-side anymore. Call on War tab focus. */
+  /** Pulls this crew's current War — `null` when it has none right now and its
+   * `warAutoMatchEnabled` setting is off (see crew-store.ts), otherwise the backend auto-starts one
+   * (real match or bot fallback) the moment there isn't an active one. Call on War tab focus. */
   refresh: () => Promise<void>;
+  /** Leader/co-leader only: explicitly starts (or matches into) a War right now, regardless of
+   * the crew's auto-match setting — see backend/routes/crew-wars.php's handleStartWar. Used by the
+   * "Start War" empty state once auto-match is off, or by a leader who just wants one immediately. */
+  startWar: () => Promise<ActionResult>;
   /** Records one attack from a just-finished workout — best-effort, fire-and-forget (see
    * workout/active.tsx). No-op below zero volume. */
   attack: (volumeKg: number, prCount: number, workoutName: string) => Promise<{ score: number } | null>;
   markRewarded: (warId: string) => void;
 };
+
+type ActionResult = { ok: true } | { ok: false; error: string };
 
 export const useCrewWarStore = create<CrewWarState & CrewWarActions>()(
   persist(
@@ -39,6 +45,17 @@ export const useCrewWarStore = create<CrewWarState & CrewWarActions>()(
         } catch (error) {
           console.warn("Failed to fetch active crew War", error);
           set({ loading: false });
+        }
+      },
+
+      startWar: async () => {
+        if (!isApiConfigured) return { ok: false, error: "Not connected to the server." };
+        try {
+          const { war } = await api.startWar();
+          set({ war });
+          return { ok: true };
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : "Could not start a War right now." };
         }
       },
 

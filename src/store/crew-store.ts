@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { advanceDivision, type Division } from "@/lib/division";
+import type { Division } from "@/lib/division";
 import { api, type ApiCrew, isApiConfigured } from "@/lib/api";
 
 export type CrewRole = "leader" | "co-leader" | "member";
@@ -85,6 +85,10 @@ type CrewSyncedState = {
   todayPlan: TodayPlan;
   privacy: CrewPrivacy;
   joinRequestsEnabled: boolean;
+  /** When true (the default), this crew is auto-entered into a new Crew War the moment it has
+   * none — see backend/routes/crew-wars.php's getOrStartWar. Off means it only ever enters one via
+   * `startWar` below. Leader/co-leader only, same as `joinRequestsEnabled`. */
+  warAutoMatchEnabled: boolean;
   trainingType: string;
   subscriptionActive: boolean;
   notifications: CrewNotificationPrefs;
@@ -104,8 +108,11 @@ type CrewActions = {
   removeMember: (id: string) => void;
   setMemberRole: (id: string, role: CrewRole) => void;
   toggleMemberAdmin: (id: string) => void;
-  /** Adds crew XP (e.g. a completed challenge reward), rolling over into the next division if it fills the bar. */
-  addXp: (amount: number) => void;
+  /** Reports crew XP for a completed challenge/battle (see backend/routes/crews.php's
+   * awardCrewXp) — `awardKey` must be a stable id for that specific completion so the server can
+   * de-duplicate multiple crew members' devices independently reporting the same one. No-ops
+   * (fire-and-forget) if there's no crew or no backend configured. */
+  addXp: (amount: number, awardKey: string) => void;
   clearDivisionCelebration: () => void;
   /** Server-backed (leader/co-leader only) — awaits the server so a rejected change (e.g. a crew
    * name someone else already has) never shows as saved locally when it wasn't. */
@@ -117,6 +124,7 @@ type CrewActions = {
   uploadIcon: (imageBase64: string, contentType: string) => Promise<ActionResult>;
   setPrivacy: (privacy: CrewPrivacy) => void;
   toggleJoinRequests: () => void;
+  toggleWarAutoMatch: () => void;
   setTrainingType: (trainingType: string) => void;
   setMaxMembers: (maxMembers: number) => void;
   toggleNotification: (key: keyof CrewNotificationPrefs) => void;
@@ -127,6 +135,8 @@ type CrewActions = {
   createCrew: (input: { name: string; tagline?: string; icon?: string; trainingType?: string; privacy?: CrewPrivacy; maxMembers?: number }) => Promise<ActionResult>;
   /** Joins an existing real crew via its invite code. Fails if the code's invalid, the crew's full, or you're already in one. */
   joinCrewByCode: (inviteCode: string) => Promise<ActionResult>;
+  /** Instant-joins a crew found via Discover (must be set to "Public" — see build-crew/discover.tsx). */
+  joinPublicCrew: (crewId: string) => Promise<ActionResult>;
   /** Pulls this account's real, genuinely shared crew from the backend (backend/routes/crews.php) —
    * `null` means you're not in a crew, which resets local state to DEFAULT_CREW. */
   syncFromServer: () => Promise<void>;
@@ -159,6 +169,7 @@ const DEFAULT_CREW: CrewState = {
   },
   privacy: "invite-only",
   joinRequestsEnabled: true,
+  warAutoMatchEnabled: true,
   trainingType: "",
   subscriptionActive: false,
   notifications: {
@@ -179,7 +190,12 @@ function errorMessage(error: unknown): string {
 /** Maps the backend's shared-crew shape onto this store's local shape — remapping your own real
  * member id to CURRENT_MEMBER_ID (see its doc comment above) so every existing screen that reads
  * crew members keeps working unchanged. */
-function normalizeCrew(apiCrew: ApiCrew): Pick<CrewSyncedState, "id" | "inviteCode" | "name" | "tagline" | "icon" | "trainingType" | "privacy" | "joinRequestsEnabled" | "maxMembers" | "xp" | "division" | "divisionHistory" | "createdAt" | "members"> {
+function normalizeCrew(
+  apiCrew: ApiCrew,
+): Pick<
+  CrewSyncedState,
+  "id" | "inviteCode" | "name" | "tagline" | "icon" | "trainingType" | "privacy" | "joinRequestsEnabled" | "warAutoMatchEnabled" | "maxMembers" | "xp" | "division" | "divisionHistory" | "createdAt" | "members"
+> {
   const myId = myClerkUserId();
   return {
     id: apiCrew.id,
@@ -190,6 +206,7 @@ function normalizeCrew(apiCrew: ApiCrew): Pick<CrewSyncedState, "id" | "inviteCo
     trainingType: apiCrew.trainingType,
     privacy: apiCrew.privacy,
     joinRequestsEnabled: apiCrew.joinRequestsEnabled,
+    warAutoMatchEnabled: apiCrew.warAutoMatchEnabled,
     maxMembers: apiCrew.maxMembers,
     xp: apiCrew.xp,
     division: apiCrew.division as Division,
@@ -228,20 +245,27 @@ export const useCrewStore = create<CrewState & CrewActions>()(
           members: state.members.map((member) => (member.id === id ? { ...member, isAdmin: !member.isAdmin } : member)),
         }));
       },
-      // Not yet server-backed — crew XP/division comes from the challenge/battle system, which
-      // still only tracks per-account progress (see db/schema.sql's user_state comment). Local-only for now.
-      addXp: (amount) => {
-        set((state) => {
-          const result = advanceDivision(state.xp, state.division, amount);
-          if (!result.leveledUp) return { xp: result.xp };
-
-          return {
-            xp: result.xp,
-            division: result.division,
-            divisionHistory: [...state.divisionHistory, { division: result.to, reachedAt: Date.now() }],
-            pendingDivisionCelebration: { from: result.from, to: result.to },
-          };
-        });
+      // Server-backed (see backend/routes/crews.php's awardCrewXp) — every crew member's device
+      // detects a completed challenge/battle independently, so the server (not this device) owns
+      // the actual rollover math and de-duplicates by `awardKey`; this just applies whatever the
+      // server reports back, same as `createCrew`/`joinCrewByCode` above.
+      addXp: (amount, awardKey) => {
+        const crewId = get().id;
+        if (!crewId || !isApiConfigured) return;
+        const fromDivision = get().division;
+        api
+          .awardCrewXp(crewId, amount, awardKey)
+          .then((crew) => {
+            const toDivision = crew.division as Division;
+            set({
+              ...normalizeCrew(crew),
+              // Only ever set on an actual transition — never clobbers an earlier pending
+              // celebration the user hasn't seen yet just because this particular grant didn't
+              // itself cross a division boundary.
+              ...(toDivision !== fromDivision ? { pendingDivisionCelebration: { from: fromDivision, to: toDivision } } : {}),
+            });
+          })
+          .catch((error) => console.warn("Failed to report crew XP to server", error));
       },
       clearDivisionCelebration: () => set({ pendingDivisionCelebration: null }),
       updateInfo: async (updates) => {
@@ -284,6 +308,14 @@ export const useCrewStore = create<CrewState & CrewActions>()(
           api.updateCrew(crewId, { joinRequestsEnabled }).catch((error) => console.warn("Failed to sync join requests setting to server", error));
         }
       },
+      toggleWarAutoMatch: () => {
+        const crewId = get().id;
+        const warAutoMatchEnabled = !get().warAutoMatchEnabled;
+        set({ warAutoMatchEnabled });
+        if (crewId) {
+          api.updateCrew(crewId, { warAutoMatchEnabled }).catch((error) => console.warn("Failed to sync War auto-match setting to server", error));
+        }
+      },
       setTrainingType: (trainingType) => {
         const crewId = get().id;
         set({ trainingType });
@@ -323,6 +355,16 @@ export const useCrewStore = create<CrewState & CrewActions>()(
         if (!isApiConfigured) return { ok: false, error: "Not connected to the server." };
         try {
           const crew = await api.joinCrewByCode(inviteCode);
+          set(normalizeCrew(crew));
+          return { ok: true };
+        } catch (error) {
+          return { ok: false, error: errorMessage(error) };
+        }
+      },
+      joinPublicCrew: async (crewId) => {
+        if (!isApiConfigured) return { ok: false, error: "Not connected to the server." };
+        try {
+          const crew = await api.joinPublicCrew(crewId);
           set(normalizeCrew(crew));
           return { ok: true };
         } catch (error) {

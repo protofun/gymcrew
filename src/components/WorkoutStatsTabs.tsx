@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ExerciseComparisonChart, type ComparisonPoint } from "@/components/ExerciseComparisonChart";
 import { MetricTrendChart, type TrendPoint } from "@/components/MetricTrendChart";
 import { formatMuscleName } from "@/data/exercises";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
+import { displayWeight } from "@/lib/units";
 import { findPreviousMatchingWorkout } from "@/lib/workout-comparison";
 import { estimateCalories } from "@/lib/workout-sessions";
 import type { LoggedExercise } from "@/store/active-workout-store";
@@ -124,6 +126,10 @@ export function WorkoutStatsTabs({ workout, workouts, bodyWeightKg }: WorkoutSta
   const [tab, setTab] = useState<StatsTabKey>("volume");
   const [pickerOpen, setPickerOpen] = useState(false);
   const tabLabel = TABS.find((option) => option.key === tab)?.label ?? "Volume";
+  // Every underlying volume number is stored in kg regardless of which unit was active when that
+  // particular workout was logged — always convert to the user's *current* display preference here,
+  // not each workout's own historical `unit`, so a multi-workout trend never mixes units.
+  const weightUnit = useWeightUnit();
 
   // No slice here — `MetricTrendChart` itself caps how many it draws (and scrolls horizontally
   // for the rest), so this just hands over everything available.
@@ -132,14 +138,19 @@ export function WorkoutStatsTabs({ workout, workouts, bodyWeightKg }: WorkoutSta
   }
 
   const exerciseRows: BreakdownRow[] = workout.exercises
-    .map((exercise) => ({ id: exercise.exerciseId, label: exercise.name, value: exerciseVolume(exercise) }))
+    .map((exercise) => ({ id: exercise.exerciseId, label: exercise.name, value: displayWeight(exerciseVolume(exercise), weightUnit) }))
     .filter((row) => row.value > 0)
     .sort((a, b) => b.value - a.value);
 
   const previousWorkout = findPreviousMatchingWorkout(workouts, workout);
   const comparisonPoints: ComparisonPoint[] = exerciseRows.map((row) => {
     const previousExercise = previousWorkout?.exercises.find((exercise) => exercise.exerciseId === row.id);
-    return { id: row.id, label: row.label, current: row.value, previous: previousExercise ? exerciseVolume(previousExercise) : null };
+    return {
+      id: row.id,
+      label: row.label,
+      current: row.value,
+      previous: previousExercise ? displayWeight(exerciseVolume(previousExercise), weightUnit) : null,
+    };
   });
   const previousLabel = previousWorkout
     ? `Last time (${new Date(previousWorkout.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })})`
@@ -153,7 +164,7 @@ export function WorkoutStatsTabs({ workout, workouts, bodyWeightKg }: WorkoutSta
       return totals;
     }, {}),
   )
-    .map(([muscle, value]) => ({ id: muscle, label: formatMuscleName(muscle), value }))
+    .map(([muscle, value]) => ({ id: muscle, label: formatMuscleName(muscle), value: displayWeight(value, weightUnit) }))
     .sort((a, b) => b.value - a.value);
 
   return (
@@ -173,8 +184,10 @@ export function WorkoutStatsTabs({ workout, workouts, bodyWeightKg }: WorkoutSta
 
       {tab === "volume" && (
         <MetricTrendChart
-          points={trendPoints((w) => w.volumeKg)}
-          formatValue={(value) => `${value.toLocaleString("en-US")}${workout.unit}`}
+          // Pre-converted by `trendPoints` — `formatValue` just labels it, so this must NOT run
+          // the value through `displayWeight`/`formatWeight` again (that would double-convert).
+          points={trendPoints((w) => displayWeight(w.volumeKg, weightUnit))}
+          formatValue={(value) => `${value.toLocaleString("en-US")} ${weightUnit}`}
           emptyLabel="Log a few more workouts to see your volume trend here."
         />
       )}
@@ -207,7 +220,7 @@ export function WorkoutStatsTabs({ workout, workouts, bodyWeightKg }: WorkoutSta
         />
       )}
       {tab === "muscles" && (
-        <BreakdownBars rows={muscleRows} unit={workout.unit} emptyLabel="No muscle data for this workout." />
+        <BreakdownBars rows={muscleRows} unit={weightUnit} emptyLabel="No muscle data for this workout." />
       )}
     </View>
   );

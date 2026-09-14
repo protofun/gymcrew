@@ -1,6 +1,8 @@
 import { Text, View } from "react-native";
 
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
+import { formatWeight } from "@/lib/units";
 import type { Gender } from "@/store/onboarding-store";
 import type { CompletedWorkout } from "@/store/workout-history-store";
 import { fontFamily } from "@/theme";
@@ -55,6 +57,8 @@ type WorkoutShareCardProps = {
  * (name/date, headline stats, one visual). Individual PRs get their own card (`PrShareCard`)
  * rather than being listed here too. */
 export function WorkoutShareCard({ workout, gender }: WorkoutShareCardProps) {
+  const weightUnit = useWeightUnit();
+
   return (
     <View className="gap-5 rounded-3xl border border-divider bg-surface p-5">
       <Text style={wordmarkStyle} className="text-center">
@@ -80,7 +84,7 @@ export function WorkoutShareCard({ workout, gender }: WorkoutShareCardProps) {
               : `${Math.round(workout.durationSeconds / 60)}m`
           }
         />
-        <ShareStat label="VOLUME" value={`${workout.volumeKg.toLocaleString("en-US")}${workout.unit}`} />
+        <ShareStat label="VOLUME" value={formatWeight(workout.volumeKg, weightUnit)} />
         <ShareStat label="SETS" value={String(workout.completedSets)} />
       </View>
 

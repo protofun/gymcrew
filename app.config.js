@@ -10,9 +10,14 @@ export default {
     userInterfaceStyle: "dark",
     backgroundColor: "#0D1117",
     ios: {
+      // TODO: confirm before the first real App Store submission — this becomes permanent once
+      // published (Apple won't let it change later).
+      bundleIdentifier: "com.gymcrew.app",
       icon: "./assets/expo.icon",
     },
     android: {
+      // TODO: confirm before the first real Play Store submission — same permanence as above.
+      package: "com.gymcrew.app",
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
         foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -23,7 +28,7 @@ export default {
     },
     web: {
       output: "static",
-      favicon: "./assets/images/favicon.png",
+      favicon: "./assets/images/favicon/app_favicon.png",
     },
     plugins: [
       "expo-router",
@@ -44,6 +49,20 @@ export default {
           // GymCrew only ever scans barcodes — no video/photo capture needs audio, so skip
           // requesting the Android microphone permission entirely.
           recordAudioAndroid: false,
+        },
+      ],
+      [
+        "expo-image-picker",
+        {
+          photosPermission: "GymCrew needs access to your photos so you can set a profile picture.",
+          cameraPermission: "GymCrew needs access to your camera so you can take a profile picture.",
+        },
+      ],
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/images/icon.png",
+          color: "#E3FF00",
         },
       ],
     ],

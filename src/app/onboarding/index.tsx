@@ -2,6 +2,7 @@ import { useAuth } from "@clerk/expo";
 import { router } from "expo-router";
 import { Pressable, SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInUp, ZoomIn } from "react-native-reanimated";
+import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
@@ -9,6 +10,7 @@ import { colors, typography } from "@/theme";
 
 export default function OnboardingIntroScreen() {
   const { isSignedIn } = useAuth();
+  const posthog = usePostHog();
 
   return (
     <SafeAreaView
@@ -62,7 +64,10 @@ export default function OnboardingIntroScreen() {
           // step below can save straight to the real backend as you go, instead of being collected
           // locally with nowhere to save to yet. A signed-in visitor here (e.g. resuming mid-wizard
           // after closing the app) skips straight back into it instead of being asked to sign up again.
-          onPress={() => router.push(isSignedIn ? "/onboarding/welcome" : "/sign-up")}
+          onPress={() => {
+            posthog.capture("onboarding_started");
+            router.push(isSignedIn ? "/onboarding/welcome" : "/sign-up");
+          }}
         />
 
         {!isSignedIn && (

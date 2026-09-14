@@ -2,9 +2,11 @@ import { useState } from "react";
 import { SafeAreaView, Switch, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { router } from "expo-router";
+import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
+import { registerForPushNotifications, reconcileNotificationSchedules } from "@/lib/push-notifications";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
@@ -35,12 +37,13 @@ function NotificationRow({ title, subtitle, value, onValueChange }: Notification
 export default function NotificationsScreen() {
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
   const completeOnboarding = useOnboardingStore((state) => state.completeOnboarding);
+  const posthog = usePostHog();
   const [workoutReminders, setWorkoutReminders] = useState(true);
   const [crewChallenges, setCrewChallenges] = useState(true);
   const [progressUpdates, setProgressUpdates] = useState(true);
   const [marketingTips, setMarketingTips] = useState(false);
 
-  function handleContinue() {
+  async function handleContinue() {
     setOnboardingData({
       workoutReminders,
       crewChallengeAlerts: crewChallenges,
@@ -48,6 +51,15 @@ export default function NotificationsScreen() {
       marketingTips,
     });
     completeOnboarding();
+    posthog.capture("onboarding_completed");
+
+    // Fire-and-forget: the permission prompt (if needed) and the actual on-device scheduling
+    // shouldn't block getting to the next screen. Creatine reminders aren't asked about here (see
+    // profile/notifications.tsx — a separate settings screen), but default to enabled, so this
+    // reconciles that one's schedule too rather than leaving it unscheduled until the user happens
+    // to visit that screen.
+    registerForPushNotifications().then(reconcileNotificationSchedules);
+
     router.push("/onboarding/all-set");
   }
 

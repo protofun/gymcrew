@@ -1,5 +1,6 @@
 import { EXERCISE_BY_ID } from "@/data/exercises";
 import type { LiftCardId } from "@/data/rank-lifts";
+import type { RankStanding } from "@/lib/api";
 import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
 import { applyRankScope, buildLiftRankCards, SCORE_PER_BODYWEIGHT_RATIO, type RankScope } from "@/lib/lift-rank-cards";
 import { RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
@@ -16,8 +17,10 @@ export type DisplayLiftCard = {
   tier: RankTier;
   score: number;
   percentileInTier: number;
-  gymRank: number;
-  gymPoolSize: number;
+  /** Real standing among other real users who share your gym — `null` when there's not enough
+   * real data yet (see backend/routes/rank-standings.php / lift-rank-cards.ts's `LiftRankCard`). */
+  gymRank: number | null;
+  gymPoolSize: number | null;
   isWeakPoint: boolean;
   isCustom: boolean;
   bestWeightKg: number;
@@ -49,8 +52,9 @@ export function ranksBoardCards(
   removedDefaultIds: LiftCardId[],
   hiddenAchievementIds: string[],
   customExerciseIds: string[],
+  realGymStandings: Record<string, RankStanding | null> = {},
 ): DisplayLiftCard[] {
-  const builtInCards = buildLiftRankCards(records, profile, scope);
+  const builtInCards = buildLiftRankCards(records, profile, scope, realGymStandings);
   const builtInByExerciseId = new Map(builtInCards.map((card) => [card.exerciseId, card]));
 
   function displayCardFor(exerciseId: string): DisplayLiftCard | null {
@@ -79,8 +83,7 @@ export function ranksBoardCards(
     const bestReps = record?.bestReps ?? 0;
     const detail = genericExerciseRankDetail(exercise, bestWeightKg, bestReps, profile);
     const score = Math.round((bestWeightKg / profile.bodyWeightKg) * SCORE_PER_BODYWEIGHT_RATIO);
-    const tierIndex = RANK_TIERS.indexOf(detail.tier);
-    const { percentileInTier, gymRank, gymPoolSize } = applyRankScope(exercise.id, tierIndex, detail.progressToNextTier, scope);
+    const { percentileInTier, gymRank, gymPoolSize } = applyRankScope(detail.progressToNextTier, realGymStandings[exercise.id] ?? null);
     return {
       id: exercise.id,
       name: exercise.name,

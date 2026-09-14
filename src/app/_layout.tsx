@@ -4,6 +4,7 @@ import { ClerkProvider, useUser } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { useEffect, useRef } from "react";
+import { Platform } from "react-native";
 import { Stack, usePathname, useGlobalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
@@ -11,8 +12,11 @@ import { PostHogProvider, usePostHog } from "posthog-react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { DivisionCelebrationWatcher } from "@/components/DivisionCelebrationWatcher";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAppFonts } from "@/hooks/use-app-fonts";
+import { trackEvent, trackScreen } from "@/lib/analytics";
 import { posthog } from "@/config/posthog";
+import "@/config/sentry";
 import { colors } from "@/theme";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
@@ -69,9 +73,32 @@ function PostHogScreenTracker() {
         previous_screen: previousPathname.current ?? null,
         ...params,
       });
+      trackScreen(pathname, { previousScreen: previousPathname.current ?? null });
       previousPathname.current = pathname;
     }
   }, [pathname, params, posthogClient]);
+
+  return null;
+}
+
+/** Web-only PWA install/open tracking (see the "PWA Analytics" admin section). `matchMedia
+ * (display-mode: standalone)` on mount tells us this launch is already running as an installed
+ * app; the `appinstalled` event fires the moment a user completes an install from the browser's
+ * own prompt. Both feed trackEvent, not posthog.capture — this has no PostHog equivalent. */
+function PwaTracker() {
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+
+    if (window.matchMedia?.("(display-mode: standalone)").matches) {
+      trackEvent("pwa_opened");
+    }
+
+    function handleInstalled() {
+      trackEvent("pwa_installed");
+    }
+    window.addEventListener("appinstalled", handleInstalled);
+    return () => window.removeEventListener("appinstalled", handleInstalled);
+  }, []);
 
   return null;
 }
@@ -90,31 +117,34 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-        <PostHogProvider
-          client={posthog}
-          autocapture={{
-            captureScreens: false, // Manual screen tracking via PostHogScreenTracker
-            captureTouches: true,
-            propsToCapture: ["testID"],
-            maxElementsCaptured: 20,
-          }}
-        >
-          <PostHogUserSync />
-          <PostHogScreenTracker />
-          <StatusBar style="light" />
-          <ThemeProvider value={navTheme}>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: colors.neutral.background },
-              }}
-            />
-          </ThemeProvider>
-          <DivisionCelebrationWatcher />
-        </PostHogProvider>
-      </ClerkProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+          <PostHogProvider
+            client={posthog}
+            autocapture={{
+              captureScreens: false, // Manual screen tracking via PostHogScreenTracker
+              captureTouches: true,
+              propsToCapture: ["testID"],
+              maxElementsCaptured: 20,
+            }}
+          >
+            <PostHogUserSync />
+            <PostHogScreenTracker />
+            <PwaTracker />
+            <StatusBar style="light" />
+            <ThemeProvider value={navTheme}>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: colors.neutral.background },
+                }}
+              />
+            </ThemeProvider>
+            <DivisionCelebrationWatcher />
+          </PostHogProvider>
+        </ClerkProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }

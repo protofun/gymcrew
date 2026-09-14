@@ -6,7 +6,9 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 import { formatMuscleLabel, intensityToColor, MuscleHeatmap } from "@/components/MuscleHeatmap";
 import type { MuscleGroup, WorkoutSession } from "@/data/workout-log";
 import { useCountUp } from "@/hooks/use-count-up";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { toDateKey } from "@/lib/date";
+import { displayWeight } from "@/lib/units";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutNotesStore } from "@/store/workout-notes-store";
 import { colors } from "@/theme";
@@ -43,6 +45,7 @@ type WorkoutSummaryModalProps = {
 
 export function WorkoutSummaryModal({ visible, onClose, date, session }: WorkoutSummaryModalProps) {
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
+  const weightUnit = useWeightUnit();
   const dateKey = date ? toDateKey(date) : null;
   const savedNote = useWorkoutNotesStore((state) => (dateKey ? (state.notesByDate[dateKey] ?? "") : ""));
   const setNote = useWorkoutNotesStore((state) => state.setNote);
@@ -123,7 +126,7 @@ export function WorkoutSummaryModal({ visible, onClose, date, session }: Workout
           <Divider />
 
           <View className="flex-row justify-between">
-            <StatValue label="Volume" value={session.volumeKg} suffix=" kg" />
+            <StatValue label="Volume" value={displayWeight(session.volumeKg, weightUnit)} suffix={` ${weightUnit}`} />
             <StatValue label="Exercises" value={session.exercises} />
             <StatValue label="Calories" value={session.calories} suffix=" kcal" />
           </View>

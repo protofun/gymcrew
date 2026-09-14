@@ -4,17 +4,21 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBack } from "@/lib/navigation";
 import { EditableText } from "@/components/EditableText";
 import { ProgressBar } from "@/components/ProgressBar";
 import { RankBadge } from "@/components/RankBadge";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
 import { EXERCISE_BY_ID } from "@/data/exercises";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { crewLiftStandings, type CrewLiftStanding } from "@/lib/crew-lift-compare";
 import { fromDateKey } from "@/lib/date";
 import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards, SCORE_PER_BODYWEIGHT_RATIO, type LiftRankCard } from "@/lib/lift-rank-cards";
 import { realStrengthProgress } from "@/lib/member-real-profile";
 import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
+import { displayWeight, formatWeight } from "@/lib/units";
+import type { WeightUnit } from "@/store/active-workout-store";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
@@ -54,7 +58,17 @@ function nearbyStandings(standings: CrewLiftStanding[]): CrewLiftStanding[] {
   return standings.slice(start, start + NEARBY_WINDOW_SIZE);
 }
 
-function StandingRow({ standing, rank, onPress }: { standing: CrewLiftStanding; rank: number; onPress?: () => void }) {
+function StandingRow({
+  standing,
+  rank,
+  weightUnit,
+  onPress,
+}: {
+  standing: CrewLiftStanding;
+  rank: number;
+  weightUnit: WeightUnit;
+  onPress?: () => void;
+}) {
   return (
     <Pressable
       onPress={onPress}
@@ -69,7 +83,7 @@ function StandingRow({ standing, rank, onPress }: { standing: CrewLiftStanding; 
         </Text>
         {!standing.isMe && <Text className="caption font-body-semibold text-brand-yellow">(Compare)</Text>}
       </View>
-      <Text className="body-md font-body-bold text-text-primary">{standing.weightKg} kg</Text>
+      <Text className="body-md font-body-bold text-text-primary">{formatWeight(standing.weightKg, weightUnit)}</Text>
     </Pressable>
   );
 }
@@ -82,6 +96,7 @@ export default function LiftRankDetailScreen() {
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
   const age = useOnboardingStore((state) => state.onboarding.age);
+  const weightUnit = useWeightUnit();
   const records = usePersonalRecordsStore((state) => state.records);
   const crewMembers = useCrewStore((state) => state.members);
   const membersActivity = useCrewActivityStore((state) => state.membersActivity);
@@ -159,7 +174,7 @@ export default function LiftRankDetailScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/ranks")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <EditableText id={`ranks.liftDetail.${card.id}.name`} className="heading-4 text-text-primary" numberOfLines={1}>
@@ -207,7 +222,7 @@ export default function LiftRankDetailScreen() {
           </View>
           <ProgressBar ratio={card.percentileInTier} color={tint} height={8} />
           {card.kgToNextTier !== null && (
-            <Text className="caption text-right text-text-secondary">{card.kgToNextTier}kg to go</Text>
+            <Text className="caption text-right text-text-secondary">{formatWeight(card.kgToNextTier, weightUnit)} to go</Text>
           )}
         </View>
 
@@ -215,7 +230,7 @@ export default function LiftRankDetailScreen() {
           <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
             <Text className="caption text-text-secondary">BEST SET (1RM)</Text>
             <EditableText id={`ranks.liftDetail.${card.id}.bestSet`} className="heading-4 text-text-primary">
-              {`${card.bestWeightKg} KG`}
+              {formatWeight(card.bestWeightKg, weightUnit).toUpperCase()}
             </EditableText>
           </View>
           <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
@@ -253,7 +268,12 @@ export default function LiftRankDetailScreen() {
             </View>
           </View>
 
-          <StrengthProgressChart exerciseName={card.name} points={trendPoints} title="1RM (kg)" unit="kg" />
+          <StrengthProgressChart
+            exerciseName={card.name}
+            points={trendPoints.map((point) => ({ ...point, value: displayWeight(point.value, weightUnit) }))}
+            title={`1RM (${weightUnit})`}
+            unit={weightUnit}
+          />
         </View>
 
         {card.knownCard && (
@@ -267,6 +287,7 @@ export default function LiftRankDetailScreen() {
                   key={standing.id}
                   standing={standing}
                   rank={nearbyStartRank + index}
+                  weightUnit={weightUnit}
                   onPress={standing.isMe ? undefined : () => goToCompare(standing.id)}
                 />
               ))}
@@ -278,10 +299,12 @@ export default function LiftRankDetailScreen() {
           <View className="flex-row items-center justify-between gap-3 rounded-2xl border border-divider bg-surface p-4">
             <View className="gap-0.5">
               <Text className="caption text-text-secondary">FOR PROMOTION TO {nextTier.toUpperCase()}</Text>
-              <Text className="body-lg font-body-semibold text-text-primary">{card.bestWeightKg + card.kgToNextTier} kg needed</Text>
+              <Text className="body-lg font-body-semibold text-text-primary">
+                {formatWeight(card.bestWeightKg + card.kgToNextTier, weightUnit)} needed
+              </Text>
             </View>
             <View className="rounded-full bg-brand-yellow/15 px-3 py-1.5">
-              <Text className="body-sm font-body-bold text-brand-yellow">+{card.kgToNextTier}kg</Text>
+              <Text className="body-sm font-body-bold text-brand-yellow">+{formatWeight(card.kgToNextTier, weightUnit)}</Text>
             </View>
           </View>
         ) : nextTier ? (

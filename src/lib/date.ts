@@ -44,6 +44,21 @@ export function currentWeekKey(referenceDate: Date = new Date()): string {
   return toDateKey(getCurrentWeekDates(referenceDate)[0]);
 }
 
+export function addDays(date: Date, days: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+}
+
+/** "Today" / "Yesterday" / a short date — the standard diary-header label every food-logging app
+ * uses (MyFitnessPal, Cronometer, Lifesum, ...) for whichever day is currently being viewed. */
+export function formatDiaryDate(date: Date, now: Date = new Date()): string {
+  const key = toDateKey(date);
+  if (key === toDateKey(now)) return "Today";
+  if (key === toDateKey(addDays(now, -1))) return "Yesterday";
+  if (key === toDateKey(addDays(now, 1))) return "Tomorrow";
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: sameYear ? undefined : "numeric" });
+}
+
 /** Monday-start month grid, padded with nulls to full weeks. */
 export function getMonthGrid(monthDate: Date): (Date | null)[][] {
   const year = monthDate.getFullYear();

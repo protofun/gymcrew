@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, SafeAreaView, Switch, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { router } from "expo-router";
+import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
@@ -16,6 +17,7 @@ const MAX_WORKOUTS_PER_WEEK = 7;
 
 export default function WorkoutPreferencesScreen() {
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
+  const posthog = usePostHog();
   const [trainingSplit, setTrainingSplit] = useState<string>("Push / Pull / Legs");
   const [workoutsPerWeek, setWorkoutsPerWeek] = useState(4);
   const [duration, setDuration] = useState<(typeof DURATIONS)[number]>("60+ min");
@@ -28,6 +30,7 @@ export default function WorkoutPreferencesScreen() {
       workoutDuration: duration,
       restTimerEnabled: restTimer,
     });
+    posthog.capture("onboarding_preferences_completed", { trainingSplit, workoutsPerWeek });
     router.push("/onboarding/training-schedule");
   }
 

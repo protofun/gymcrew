@@ -122,6 +122,38 @@ function clerkApiRequest(string $method, string $path, array $body = []): ?array
     return is_array($decoded) ? $decoded : null;
 }
 
+/**
+ * Sends one or more push notifications via Expo's push service — no SDK, no auth token needed for
+ * this volume (see https://docs.expo.dev/push-notifications/sending-notifications/#http2-api).
+ * `$messages` is a list of `['to' => expoPushToken, 'title' => ..., 'body' => ..., 'data' => [...]]`.
+ * Best-effort: logs and swallows any failure rather than throwing, since a push failing must never
+ * break the request that triggered it (e.g. logging a PR shouldn't fail just because a crewmate's
+ * token has gone stale).
+ */
+function sendExpoPushNotifications(array $messages): void
+{
+    if (empty($messages)) {
+        return;
+    }
+
+    $ch = curl_init('https://exp.host/--/api/v2/push/send');
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST => 'POST',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json'],
+        CURLOPT_POSTFIELDS => json_encode($messages),
+        CURLOPT_TIMEOUT => 10,
+    ]);
+    $response = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false || $curlError !== '' || $status >= 400) {
+        error_log("Expo push send failed (status $status): " . ($curlError ?: $response));
+    }
+}
+
 function getPdo(): PDO
 {
     static $pdo = null;

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { router } from "expo-router";
+import { usePostHog } from "posthog-react-native";
 
 import { FormField } from "@/components/FormField";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
@@ -51,21 +52,24 @@ function CameraIcon() {
   );
 }
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
 export default function PersonalInfoScreen() {
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
-  const [fullName, setFullName] = useState("");
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [errors, setErrors] = useState<{ fullName?: string; username?: string; email?: string }>({});
+  // Prefills a name/username already known from elsewhere (e.g. a Founding Athlete account linked
+  // from gymcrew.site, see backend/routes/profile.php's maybeLinkFoundingAthlete) instead of making
+  // someone retype what the backend already synced into the store — see syncProfileFromServer.
+  const savedFullName = useOnboardingStore((state) => state.onboarding.fullName);
+  const savedUsername = useOnboardingStore((state) => state.onboarding.username);
+  const posthog = usePostHog();
+  const [fullName, setFullName] = useState(savedFullName ?? "");
+  const [username, setUsername] = useState(savedUsername ?? "");
+  const [errors, setErrors] = useState<{ fullName?: string; username?: string }>({});
   const [checkingUsername, setCheckingUsername] = useState(false);
 
   async function handleContinue() {
     const trimmedName = fullName.trim();
     const trimmedUsername = username.trim().toLowerCase();
-    const trimmedEmail = email.trim();
 
     const nextErrors: typeof errors = {};
     if (!trimmedName) nextErrors.fullName = "Enter your full name.";
@@ -73,8 +77,6 @@ export default function PersonalInfoScreen() {
     else if (!USERNAME_REGEX.test(trimmedUsername)) {
       nextErrors.username = "3-20 characters: lowercase letters, numbers, and underscores only.";
     }
-    if (!trimmedEmail) nextErrors.email = "Enter your email.";
-    else if (!EMAIL_REGEX.test(trimmedEmail)) nextErrors.email = "Enter a valid email address.";
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
@@ -101,7 +103,8 @@ export default function PersonalInfoScreen() {
     }
 
     setErrors({});
-    setOnboardingData({ fullName: trimmedName, username: trimmedUsername, email: trimmedEmail });
+    setOnboardingData({ fullName: trimmedName, username: trimmedUsername });
+    posthog.capture("onboarding_personal_info_completed");
     router.push("/onboarding/your-stats");
   }
 
@@ -143,21 +146,6 @@ export default function PersonalInfoScreen() {
               />
               {errors.username && <Text className="body-sm text-error">{errors.username}</Text>}
             </View>
-            <View className="gap-1">
-              <FormField
-                label="Email"
-                placeholder="Enter your email"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  setErrors((prev) => ({ ...prev, email: undefined }));
-                }}
-              />
-              {errors.email && <Text className="body-sm text-error">{errors.email}</Text>}
-            </View>
-
             <View className="gap-2">
               <Text className="body-md text-text-primary">Profile Picture</Text>
               <Pressable className="h-20 w-20 items-center justify-center self-center rounded-full border border-divider bg-surface">

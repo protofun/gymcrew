@@ -5,6 +5,7 @@ import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { EXERCISE_BY_ID } from "@/data/exercises";
 import type { Weekday } from "@/data/weekdays";
 import { formatMuscleLabel } from "@/lib/muscle-groups";
@@ -75,7 +76,7 @@ export default function WorkoutSplitDayScreen() {
     return (
       <View style={{ flex: 1, paddingTop: insets.top }} className="items-center justify-center bg-background px-6">
         <Text className="body-md text-center text-text-secondary">No workout planned for this day.</Text>
-        <Pressable onPress={() => router.back()} style={PRESSED_STYLE} className="mt-4">
+        <Pressable onPress={() => goBack("/(tabs)/profile")} style={PRESSED_STYLE} className="mt-4">
           <Text className="body-md font-body-semibold text-brand-yellow">Go back</Text>
         </Pressable>
       </View>
@@ -85,7 +86,7 @@ export default function WorkoutSplitDayScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/profile")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">{weekday}</Text>

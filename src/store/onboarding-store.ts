@@ -44,6 +44,9 @@ type OnboardingData = {
    * as the other notification toggles above (none of these are seeded in the store's initial
    * state, only set once the user actually visits Notification Settings). */
   creatineReminderTime: string;
+  /** "HH:mm", 24h — when the daily workout-reminder nudge should appear. Defaults to "18:00" at
+   * usage sites, same convention as `creatineReminderTime` above. */
+  workoutReminderTime: string;
 };
 
 /** The subset of OnboardingData that's also broken out into real columns on the backend `users`
@@ -51,7 +54,7 @@ type OnboardingData = {
  * profiles directly (e.g. via phpMyAdmin). The *complete* onboarding answers (every field on
  * OnboardingData, not just this subset) are separately synced wholesale as one JSON blob — see
  * `setOnboardingData`/`syncProfileFromServer` below and backend/routes/state.php. */
-const PROFILE_SYNC_KEYS = ["fullName", "username", "gender", "heightCm", "weightKg", "age", "gymName", "goal", "experienceLevel"] as const;
+const PROFILE_SYNC_KEYS = ["email", "fullName", "username", "gender", "heightCm", "weightKg", "age", "gymName", "goal", "experienceLevel"] as const;
 
 function pickDefined<T extends object, K extends keyof T>(obj: T, keys: readonly K[]): Partial<Pick<T, K>> {
   const result: Partial<Pick<T, K>> = {};
@@ -82,6 +85,14 @@ type OnboardingStore = {
    * this store already persists globally and every screen already reads profile info from it. */
   weightUnit: WeightUnit;
   setOnboardingData: (data: Partial<OnboardingData>) => void;
+  /** Pushes the real, verified email from the signed-in Clerk account straight to the backend — see
+   * backend/routes/profile.php's maybeLinkFoundingAthlete, which needs users.email set before it can
+   * link a Founding Athlete's marketing-site account (and Crew) to this real one. The onboarding
+   * wizard no longer asks for an email at all (it only ever runs for someone already signed in, so
+   * Clerk already has it, verified) — this is how it reaches the backend instead. Unlike
+   * `setOnboardingData`'s fire-and-forget push, this is awaited: build-crew/_layout.tsx calls it
+   * right before checking whether a Crew already exists, so that check never races the link. */
+  syncEmailToBackend: (email: string) => Promise<void>;
   completeOnboarding: () => void;
   setCrewData: (data: Partial<CrewData>) => void;
   completeCrewSelection: () => void;
@@ -99,6 +110,15 @@ type OnboardingStore = {
    * right after sign-up actually completes and a session exists (see sign-up.tsx), so that
    * already-collected data doesn't just vanish into local storage. */
   pushAllOnboardingData: () => void;
+  /** Wipes this store's in-memory state back to a brand-new install's defaults — called from
+   * `resetLocalStateForAccountSwitch` (see lib/reset-local-state.ts) right after sign-out, on every
+   * platform. Without this, `AsyncStorage.clear()` alone leaves this already-mounted store's
+   * in-memory state (name/weight/gender/goals/crew choices) untouched; if a second account signs up
+   * in the same app session before a full reload happens, `pushAllOnboardingData` would push the
+   * FIRST account's answers onto the second one. Native has no cross-platform "reload the JS bundle"
+   * primitive without adding a new dependency (e.g. expo-updates), so this resets the one store that
+   * actually gets wholesale-pushed on sign-up, directly, instead. */
+  resetForAccountSwitch: () => void;
 };
 
 type OnboardingBlob = { onboarding: Partial<OnboardingData>; crew: Partial<CrewData>; weightUnit: WeightUnit };
@@ -108,16 +128,21 @@ function pushOnboardingBlob(get: () => OnboardingStore) {
   pushState("onboarding-full", { onboarding, crew, weightUnit });
 }
 
+// Just enough of a starter profile for rank calculations (e.g. the member profile's muscle rank
+// heatmap) to work before onboarding — real onboarding overwrites this permanently. Shared by the
+// store's initial state and `resetForAccountSwitch` so the two can never drift apart.
+const INITIAL_ONBOARDING_STATE = {
+  onboarding: { gender: "male" as const, weightKg: 85 },
+  crew: {},
+  hasCompletedOnboarding: false,
+  hasCompletedCrewSelection: false,
+  weightUnit: "kg" as const,
+};
+
 export const useOnboardingStore = create<OnboardingStore>()(
   persist(
     (set, get) => ({
-      // Just enough of a starter profile for rank calculations (e.g. the member profile's muscle
-      // rank heatmap) to work before onboarding — real onboarding overwrites this permanently.
-      onboarding: { gender: "male", weightKg: 85 },
-      crew: {},
-      hasCompletedOnboarding: false,
-      hasCompletedCrewSelection: false,
-      weightUnit: "kg",
+      ...INITIAL_ONBOARDING_STATE,
       setOnboardingData: (data) => {
         set((state) => ({ onboarding: { ...state.onboarding, ...data } }));
         pushOnboardingBlob(get);
@@ -127,6 +152,16 @@ export const useOnboardingStore = create<OnboardingStore>()(
           if (Object.keys(profileUpdate).length > 0) {
             api.updateProfile(profileUpdate).catch((error) => console.warn("Failed to sync profile to server", error));
           }
+        }
+      },
+      syncEmailToBackend: async (email) => {
+        set((state) => ({ onboarding: { ...state.onboarding, email } }));
+        pushOnboardingBlob(get);
+        if (!isApiConfigured) return;
+        try {
+          await api.updateProfile({ email });
+        } catch (error) {
+          console.warn("Failed to sync email to server", error);
         }
       },
       completeOnboarding: () => {
@@ -170,16 +205,15 @@ export const useOnboardingStore = create<OnboardingStore>()(
           if (Object.keys(update).length > 0) {
             set((state) => ({ onboarding: { ...state.onboarding, ...update } }));
           }
-
-          // A backend profile with the core wizard fields already filled in means this account has
-          // onboarded before, on some device — skip the wizard here too instead of sending a
-          // returning user through it again just because this device's local storage is fresh.
-          // Centralized here (not just in the sign-in button handler) so it also covers a session
-          // that's already active when the app loads with no local "completed" flag set yet.
-          const merged = get().onboarding;
-          if (merged.gender && merged.weightKg && merged.heightCm) {
-            get().completeOnboarding();
-          }
+          // Whether this account has already onboarded (on some other device) is decided by Clerk's
+          // `hasCompletedOnboarding` metadata flag alone (see lib/clerk.ts / hooks/use-clerk-flag-sync,
+          // wired up in app/index.tsx and friends) — NOT inferred from field presence here. An earlier
+          // version of this function auto-completed onboarding once gender/weightKg/heightCm were all
+          // truthy, but gender and weightKg are seeded with non-null placeholder defaults from the
+          // moment this store is created (see the initial state below), so that check was really just
+          // "does heightCm exist yet" — true for anyone whose backend happens to carry a heightCm from
+          // an earlier abandoned attempt, which silently skipped the rest of the wizard (including the
+          // actual stats step) for a real returning user who'd never genuinely finished it.
         } catch (error) {
           console.warn("Failed to sync profile from server, keeping local data", error);
         }
@@ -193,6 +227,7 @@ export const useOnboardingStore = create<OnboardingStore>()(
           }
         }
       },
+      resetForAccountSwitch: () => set(INITIAL_ONBOARDING_STATE),
     }),
     {
       name: "gymcrew-onboarding",

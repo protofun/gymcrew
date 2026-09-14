@@ -24,9 +24,13 @@ type StrengthProgressChartProps = {
   points: StrengthPoint[];
   title?: string;
   unit?: string;
+  /** Adds a soft fill beneath the line down to the chart baseline — a heavier "how much" read for
+   * metrics like weight or calories, still the same brand-yellow accent as the line itself (no new
+   * color introduced), just a different chart type from the plain line default. */
+  area?: boolean;
 };
 
-export function StrengthProgressChart({ exerciseName, points, title = "Strength Progress", unit = "kg" }: StrengthProgressChartProps) {
+export function StrengthProgressChart({ exerciseName, points, title = "Strength Progress", unit = "kg", area = false }: StrengthProgressChartProps) {
   const [renderedWidth, setRenderedWidth] = useState(CHART_WIDTH);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
@@ -133,6 +137,13 @@ export function StrengthProgressChart({ exerciseName, points, title = "Strength 
             </Fragment>
           ))}
 
+          {area && (
+            <Path
+              d={`${pathD} L ${coords[coords.length - 1].x} ${CHART_HEIGHT - CHART_PADDING} L ${coords[0].x} ${CHART_HEIGHT - CHART_PADDING} Z`}
+              fill={colors.brand.yellow}
+              fillOpacity={0.15}
+            />
+          )}
           <Path d={pathD} stroke={colors.brand.yellow} strokeWidth={2.5} fill="none" strokeLinejoin="round" strokeLinecap="round" />
           {coords.map((c, index) => (
             <Circle key={index} cx={c.x} cy={c.y} r={3.5} fill={colors.brand.yellow} />

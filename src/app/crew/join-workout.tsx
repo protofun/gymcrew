@@ -3,8 +3,11 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { EXERCISE_BY_ID } from "@/data/exercises";
+import { waitForAuthToken } from "@/lib/api";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { useCrewStore } from "@/store/crew-store";
 import { useLedWorkoutStore } from "@/store/led-workout-store";
@@ -15,6 +18,7 @@ const POLL_INTERVAL_MS = 15000;
 
 export default function JoinWorkoutScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const session = useLedWorkoutStore((state) => state.session);
@@ -27,9 +31,19 @@ export default function JoinWorkoutScreen() {
   const addExercise = useActiveWorkoutStore((state) => state.addExercise);
 
   useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    // A hard refresh landing directly on this screen can fire before Clerk's session/token has
+    // finished restoring — same race as (tabs)/crew.tsx's own live-session refresh, see its comment.
+    let cancelled = false;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    waitForAuthToken().then(() => {
+      if (cancelled) return;
+      refresh();
+      interval = setInterval(refresh, POLL_INTERVAL_MS);
+    });
+    return () => {
+      cancelled = true;
+      if (interval) clearInterval(interval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -37,7 +51,7 @@ export default function JoinWorkoutScreen() {
     return (
       <View style={{ flex: 1, paddingTop: insets.top }} className="items-center justify-center bg-background px-6">
         <Text className="body-md text-text-secondary">No crew workout is active right now.</Text>
-        <Pressable onPress={() => router.back()} className="mt-4">
+        <Pressable onPress={() => goBack("/(tabs)/crew")} className="mt-4">
           <Text className="body-md font-body-semibold text-brand-yellow">Go back</Text>
         </Pressable>
       </View>
@@ -65,6 +79,7 @@ export default function JoinWorkoutScreen() {
     discardWorkout();
     startWorkout();
     setWorkoutName(session.workoutName);
+    posthog.capture("crew_workout_joined", { exerciseCount: session.exercises.length });
     // Snapshot of whatever the leader has logged so far — a starting point, not a live mirror.
     // Anything the leader adds after this point stays theirs; each person logs independently from here.
     for (const logged of session.exercises) {
@@ -77,7 +92,7 @@ export default function JoinWorkoutScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/crew")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="close" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Join Workout</Text>

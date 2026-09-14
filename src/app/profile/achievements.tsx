@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBack } from "@/lib/navigation";
 import { EditableText } from "@/components/EditableText";
 import { RankBadge } from "@/components/RankBadge";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
@@ -14,6 +14,7 @@ import { realMemberPrTimeline } from "@/lib/member-real-profile";
 import { buildSnapshotRecords } from "@/lib/profile-snapshot";
 import type { RankTier } from "@/lib/rank";
 import { formatShortAgo } from "@/lib/time-since";
+import { formatWeight } from "@/lib/units";
 import { useCustomExercisesStore } from "@/store/custom-exercises-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
@@ -71,7 +72,7 @@ export default function AchievementsScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/profile")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Personal Records</Text>
@@ -123,7 +124,7 @@ export default function AchievementsScreen() {
                       )}
                     </View>
                     <EditableText id={`profile.achievements.${entry.workoutId}-${entry.exerciseId}.date`} className="caption text-text-secondary">
-                      {`${formatDate(entry.achievedAt)}${deltaKg !== null && deltaKg > 0 ? ` · +${deltaKg} kg` : ""}`}
+                      {`${formatDate(entry.achievedAt)}${deltaKg !== null && deltaKg > 0 ? ` · +${formatWeight(deltaKg, weightUnit)}` : ""}`}
                     </EditableText>
                   </View>
                   <EditableText
@@ -131,7 +132,7 @@ export default function AchievementsScreen() {
                     className="body-md font-body-bold text-text-primary"
                     style={{ flexShrink: 0 }}
                   >
-                    {`${entry.weightKg} kg × ${entry.reps}`}
+                    {`${formatWeight(entry.weightKg, weightUnit)} × ${entry.reps}`}
                   </EditableText>
                 </View>
               </View>

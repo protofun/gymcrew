@@ -1,15 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBack } from "@/lib/navigation";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { EditableText } from "@/components/EditableText";
-import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
-import { MY_GYM_NAME, PLAYER_LEADERBOARD, type LeaderboardPlayer } from "@/data/player-leaderboard";
-import { DIVISION_COLOR, divisionForCrewPower, divisionForPlayerPower, type Division } from "@/lib/division";
+import { api, isApiConfigured, type ApiCrewLeaderboardEntry, type ApiPlayerLeaderboardEntry } from "@/lib/api";
+import { DIVISION_COLOR, type Division } from "@/lib/division";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors, fontFamily } from "@/theme";
@@ -19,10 +19,7 @@ type Scope = (typeof SCOPES)[number];
 
 const MEDAL_COLOR = ["#FFD700", "#C0C0C0", "#CD7F32"] as const;
 
-type Avatar =
-  | { type: "image"; uri: string }
-  | { type: "icon"; name: keyof typeof Ionicons.glyphMap; tint: string }
-  | { type: "crewIcon"; iconKey: string };
+type Avatar = { type: "image"; uri: string } | { type: "crewIcon"; iconKey: string };
 
 type Entry = { id: string; name: string; score: number; avatar: Avatar; isMe: boolean };
 
@@ -40,17 +37,7 @@ function EntryAvatar({ avatar, size }: { avatar: Avatar; size: number }) {
   if (avatar.type === "image") {
     return <Image source={{ uri: avatar.uri }} className="bg-divider" style={{ width: size, height: size, borderRadius: size / 2 }} />;
   }
-  if (avatar.type === "crewIcon") {
-    return <CrewIconBadge iconKey={avatar.iconKey} size={size} />;
-  }
-  return (
-    <View
-      className="items-center justify-center"
-      style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: `${avatar.tint}26` }}
-    >
-      <Ionicons name={avatar.name} size={size * 0.5} color={avatar.tint} />
-    </View>
-  );
+  return <CrewIconBadge iconKey={avatar.iconKey} size={size} />;
 }
 
 // Matches ContributorsList's row styling (trophy medal for the top 3, yellow-tinted highlight card)
@@ -120,74 +107,52 @@ function LeaderboardList({ entries }: { entries: Entry[] }) {
   );
 }
 
+function playerEntry(player: ApiPlayerLeaderboardEntry): Entry {
+  return { id: player.id, name: player.name, score: player.power, avatar: { type: "image", uri: player.avatarUrl }, isMe: player.isMe };
+}
+
+function crewEntry(crew: ApiCrewLeaderboardEntry, myCrewId: string): Entry {
+  return { id: crew.id, name: crew.name, score: crew.xp, avatar: { type: "crewIcon", iconKey: crew.icon }, isMe: crew.id === myCrewId };
+}
+
 export default function CrewLeaderboardScreen() {
   const insets = useSafeAreaInsets();
   const [scope, setScope] = useState<Scope>("Crews");
-  const myCrewName = useCrewStore((state) => state.name);
-  const myCrewPower = useCrewStore((state) => state.crewPower);
-  const myCrewDivision = useCrewStore((state) => state.division);
-  const myCrewIcon = useCrewStore((state) => state.icon);
-  const fullName = useOnboardingStore((state) => state.onboarding.fullName);
-  const myName = fullName?.trim().split(" ")[0] || "You";
+  const myCrewId = useCrewStore((state) => state.id);
+  const myGymName = useOnboardingStore((state) => state.onboarding.gymName)?.trim() || null;
 
-  const me: LeaderboardPlayer = {
-    id: "me",
-    name: myName,
-    avatarUrl: "https://picsum.photos/seed/gymcrew-me/128",
-    rankTier: "champion",
-    power: 7200,
-    gymName: MY_GYM_NAME,
-  };
-  const myGlobalDivision = divisionForPlayerPower(me.power);
+  // Real data — see backend/routes/crews.php's respondWithCrewLeaderboard and
+  // backend/routes/leaderboards.php. Replaces the old static `OTHER_CREWS_POWER`/`PLAYER_LEADERBOARD`
+  // mocks (including a hardcoded stand-in for "you"). Fetched once for all three scopes rather than
+  // per tab switch — three light queries, no loading flash when flipping tabs.
+  const [crewsData, setCrewsData] = useState<{ crews: ApiCrewLeaderboardEntry[]; myDivision: string | null }>({ crews: [], myDivision: null });
+  const [globalData, setGlobalData] = useState<{ players: ApiPlayerLeaderboardEntry[]; myDivision: string | null }>({ players: [], myDivision: null });
+  const [gymData, setGymData] = useState<{ players: ApiPlayerLeaderboardEntry[]; myDivision: string | null }>({ players: [], myDivision: null });
 
-  // My crew's division is tracked for real via challenge XP (crew-store); the mock rival crews have
-  // no simulated XP history, so their division is approximated straight from their power score.
-  // Crews and players only ever see their own division — no cross-division comparisons.
-  const crewPool: Entry[] = [
-    ...OTHER_CREWS_POWER.filter((crew) => divisionForCrewPower(crew.power) === myCrewDivision).map((crew) => ({
-      id: crew.name,
-      name: crew.name,
-      score: crew.power,
-      avatar: { type: "icon" as const, name: crew.icon, tint: crew.tint },
-      isMe: false,
-    })),
-    {
-      id: "me-crew",
-      name: myCrewName,
-      score: myCrewPower,
-      avatar: { type: "crewIcon" as const, iconKey: myCrewIcon },
-      isMe: true,
-    },
-  ].sort((a, b) => b.score - a.score);
+  useEffect(() => {
+    if (!isApiConfigured) return;
+    api.getCrewLeaderboard().then(setCrewsData).catch((error) => console.warn("Failed to load crew leaderboard", error));
+    api.getPlayerLeaderboard("global").then(setGlobalData).catch((error) => console.warn("Failed to load global leaderboard", error));
+    api.getPlayerLeaderboard("gym").then(setGymData).catch((error) => console.warn("Failed to load gym leaderboard", error));
+  }, []);
 
-  const globalPool: Entry[] = [...PLAYER_LEADERBOARD, me]
-    .filter((player) => divisionForPlayerPower(player.power) === myGlobalDivision)
-    .map((player) => ({
-      id: player.id,
-      name: player.name,
-      score: player.power,
-      avatar: { type: "image" as const, uri: player.avatarUrl },
-      isMe: player.id === "me",
-    }))
-    .sort((a, b) => b.score - a.score);
+  const crewPool: Entry[] = crewsData.crews.map((crew) => crewEntry(crew, myCrewId));
+  const globalPool: Entry[] = globalData.players.map(playerEntry);
+  const gymPool: Entry[] = gymData.players.map(playerEntry);
 
-  const gymPool: Entry[] = [...PLAYER_LEADERBOARD.filter((player) => player.gymName === MY_GYM_NAME), me]
-    .map((player) => ({
-      id: player.id,
-      name: player.name,
-      score: player.power,
-      avatar: { type: "image" as const, uri: player.avatarUrl },
-      isMe: player.id === "me",
-    }))
-    .sort((a, b) => b.score - a.score);
+  const myCrewDivision = (crewsData.myDivision ?? "Rookie") as Division;
+  const myGlobalDivision = (globalData.myDivision ?? "Rookie") as Division;
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/crew")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Leaderboard</Text>
+        <Pressable onPress={() => router.push("/crew/all-divisions")} hitSlop={8} style={{ position: "absolute", right: 16 }}>
+          <Ionicons name="information-circle-outline" size={24} color={colors.neutral.textSecondary} />
+        </Pressable>
       </View>
 
       <View className="mx-4 mt-4 gap-1">
@@ -199,7 +164,7 @@ export default function CrewLeaderboardScreen() {
           <Text className="caption font-body-semibold text-text-secondary">
             {scope === "Crews" && "Crews rank within their own division — no mismatches."}
             {scope === "Global" && "Ranked within your division. Climb to earn a bigger stage."}
-            {scope === "Gym" && MY_GYM_NAME}
+            {scope === "Gym" && (myGymName || "Set your gym in Settings to see gym rankings")}
           </Text>
         </View>
       </View>

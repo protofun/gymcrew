@@ -3,12 +3,12 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
-import { IconBadge } from "@/components/IconBadge";
 import { SkewedStat } from "@/components/SkewedStat";
 import { Stepper } from "@/components/Stepper";
 import { api, isApiConfigured } from "@/lib/api";
-import { toDateKey } from "@/lib/date";
+import { formatDiaryDate, fromDateKey, toDateKey } from "@/lib/date";
 import { MEAL_SLOTS, mealSlotForTime, type MealSlot } from "@/lib/meal-slot";
 import { NUTRITION_COLORS } from "@/lib/nutrition-colors";
 import { scaleExtendedMacros, scaleMacros } from "@/lib/nutrition-macros";
@@ -24,7 +24,9 @@ import { colors } from "@/theme";
  * just-finished and a historical workout). */
 export default function FoodDetailScreen() {
   const insets = useSafeAreaInsets();
-  const { id, logId } = useLocalSearchParams<{ id: string; logId?: string }>();
+  const posthog = usePostHog();
+  const { id, logId, date } = useLocalSearchParams<{ id: string; logId?: string; date?: string }>();
+  const targetDateKey = date ?? toDateKey(new Date());
 
   const customFoods = useCustomFoodsStore((state) => state.foods);
   const offFoods = useOffFoodsCacheStore((state) => state.foods);
@@ -81,8 +83,16 @@ export default function FoodDetailScreen() {
       mealSlot,
       quantity,
       unit: food.servingUnit,
-      dateKey: toDateKey(new Date()),
+      dateKey: targetDateKey,
       ...macros,
+    });
+    posthog.capture("food_logged", {
+      source: food.source,
+      meal_slot: mealSlot,
+      quantity,
+      unit: food.servingUnit,
+      calories: macros.calories,
+      is_today: targetDateKey === toDateKey(new Date()),
     });
     router.replace("/nutrition");
   }
@@ -100,12 +110,14 @@ export default function FoodDetailScreen() {
       dateKey: existingLog.dateKey,
       ...macros,
     });
+    posthog.capture("food_log_updated", { meal_slot: mealSlot, quantity, calories: macros.calories });
     handleBack();
   }
 
   function handleRemove() {
     if (!existingLog) return;
     removeEntry(existingLog.id);
+    posthog.capture("food_log_removed", { meal_slot: existingLog.mealSlot, calories: existingLog.calories });
     handleBack();
   }
 
@@ -139,7 +151,14 @@ export default function FoodDetailScreen() {
         </Pressable>
         <Text className="heading-4 text-text-primary">{logId ? "Edit Entry" : "Food"}</Text>
         {food && (
-          <Pressable onPress={() => toggleFavorite(food.id)} hitSlop={8} style={{ position: "absolute", right: 16 }}>
+          <Pressable
+            onPress={() => {
+              toggleFavorite(food.id);
+              posthog.capture(isFavorite ? "food_unfavorited" : "food_favorited", { source: food.source });
+            }}
+            hitSlop={8}
+            style={{ position: "absolute", right: 16 }}
+          >
             <Ionicons name={isFavorite ? "star" : "star-outline"} size={22} color={isFavorite ? colors.brand.yellow : colors.neutral.textSecondary} />
           </Pressable>
         )}
@@ -172,25 +191,25 @@ export default function FoodDetailScreen() {
           </View>
         )}
 
-        <View className="flex-row gap-3">
-          <View className="flex-1 items-center gap-1.5 rounded-2xl border border-divider bg-surface p-3">
-            <IconBadge icon="flame-outline" color={NUTRITION_COLORS.calories} size={28} />
-            <SkewedStat size={20} color={colors.neutral.textPrimary}>{String(macros.calories)}</SkewedStat>
+        <View className="flex-row gap-2.5">
+          <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
+            <Ionicons name="flame" size={16} color={NUTRITION_COLORS.calories} />
+            <SkewedStat size={19} color={colors.neutral.textPrimary}>{String(macros.calories)}</SkewedStat>
             <Text className="caption text-text-secondary">Calories</Text>
           </View>
-          <View className="flex-1 items-center gap-1.5 rounded-2xl border border-divider bg-surface p-3">
-            <IconBadge icon="barbell-outline" color={NUTRITION_COLORS.protein} size={28} />
-            <SkewedStat size={20} color={colors.neutral.textPrimary}>{`${macros.proteinG}g`}</SkewedStat>
+          <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
+            <Ionicons name="barbell" size={16} color={NUTRITION_COLORS.protein} />
+            <SkewedStat size={19} color={colors.neutral.textPrimary}>{`${macros.proteinG}g`}</SkewedStat>
             <Text className="caption text-text-secondary">Protein</Text>
           </View>
-          <View className="flex-1 items-center gap-1.5 rounded-2xl border border-divider bg-surface p-3">
-            <IconBadge icon="flash-outline" color={NUTRITION_COLORS.carbs} size={28} />
-            <SkewedStat size={20} color={colors.neutral.textPrimary}>{`${macros.carbsG}g`}</SkewedStat>
+          <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
+            <Ionicons name="flash" size={16} color={NUTRITION_COLORS.carbs} />
+            <SkewedStat size={19} color={colors.neutral.textPrimary}>{`${macros.carbsG}g`}</SkewedStat>
             <Text className="caption text-text-secondary">Carbs</Text>
           </View>
-          <View className="flex-1 items-center gap-1.5 rounded-2xl border border-divider bg-surface p-3">
-            <IconBadge icon="water-outline" color={NUTRITION_COLORS.fat} size={28} />
-            <SkewedStat size={20} color={colors.neutral.textPrimary}>{`${macros.fatG}g`}</SkewedStat>
+          <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
+            <Ionicons name="water" size={16} color={NUTRITION_COLORS.fat} />
+            <SkewedStat size={19} color={colors.neutral.textPrimary}>{`${macros.fatG}g`}</SkewedStat>
             <Text className="caption text-text-secondary">Fat</Text>
           </View>
         </View>
@@ -268,7 +287,9 @@ export default function FoodDetailScreen() {
           </View>
         ) : (
           <Pressable onPress={handleAdd} disabled={!food} className={`items-center rounded-full py-4 ${food ? "bg-brand-yellow" : "bg-surface"}`}>
-            <Text className={`body-md font-body-semibold ${food ? "text-brand-iron" : "text-text-secondary"}`}>Add to Today&apos;s Log</Text>
+            <Text className={`body-md font-body-semibold ${food ? "text-brand-iron" : "text-text-secondary"}`}>
+              {`Add to ${formatDiaryDate(fromDateKey(targetDateKey))}'s Log`}
+            </Text>
           </Pressable>
         )}
       </ScrollView>

@@ -1,12 +1,14 @@
 import { router } from "expo-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Image, ScrollView, Text, View } from "react-native";
 import { usePostHog } from "posthog-react-native";
 
+import { DatePickerModal } from "@/components/DatePickerModal";
 import { WorkoutStartCard } from "@/components/WorkoutStartCard";
 import { WorkoutWeekStrip } from "@/components/WorkoutWeekStrip";
 import { images } from "@/constants/images";
 import { EXERCISE_BY_ID } from "@/data/exercises";
+import { addDays, toDateKey } from "@/lib/date";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
 import { computeMuscleGroupRanks } from "@/lib/muscle-group-rank";
 import type { RankProfile } from "@/lib/rank";
@@ -22,10 +24,12 @@ export default function LogScreen() {
   const startWorkout = useActiveWorkoutStore((state) => state.startWorkout);
   const discardWorkout = useActiveWorkoutStore((state) => state.discardWorkout);
   const setName = useActiveWorkoutStore((state) => state.setName);
+  const setLogDateKey = useActiveWorkoutStore((state) => state.setLogDateKey);
   const addExercise = useActiveWorkoutStore((state) => state.addExercise);
   const addSet = useActiveWorkoutStore((state) => state.addSet);
   const workouts = useWorkoutHistoryStore((state) => state.workouts);
   const posthog = usePostHog();
+  const [pastDatePickerVisible, setPastDatePickerVisible] = useState(false);
 
   const preferences = useWorkoutSplitStore((state) => state.preferences);
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
@@ -44,6 +48,15 @@ export default function LogScreen() {
   function handleStartWorkout() {
     startWorkout();
     posthog.capture("workout_started", { source: "quick_start" });
+    router.push("/workout/active");
+  }
+
+  function handleStartPastWorkout(date: Date) {
+    setPastDatePickerVisible(false);
+    discardWorkout();
+    startWorkout();
+    setLogDateKey(toDateKey(date));
+    posthog.capture("workout_started", { source: "past_date" });
     router.push("/workout/active");
   }
 
@@ -98,6 +111,12 @@ export default function LogScreen() {
             onPress={() => router.push("/workout/templates")}
           />
           <WorkoutStartCard icon="trending-up-outline" title={smartSplitCard.title} description={smartSplitCard.description} onPress={smartSplitCard.onPress} />
+          <WorkoutStartCard
+            icon="calendar-outline"
+            title="Log a Past Workout"
+            description="Forgot to log a day? Backfill it — won't count toward XP, streaks, PRs, or Crew War"
+            onPress={() => setPastDatePickerVisible(true)}
+          />
         </View>
       </View>
 
@@ -108,6 +127,15 @@ export default function LogScreen() {
           onSeeAll={() => router.push("/workout/history")}
         />
       )}
+
+      <DatePickerModal
+        visible={pastDatePickerVisible}
+        title="Log a Past Workout"
+        minDate={addDays(new Date(), -90)}
+        maxDate={addDays(new Date(), -1)}
+        onClose={() => setPastDatePickerVisible(false)}
+        onSelect={handleStartPastWorkout}
+      />
     </ScrollView>
   );
 }

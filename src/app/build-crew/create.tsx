@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Image, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
 
+import { goBack } from "@/lib/navigation";
 import { CrewAvatarGeneratorModal } from "@/components/CrewAvatarGeneratorModal";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
@@ -38,7 +39,7 @@ export default function CreateCrewScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
       <ScrollView className="flex-1" contentContainerClassName="px-6 pb-6 pt-4" showsVerticalScrollIndicator={false}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={8}
           className="mb-2 h-9 w-9 items-center justify-center rounded-full border border-divider"
         >

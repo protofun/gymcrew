@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBack } from "@/lib/navigation";
 import { ContributorsList } from "@/components/ContributorsList";
 import { EditableText } from "@/components/EditableText";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -18,6 +19,8 @@ import {
 } from "@/lib/challenge-progress";
 import { challengeHeroImage } from "@/lib/challenge-visuals";
 import { fromDateKey, toDateKey } from "@/lib/date";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
+import { displayWeight } from "@/lib/units";
 import { useAdminChallengeStore } from "@/store/admin-challenge-store";
 import { useChallengeStore } from "@/store/challenge-store";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
@@ -65,6 +68,7 @@ export default function ChallengeDetailScreen() {
   const adminChallenges = useAdminChallengeStore((state) => state.challenges);
   const membersActivity = useCrewActivityStore((state) => state.membersActivity);
   const memberActivityLookup = (memberId: string) => membersActivity[memberId] ?? { recentWorkouts: [], records: {} };
+  const weightUnit = useWeightUnit();
 
   const custom = id?.startsWith("custom-") ? customChallenges.find((challenge) => challenge.id === id) : undefined;
   const admin = !custom && id?.startsWith("admin-challenge-") ? adminChallenges.find((challenge) => challenge.id === id) : undefined;
@@ -75,7 +79,7 @@ export default function ChallengeDetailScreen() {
     return (
       <View style={{ flex: 1, paddingTop: insets.top }} className="items-center justify-center bg-background px-6">
         <Text className="body-md text-text-secondary">This challenge could not be found.</Text>
-        <Pressable onPress={() => router.back()} className="mt-4">
+        <Pressable onPress={() => goBack("/(tabs)/crew")} className="mt-4">
           <Text className="body-md font-body-semibold text-brand-yellow">Go back</Text>
         </Pressable>
       </View>
@@ -84,9 +88,16 @@ export default function ChallengeDetailScreen() {
 
   const name = custom ? custom.name : admin ? admin.name : template!.name;
   const description = custom ? custom.description : admin ? admin.description : template!.description;
-  const unit = custom ? custom.unit : admin ? admin.unit : template!.unit;
+  const rawUnit = custom ? custom.unit : admin ? admin.unit : template!.unit;
   const metric: ChallengeMetric = custom ? custom.metric : admin ? admin.metric : template!.metric;
-  const target = custom ? custom.target : admin ? admin.perMemberTarget * members.length : template!.perMemberTarget * members.length;
+  const rawTarget = custom ? custom.target : admin ? admin.perMemberTarget * members.length : template!.perMemberTarget * members.length;
+
+  // Only a "kg" challenge is a real stored weight — reps/sets/workouts pass through untouched, or
+  // converting them would turn "10,000 reps" into nonsense.
+  const isWeightChallenge = rawUnit === "kg";
+  const unit = isWeightChallenge ? weightUnit : rawUnit;
+  const toDisplay = (value: number) => (isWeightChallenge ? displayWeight(value, weightUnit) : value);
+  const target = toDisplay(rawTarget);
 
   let startKey: string;
   let endKey: string;
@@ -109,16 +120,27 @@ export default function ChallengeDetailScreen() {
   }
 
   const myContribution = progressMap[id!] ?? 0;
-  const progress = crewChallengeProgress(metric, members, myContribution, startKey, endKey, memberActivityLookup);
+  const progress = toDisplay(crewChallengeProgress(metric, members, myContribution, startKey, endKey, memberActivityLookup));
   const isComplete = progress >= target || Date.now() > endsAt;
   const percent = Math.min(100, Math.round((progress / Math.max(1, target)) * 100));
 
-  const contributors = perMemberContributions(metric, members, myContribution, startKey, endKey, memberActivityLookup);
-  const trend = challengeProgressTrend(metric, members, myContribution, startKey, endKey, memberActivityLookup);
-  const feed = challengeFeed(metric, unit, members, startKey, endKey, memberActivityLookup);
+  const contributors = perMemberContributions(metric, members, myContribution, startKey, endKey, memberActivityLookup).map(
+    (entry) => ({ ...entry, amount: toDisplay(entry.amount) }),
+  );
+  const trend = challengeProgressTrend(metric, members, myContribution, startKey, endKey, memberActivityLookup).map((point) => ({
+    ...point,
+    value: toDisplay(point.value),
+  }));
+  const feed = challengeFeed(metric, unit, members, startKey, endKey, memberActivityLookup).map((entry) => ({
+    ...entry,
+    amount: toDisplay(entry.amount),
+  }));
 
   const opponent = custom
-    ? { name: custom.opponentCrewName, progress: simulatedOpponentProgress(custom.id, custom.target, custom.startedAt, custom.endsAt) }
+    ? {
+        name: custom.opponentCrewName,
+        progress: toDisplay(simulatedOpponentProgress(custom.id, custom.target, custom.startedAt, custom.endsAt)),
+      }
     : null;
 
   return (
@@ -132,7 +154,7 @@ export default function ChallengeDetailScreen() {
           />
 
           <View style={{ paddingTop: insets.top + 8 }} className="absolute left-0 right-0 top-0 flex-row items-center px-4">
-            <Pressable onPress={() => router.back()} hitSlop={8} className="h-9 w-9 items-center justify-center rounded-full bg-background/60">
+            <Pressable onPress={() => goBack("/(tabs)/crew")} hitSlop={8} className="h-9 w-9 items-center justify-center rounded-full bg-background/60">
               <Ionicons name="chevron-back" size={22} color={colors.brand.white} />
             </Pressable>
           </View>

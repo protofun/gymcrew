@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { RankBadge } from "@/components/RankBadge";
 import { images } from "@/constants/images";
@@ -41,6 +43,7 @@ function tierSpreadToIntensity(spread: [MuscleGroup, number][]): Partial<Record<
 
 export default function WorkoutSplitRevealScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const preferences = useWorkoutSplitStore((state) => state.preferences);
   const acceptPlan = useWorkoutSplitStore((state) => state.acceptPlan);
 
@@ -102,6 +105,7 @@ export default function WorkoutSplitRevealScreen() {
   function handleAccept() {
     if (!plan) return;
     acceptPlan(plan);
+    posthog.capture("workout_split_accepted");
     setAccepted(true);
   }
 
@@ -121,7 +125,7 @@ export default function WorkoutSplitRevealScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/profile")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Your Split Is Ready</Text>

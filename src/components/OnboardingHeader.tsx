@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
-import { router } from "expo-router";
 
+import { goBack } from "@/lib/navigation";
 type OnboardingHeaderProps = {
   title: string;
   subtitle: string;
@@ -11,7 +11,7 @@ export function OnboardingHeader({ title, subtitle }: OnboardingHeaderProps) {
   return (
     <View className="gap-6">
       <Pressable
-        onPress={() => router.back()}
+        onPress={() => goBack()}
         hitSlop={12}
         className="h-6 w-6 items-center justify-center self-start"
       >

@@ -3,9 +3,11 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
 import { IconBadge } from "@/components/IconBadge";
 import { SkewedStat } from "@/components/SkewedStat";
+import { goBack } from "@/lib/navigation";
 import type { Macros } from "@/lib/nutrition-macros";
 import {
   ACTIVITY_LEVELS,
@@ -71,6 +73,7 @@ function MacroInput({ label, value, onChangeText, suffix }: { label: string; val
  * (never medical advice) and always overridable, per that section's explicit requirement. */
 export default function NutritionTargetsScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const onboarding = useOnboardingStore((state) => state.onboarding);
   const currentTargets = useNutritionTargetsStore((state) => state);
   const setTargets = useNutritionTargetsStore((state) => state.setTargets);
@@ -105,7 +108,8 @@ export default function NutritionTargetsScreen() {
   function handleUseSuggested() {
     if (!suggested || !activityLevel || !goal) return;
     setTargets(suggested, goal, activityLevel, false);
-    router.back();
+    posthog.capture("nutrition_targets_set", { goal, activity_level: activityLevel, is_custom: false, calories: suggested.calories });
+    goBack("/nutrition");
   }
 
   function handleSaveManual() {
@@ -116,7 +120,8 @@ export default function NutritionTargetsScreen() {
       fatG: num(manualFat, 0),
     };
     setTargets(macros, goal ?? "custom", activityLevel ?? "moderate", true);
-    router.back();
+    posthog.capture("nutrition_targets_set", { goal: goal ?? "custom", activity_level: activityLevel ?? "moderate", is_custom: true, calories: macros.calories });
+    goBack("/nutrition");
   }
 
   return (

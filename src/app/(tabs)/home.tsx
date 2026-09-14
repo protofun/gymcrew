@@ -2,7 +2,9 @@ import { router } from "expo-router";
 import { useMemo } from "react";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 import { usePostHog } from "posthog-react-native";
+import { AttachStep } from "react-native-spotlight-tour";
 
+import { ATTACH_INDEXES } from "@/components/AppTourOverlay";
 import { BiggestOpportunityCard } from "@/components/BiggestOpportunityCard";
 import { CrewCard } from "@/components/CrewCard";
 import { CrewWarWidget } from "@/components/CrewWarWidget";
@@ -11,6 +13,7 @@ import { HomeNutritionWidget } from "@/components/HomeNutritionWidget";
 import { LastWorkoutWidget } from "@/components/LastWorkoutWidget";
 import { MuscleSuggestions } from "@/components/MuscleSuggestions";
 import { VisualTrainingCalendar } from "@/components/VisualTrainingCalendar";
+import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { WelcomeWidget } from "@/components/WelcomeWidget";
 import { deriveWorkoutSessions } from "@/lib/workout-sessions";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
@@ -49,7 +52,10 @@ export default function HomeScreen() {
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
-      <WelcomeWidget name={firstName} onPressStartWorkout={handleStartWorkout} />
+      <AnnouncementBanner />
+      <AttachStep index={ATTACH_INDEXES.home} fill>
+        <WelcomeWidget name={firstName} onPressStartWorkout={handleStartWorkout} />
+      </AttachStep>
       <CrewWarWidget />
       <View className="mx-4 mt-8">
         <VisualTrainingCalendar workouts={workouts} gender={gender} />

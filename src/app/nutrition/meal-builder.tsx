@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
 import { FoodPickerModal } from "@/components/FoodPickerModal";
 import { MacroTotalsBar } from "@/components/MacroTotalsBar";
@@ -24,6 +25,7 @@ const KIND_COPY: Record<MealKind, { title: string; createTitle: string; icon: ke
  * spec actually asks for. */
 export default function MealBuilderScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const { kind: kindParam, id } = useLocalSearchParams<{ kind?: MealKind; id?: string }>();
   const kind: MealKind = kindParam === "shake" ? "shake" : "meal";
   const copy = KIND_COPY[kind];
@@ -69,6 +71,11 @@ export default function MealBuilderScreen() {
       totalProteinG: totals.proteinG,
       totalCarbsG: totals.carbsG,
       totalFatG: totals.fatG,
+    });
+    posthog.capture(existing ? "meal_updated" : "meal_created", {
+      kind,
+      ingredient_count: items.length,
+      calories: totals.calories,
     });
     router.replace("/nutrition/my-meals");
   }

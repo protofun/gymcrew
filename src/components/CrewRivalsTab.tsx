@@ -17,6 +17,8 @@ import {
 } from "@/lib/crew-stats";
 import { toDateKey } from "@/lib/date";
 import type { Division } from "@/lib/division";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
+import { displayWeight } from "@/lib/units";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { CURRENT_MEMBER_ID, useCrewStore } from "@/store/crew-store";
 import { useCrewDuelStore } from "@/store/crew-duel-store";
@@ -151,6 +153,7 @@ export function CrewRivalsTab() {
   const [challengingId, setChallengingId] = useState<string | null>(null);
 
   const { user } = useUser();
+  const weightUnit = useWeightUnit();
   const members = useCrewStore((state) => state.members);
   const myWorkouts = useWorkoutHistoryStore((state) => state.workouts);
   const membersActivity = useCrewActivityStore((state) => state.membersActivity);
@@ -195,7 +198,14 @@ export function CrewRivalsTab() {
         ? realTotalWorkoutsInRange(myWorkouts, startKey, endKey)
         : realTotalVolumeInRange(myWorkouts, startKey, endKey);
 
-  const leaderboard = perMemberContributions({ type: metricKey }, members, myContribution, startKey, endKey, memberActivityLookup);
+  const rawLeaderboard = perMemberContributions({ type: metricKey }, members, myContribution, startKey, endKey, memberActivityLookup);
+  // Volume is stored in kg regardless of unit — convert to the user's current display preference;
+  // other metrics (sets, workouts) are unit-less counts and pass through untouched.
+  const leaderboard =
+    metricKey === "totalVolume"
+      ? rawLeaderboard.map((entry) => ({ ...entry, amount: displayWeight(entry.amount, weightUnit) }))
+      : rawLeaderboard;
+  const metricUnit = metricKey === "totalVolume" ? weightUnit : metric.unit;
   const leader = leaderboard[0];
 
   const myDuels = duels.filter((duel) => duel.challengerId === user?.id || duel.opponentId === user?.id);
@@ -239,7 +249,7 @@ export function CrewRivalsTab() {
       </Animated.View>
 
       {leader && leader.amount > 0 && (
-        <MvpSpotlight leader={leader} division={divisionFor(leader.member.id, leader.member.division)} unit={metric.unit} />
+        <MvpSpotlight leader={leader} division={divisionFor(leader.member.id, leader.member.division)} unit={metricUnit} />
       )}
 
       <Animated.View entering={FadeInUp.delay(180).springify().damping(16).mass(0.6)} className="gap-2.5">
@@ -248,7 +258,7 @@ export function CrewRivalsTab() {
             key={contribution.member.id}
             contribution={contribution}
             rank={index + 1}
-            unit={metric.unit}
+            unit={metricUnit}
             division={divisionFor(contribution.member.id, contribution.member.division)}
             canChallenge={contribution.member.id !== CURRENT_MEMBER_ID}
             onChallenge={() => setChallengingId(contribution.member.id)}

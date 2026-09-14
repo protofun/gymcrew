@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
 import { IconBadge } from "@/components/IconBadge";
 import { SkewedStat } from "@/components/SkewedStat";
+import { nutritionIcons } from "@/constants/images";
 import type { ApiMeal, MealKind } from "@/lib/api";
 import { NUTRITION_COLORS } from "@/lib/nutrition-colors";
 import { useNutritionMealsStore } from "@/store/nutrition-meals-store";
@@ -18,25 +20,23 @@ const TABS: { key: MealKind; label: string; icon: keyof typeof Ionicons.glyphMap
 
 function MealRow({ meal, accent, onPress, onDelete }: { meal: ApiMeal; accent: string; onPress: () => void; onDelete: () => void }) {
   return (
-    <Pressable onPress={onPress} className="flex-row items-stretch overflow-hidden rounded-2xl border border-divider bg-surface">
-      <View style={{ width: 4, backgroundColor: accent }} />
-      <View className="flex-1 flex-row items-center gap-3 px-3.5 py-3">
-        <IconBadge icon={meal.kind === "shake" ? "nutrition-outline" : "restaurant-outline"} color={accent} size={36} />
-        <View className="flex-1 gap-0.5">
-          <Text className="body-md font-body-semibold text-text-primary" numberOfLines={1}>{meal.name}</Text>
-          <Text className="caption text-text-secondary">{`${meal.totalProteinG}g protein · ${meal.totalCarbsG}g carbs · ${meal.totalFatG}g fat`}</Text>
-        </View>
-        <SkewedStat size={20} color={colors.neutral.textPrimary}>{String(Math.round(meal.totalCalories))}</SkewedStat>
-        <Pressable onPress={onDelete} hitSlop={8} className="h-9 w-9 items-center justify-center">
-          <Ionicons name="trash-outline" size={17} color={colors.neutral.textSecondary} />
-        </Pressable>
+    <Pressable onPress={onPress} className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3.5">
+      <IconBadge icon={meal.kind === "shake" ? "nutrition" : "restaurant"} color={accent} size={44} />
+      <View className="flex-1 gap-0.5">
+        <Text className="body-md font-body-semibold text-text-primary" numberOfLines={1}>{meal.name}</Text>
+        <Text className="caption text-text-secondary">{`${meal.totalProteinG}g protein · ${meal.totalCarbsG}g carbs · ${meal.totalFatG}g fat`}</Text>
       </View>
+      <SkewedStat size={20} color={colors.neutral.textPrimary}>{String(Math.round(meal.totalCalories))}</SkewedStat>
+      <Pressable onPress={onDelete} hitSlop={8} className="h-9 w-9 items-center justify-center">
+        <Ionicons name="close-circle" size={18} color={colors.neutral.textSecondary} />
+      </Pressable>
     </Pressable>
   );
 }
 
 export default function MyMealsScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const { tab: tabParam } = useLocalSearchParams<{ tab?: MealKind }>();
   const [tab, setTab] = useState<MealKind>(tabParam === "shake" ? "shake" : "meal");
 
@@ -49,7 +49,14 @@ export default function MyMealsScreen() {
   function handleDelete(meal: ApiMeal) {
     Alert.alert(`Delete ${meal.kind === "shake" ? "Shake" : "Meal"}`, `Remove "${meal.name}" from ${activeTab.label}?`, [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => removeMeal(meal.id) },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          removeMeal(meal.id);
+          posthog.capture("meal_deleted", { kind: meal.kind });
+        },
+      },
     ]);
   }
 
@@ -91,7 +98,11 @@ export default function MyMealsScreen() {
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32, gap: 10 }} showsVerticalScrollIndicator={false}>
         {visibleMeals.length === 0 ? (
           <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-14">
-            <Ionicons name={activeTab.icon} size={28} color={colors.neutral.textSecondary} />
+            {tab === "meal" ? (
+              <Image source={nutritionIcons.myMeals} resizeMode="contain" style={{ width: 44, height: 44, opacity: 0.85 }} />
+            ) : (
+              <Ionicons name={activeTab.icon} size={28} color={colors.neutral.textSecondary} />
+            )}
             <Text className="body-md text-text-secondary">No {activeTab.label.toLowerCase()} saved yet.</Text>
             <Text className="body-sm text-text-secondary">Tap + to build one.</Text>
           </View>

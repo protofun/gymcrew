@@ -4,7 +4,7 @@ import { ActivityIndicator, FlatList, Modal, Platform, Pressable, Text, TextInpu
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CreateFoodForm } from "@/components/CreateFoodForm";
-import { IconBadge } from "@/components/IconBadge";
+import { FoodThumbnail } from "@/components/FoodThumbnail";
 import type { Food } from "@/data/nutrition-foods";
 import { useOffSearch } from "@/hooks/use-off-search";
 import { searchCustomFoods } from "@/lib/food-search";
@@ -24,18 +24,19 @@ function FoodRow({ food, isFavorite, onPress, onToggleFavorite }: { food: Food; 
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-center gap-3 border-b border-divider px-4 py-3"
+      className="flex-row items-center gap-3 px-4 py-2.5"
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
     >
-      <IconBadge icon={isOff ? "globe-outline" : "fast-food-outline"} color={isOff ? colors.semantic.info : colors.brand.yellow} size={32} iconSize={16} />
+      <FoodThumbnail photoUrl={food.photoUrl} icon={isOff ? "globe-outline" : "fast-food"} color={isOff ? colors.semantic.info : colors.brand.yellow} size={46} />
       <View className="flex-1 gap-0.5">
         <Text className="body-md font-body-semibold text-text-primary" numberOfLines={1}>
           {food.name}
           {food.brand ? <Text className="body-sm text-text-secondary"> — {food.brand}</Text> : null}
         </Text>
-        <Text className="caption text-text-secondary" numberOfLines={1}>
-          {`${Math.round(food.calories)} kcal · ${food.proteinG}g protein / ${food.servingSize}${food.servingUnit}`}
-        </Text>
+        <View className="flex-row items-center gap-2">
+          <Text className="caption font-body-bold" style={{ color: colors.brand.yellow }}>{`${Math.round(food.calories)} kcal`}</Text>
+          <Text className="caption text-text-secondary" numberOfLines={1}>{`${food.proteinG}g protein / ${food.servingSize}${food.servingUnit}`}</Text>
+        </View>
       </View>
       <Pressable onPress={onToggleFavorite} hitSlop={8} className="h-9 w-9 shrink-0 items-center justify-center">
         <Ionicons name={isFavorite ? "star" : "star-outline"} size={20} color={isFavorite ? colors.brand.yellow : colors.neutral.textSecondary} />

@@ -1,33 +1,25 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Keyboard, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
 import { BmiGauge, calculateBmi } from "@/components/BmiGauge";
 import { EditableText } from "@/components/EditableText";
+import { SkewedStat } from "@/components/SkewedStat";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { StatCard, StatRow, StatSectionHeader } from "@/components/StatRow";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
 import { toDateKey } from "@/lib/date";
+import { goBack } from "@/lib/navigation";
 import { kgToLbs, lbsToKg } from "@/lib/units";
 import type { WeightUnit } from "@/store/active-workout-store";
 import { useBodyLogStore } from "@/store/body-log-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { useProfileSnapshotStore } from "@/store/profile-snapshot-store";
-import { colors, fontFamily } from "@/theme";
+import { colors } from "@/theme";
 
 const RECENT_ENTRIES_LIMIT = 5;
-
-// Same accent-bar-card language as ChallengeCard on the crew page's Challenges tab — a colored
-// strip down the left edge and a bold skewed stat, here the logged weight instead of a title.
-const weightStatStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 30,
-  lineHeight: 30,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
 
 type BodyMetric = "weight" | "bodyFat" | "bmi";
 
@@ -42,6 +34,7 @@ function displayWeight(weightKg: number, unit: WeightUnit): number {
 }
 
 function AddEntrySheet({ visible, onClose, weightUnit }: { visible: boolean; onClose: () => void; weightUnit: WeightUnit }) {
+  const posthog = usePostHog();
   const addEntry = useBodyLogStore((state) => state.addEntry);
   const onboardingWeightKg = useOnboardingStore((state) => state.onboarding.weightKg);
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
@@ -76,9 +69,11 @@ function AddEntrySheet({ visible, onClose, weightUnit }: { visible: boolean; onC
     const parsedWeightKg = weightUnit === "kg" ? parsedInput : lbsToKg(parsedInput);
     const parsedBodyFat = parseFloat(bodyFatPercent.replace(",", "."));
 
-    addEntry({ weightKg: parsedWeightKg, bodyFatPercent: Number.isFinite(parsedBodyFat) && parsedBodyFat > 0 ? parsedBodyFat : null });
+    const hasBodyFat = Number.isFinite(parsedBodyFat) && parsedBodyFat > 0;
+    addEntry({ weightKg: parsedWeightKg, bodyFatPercent: hasBodyFat ? parsedBodyFat : null });
     // Keeps the rank system's bodyweight in sync with the latest log entry, same weight everywhere.
     setOnboardingData({ weightKg: parsedWeightKg });
+    posthog.capture("body_weight_logged", { hasBodyFat });
     setBodyFatPercent("");
     onClose();
   }
@@ -130,6 +125,7 @@ function AddEntrySheet({ visible, onClose, weightUnit }: { visible: boolean; onC
 
 export default function BodyLogScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const allEntries = useBodyLogStore((state) => state.entries);
   const removeEntry = useBodyLogStore((state) => state.removeEntry);
   const heightCm = useOnboardingStore((state) => state.onboarding.heightCm);
@@ -190,13 +186,13 @@ export default function BodyLogScreen() {
 
   function handleEntryPress(entryLoggedAt: number, entryWeightKg: number) {
     setSnapshot(entryLoggedAt, entryWeightKg);
-    router.back();
+    goBack("/(tabs)/profile");
   }
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/profile")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Body Log</Text>
@@ -309,9 +305,9 @@ export default function BodyLogScreen() {
                   <View style={{ width: 4, backgroundColor: colors.brand.yellow }} />
 
                   <View className="items-center justify-center gap-0.5 px-4 py-3">
-                    <EditableText id={`profile.bodyLog.entry.${entry.id}.weight`} style={weightStatStyle} className="text-brand-white" numberOfLines={1}>
+                    <SkewedStat id={`profile.bodyLog.entry.${entry.id}.weight`} size={30} color={colors.brand.white}>
                       {String(Math.round(displayWeight(entry.weightKg, weightUnit)))}
-                    </EditableText>
+                    </SkewedStat>
                     <Text className="caption font-body-semibold text-text-secondary">{weightUnit.toUpperCase()}</Text>
                   </View>
 
@@ -327,7 +323,14 @@ export default function BodyLogScreen() {
                     </View>
                   </View>
 
-                  <Pressable onPress={() => removeEntry(entry.id)} hitSlop={8} className="items-center justify-center pr-3">
+                  <Pressable
+                    onPress={() => {
+                      removeEntry(entry.id);
+                      posthog.capture("body_weight_entry_removed");
+                    }}
+                    hitSlop={8}
+                    className="items-center justify-center pr-3"
+                  >
                     <Ionicons name="trash-outline" size={17} color={colors.neutral.textSecondary} />
                   </Pressable>
                 </Pressable>

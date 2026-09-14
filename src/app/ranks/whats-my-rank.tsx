@@ -7,7 +7,9 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Line, Path } from "react-native-svg";
 import { captureRef } from "react-native-view-shot";
+import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { DatePickerModal } from "@/components/DatePickerModal";
 import { ExerciseInstructionsModal } from "@/components/ExerciseInstructionsModal";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
@@ -15,6 +17,7 @@ import { RankBadge } from "@/components/RankBadge";
 import { RankRevealCard } from "@/components/RankRevealCard";
 import { TierPickerSheet } from "@/components/TierPickerSheet";
 import type { Exercise } from "@/data/exercises";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { genericExerciseRankDetail, tierForExercise } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards, type LiftRankCard } from "@/lib/lift-rank-cards";
 import { checkLiftPlausibility, type PlausibilityResult } from "@/lib/rank-plausibility";
@@ -27,8 +30,10 @@ import {
   type HypotheticalRankResult,
   type SimulationPoint,
 } from "@/lib/rank-simulator";
+import { displayWeight, formatWeight, lbsToKg } from "@/lib/units";
 import { ensureExerciseTrackedOnRanksBoard } from "@/lib/workout-finish";
 import { estimateOneRepMax } from "@/lib/workout-metrics";
+import type { WeightUnit } from "@/store/active-workout-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore, type PersonalRecord } from "@/store/personal-records-store";
 import { colors, fontFamily } from "@/theme";
@@ -98,19 +103,33 @@ function rankAtWeight(lift: WizardLift, weightKg: number, reps: number, profile:
   return genericExerciseRankDetail(lift.exercise, weightKg, reps, profile);
 }
 
-function LogStep({ lift, onSubmit, onInfo }: { lift: WizardLift; onSubmit: (weightKg: number, reps: number) => void; onInfo: () => void }) {
+function LogStep({
+  lift,
+  weightUnit,
+  onSubmit,
+  onInfo,
+}: {
+  lift: WizardLift;
+  weightUnit: WeightUnit;
+  onSubmit: (weightKg: number, reps: number) => void;
+  onInfo: () => void;
+}) {
   // Bodyweight exercises (crunches, planks, ...) are legitimately 0kg — default that field to "0"
   // instead of blank so it doesn't read as "not filled in yet".
   const isBodyweight = lift.exercise.equipment === "body only";
-  const [weightInput, setWeightInput] = useState(lift.bestWeightKg > 0 ? String(lift.bestWeightKg) : isBodyweight ? "0" : "");
+  const [weightInput, setWeightInput] = useState(
+    lift.bestWeightKg > 0 ? String(displayWeight(lift.bestWeightKg, weightUnit)) : isBodyweight ? "0" : "",
+  );
   const [repsInput, setRepsInput] = useState(lift.bestReps > 0 ? String(lift.bestReps) : "");
 
   // Blank still parses to NaN (invalid) — only an explicit "0" (or the bodyweight default above)
-  // counts as a real zero-weight entry.
-  const weightKg = parseFloat(weightInput.replace(",", "."));
+  // counts as a real zero-weight entry. Entered in the user's chosen unit; converted to kg (the
+  // canonical storage unit) before it ever reaches rank math or `onSubmit`.
+  const enteredWeight = parseFloat(weightInput.replace(",", "."));
+  const weightKg = Number.isFinite(enteredWeight) ? (weightUnit === "lbs" ? lbsToKg(enteredWeight) : enteredWeight) : NaN;
   const reps = parseInt(repsInput, 10);
   const validInput = Number.isFinite(weightKg) && weightKg >= 0 && Number.isFinite(reps) && reps > 0;
-  const estimated1RM = validInput ? estimateOneRepMax(weightKg, reps) : null;
+  const estimated1RM = validInput ? displayWeight(estimateOneRepMax(weightKg, reps), weightUnit) : null;
 
   return (
     <View className="gap-5 px-4 pt-4">
@@ -129,7 +148,7 @@ function LogStep({ lift, onSubmit, onInfo }: { lift: WizardLift; onSubmit: (weig
 
       <View className="flex-row gap-3">
         <View className="flex-1 gap-1.5">
-          <Text className="caption font-body-semibold text-text-secondary">WEIGHT (KG)</Text>
+          <Text className="caption font-body-semibold text-text-secondary">WEIGHT ({weightUnit.toUpperCase()})</Text>
           <TextInput
             value={weightInput}
             onChangeText={setWeightInput}
@@ -155,7 +174,7 @@ function LogStep({ lift, onSubmit, onInfo }: { lift: WizardLift; onSubmit: (weig
       {estimated1RM !== null && (
         <View className="flex-row items-center gap-1.5">
           <Ionicons name="calculator-outline" size={13} color={colors.neutral.textSecondary} />
-          <Text className="caption text-text-secondary">Estimated 1RM: {estimated1RM}kg</Text>
+          <Text className="caption text-text-secondary">Estimated 1RM: {estimated1RM}{weightUnit}</Text>
         </View>
       )}
 
@@ -175,6 +194,7 @@ function RevealStep({
   lift,
   weightKg,
   reps,
+  weightUnit,
   profile,
   decision,
   sharing,
@@ -189,6 +209,7 @@ function RevealStep({
   lift: WizardLift;
   weightKg: number;
   reps: number;
+  weightUnit: WeightUnit;
   profile: RankProfile;
   decision: Decision;
   sharing: boolean;
@@ -211,9 +232,9 @@ function RevealStep({
           id={`ranks.whatsMyRank.${lift.exercise.id}`}
           name={lift.name}
           tier={tier}
-          weightKg={weightKg}
+          weightKg={displayWeight(weightKg, weightUnit)}
           reps={reps}
-          unit="kg"
+          unit={weightUnit}
           topPercent={topPercent}
           progressToNextTier={progressToNextTier}
           triggerKey={`${lift.exercise.id}-${weightKg}-${reps}`}
@@ -287,7 +308,7 @@ const CHART_HEIGHT = 130;
 const CHART_Y_AXIS_WIDTH = 28;
 const CHART_PADDING = 14;
 
-function RankProgressionChart({ points }: { points: SimulationPoint[] }) {
+function RankProgressionChart({ points, weightUnit }: { points: SimulationPoint[]; weightUnit: WeightUnit }) {
   const tierIndices = points.map((point) => point.tierIndex);
   const minTier = Math.min(...tierIndices);
   const maxTier = Math.max(...tierIndices);
@@ -353,7 +374,7 @@ function RankProgressionChart({ points }: { points: SimulationPoint[] }) {
       <View className="flex-row" style={{ paddingLeft: CHART_Y_AXIS_WIDTH }}>
         {points.map((point, index) => (
           <View key={index} className="items-center" style={{ width: (CHART_WIDTH - CHART_Y_AXIS_WIDTH) / points.length }}>
-            <Text className="caption font-body-bold text-text-primary">{point.weightKg}kg</Text>
+            <Text className="caption font-body-bold text-text-primary">{formatWeight(point.weightKg, weightUnit)}</Text>
             <Text className="caption text-text-secondary">{point.label}</Text>
           </View>
         ))}
@@ -362,7 +383,19 @@ function RankProgressionChart({ points }: { points: SimulationPoint[] }) {
   );
 }
 
-function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: WizardLift; currentWeightKg: number; currentReps: number; profile: RankProfile }) {
+function SimulatorStep({
+  lift,
+  currentWeightKg,
+  currentReps,
+  weightUnit,
+  profile,
+}: {
+  lift: WizardLift;
+  currentWeightKg: number;
+  currentReps: number;
+  weightUnit: WeightUnit;
+  profile: RankProfile;
+}) {
   const today = useMemo(() => new Date(), []);
   const minDate = useMemo(() => {
     const date = new Date(today);
@@ -378,7 +411,9 @@ function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: 
   // Either a target weight or a target rank drives the goal — never both at once, so switching
   // modes can't leave a stale value from the other one silently still in effect.
   const [goalMode, setGoalMode] = useState<"weight" | "rank">("weight");
-  const [goalInput, setGoalInput] = useState(String(Math.round(currentWeightKg + Math.max(5, currentWeightKg * 0.08))));
+  const [goalInput, setGoalInput] = useState(
+    String(Math.round(displayWeight(currentWeightKg + Math.max(5, currentWeightKg * 0.08), weightUnit))),
+  );
   const [targetTier, setTargetTier] = useState<RankTier | null>(null);
   const [tierPickerVisible, setTierPickerVisible] = useState(false);
   // Same either/or as the goal above: by default the timeline is auto-estimated from the goal
@@ -388,7 +423,10 @@ function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: 
   const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
 
-  const goalWeightKg = parseFloat(goalInput.replace(",", "."));
+  // Entered in the user's chosen unit; converted to kg (the canonical unit every rank-math function
+  // below expects) immediately, so nothing downstream needs to know a unit toggle exists.
+  const enteredGoalWeight = parseFloat(goalInput.replace(",", "."));
+  const goalWeightKg = Number.isFinite(enteredGoalWeight) ? (weightUnit === "lbs" ? lbsToKg(enteredGoalWeight) : enteredGoalWeight) : NaN;
   const validGoal = goalMode === "weight" ? Number.isFinite(goalWeightKg) && goalWeightKg > 0 : targetTier !== null;
 
   // `lift` is the lift as picked in step 1 — if the logged set just became a new PR, its
@@ -455,7 +493,7 @@ function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: 
         <View>
           <Text className="caption text-text-secondary">CURRENT</Text>
           <Text className="body-md font-body-bold text-text-primary">
-            {currentWeightKg}kg × {currentReps}
+            {formatWeight(currentWeightKg, weightUnit)} × {currentReps}
           </Text>
         </View>
         <RankBadge tier={simulatedLift.tier} size={30} />
@@ -495,7 +533,7 @@ function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: 
               className="heading-4 flex-1 text-text-primary"
               style={{ minWidth: 0 }}
             />
-            <Text className="body-md font-body-semibold text-text-secondary">kg × {currentReps}</Text>
+            <Text className="body-md font-body-semibold text-text-secondary">{weightUnit} × {currentReps}</Text>
           </View>
         ) : (
           <Pressable
@@ -574,7 +612,7 @@ function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: 
         <View className="flex-row items-center gap-2 rounded-2xl border border-divider bg-surface p-3">
           <Ionicons name="calculator-outline" size={14} color={colors.neutral.textSecondary} />
           <Text className="body-sm flex-1 text-text-secondary">
-            That takes {Math.round(effectiveGoalKg)}kg × {currentReps} on {lift.name}.
+            That takes {formatWeight(effectiveGoalKg, weightUnit)} × {currentReps} on {lift.name}.
           </Text>
         </View>
       )}
@@ -594,7 +632,7 @@ function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: 
               </View>
             )}
           </View>
-          <RankProgressionChart points={points} />
+          <RankProgressionChart points={points} weightUnit={weightUnit} />
         </View>
       )}
 
@@ -629,6 +667,7 @@ function SimulatorStep({ lift, currentWeightKg, currentReps, profile }: { lift: 
 
 export default function WhatsMyRankScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const [step, setStep] = useState<Step>("pick");
   const [selectedLift, setSelectedLift] = useState<WizardLift | null>(null);
   const [infoExercise, setInfoExercise] = useState<Exercise | null>(null);
@@ -641,6 +680,7 @@ export default function WhatsMyRankScreen() {
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
   const age = useOnboardingStore((state) => state.onboarding.age);
+  const weightUnit = useWeightUnit();
   const records = usePersonalRecordsStore((state) => state.records);
   const checkAndRecord = usePersonalRecordsStore((state) => state.checkAndRecord);
 
@@ -649,7 +689,7 @@ export default function WhatsMyRankScreen() {
 
   function handleBack() {
     if (step === "pick") {
-      router.back();
+      goBack("/(tabs)/ranks");
     } else if (step === "log") {
       setStep("pick");
     } else if (step === "reveal") {
@@ -677,6 +717,7 @@ export default function WhatsMyRankScreen() {
     if (!selectedLift) return;
     checkAndRecord(selectedLift.exercise.id, selectedLift.name, loggedWeightKg, loggedReps);
     ensureExerciseTrackedOnRanksBoard(selectedLift.exercise.id);
+    posthog.capture("rank_lift_logged", { exerciseId: selectedLift.exercise.id, weightKg: loggedWeightKg, reps: loggedReps });
     setDecision("logged");
   }
 
@@ -691,8 +732,10 @@ export default function WhatsMyRankScreen() {
     // Share.share returns a rejected promise on web when the browser has no native share sheet —
     // .catch() it so that never surfaces as an unhandled rejection.
     Share.share({
-      message: `I just hit ${formatRankTier(tier)} on ${selectedLift.name} (${loggedWeightKg}kg × ${loggedReps}) on GymCrew 💪`,
-    }).catch((error) => console.warn("Sharing is unavailable on this platform", error));
+      message: `I just hit ${formatRankTier(tier)} on ${selectedLift.name} (${formatWeight(loggedWeightKg, weightUnit)} × ${loggedReps}) on GymCrew 💪`,
+    })
+      .then(() => posthog.capture("rank_shared"))
+      .catch((error) => console.warn("Sharing is unavailable on this platform", error));
   }
 
   async function handleShare() {
@@ -706,6 +749,7 @@ export default function WhatsMyRankScreen() {
       const uri = await captureRef(shareCardRef, { format: "png", quality: 1 });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: "image/png" });
+        posthog.capture("rank_shared");
       } else {
         shareAsText();
       }
@@ -738,13 +782,16 @@ export default function WhatsMyRankScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Animated.View key={step} entering={FadeInUp.springify().damping(16).mass(0.6)}>
-            {step === "log" && <LogStep lift={selectedLift} onSubmit={handleLogSubmit} onInfo={() => setInfoExercise(selectedLift.exercise)} />}
+            {step === "log" && (
+              <LogStep lift={selectedLift} weightUnit={weightUnit} onSubmit={handleLogSubmit} onInfo={() => setInfoExercise(selectedLift.exercise)} />
+            )}
 
             {step === "reveal" && (
               <RevealStep
                 lift={selectedLift}
                 weightKg={loggedWeightKg}
                 reps={loggedReps}
+                weightUnit={weightUnit}
                 profile={profile}
                 decision={decision}
                 sharing={sharing}
@@ -752,13 +799,21 @@ export default function WhatsMyRankScreen() {
                 onLogAsPr={handleLogAsPr}
                 onViewOnly={handleViewOnly}
                 onOpenSimulator={() => setStep("simulator")}
-                onDone={() => router.back()}
+                onDone={() => goBack("/(tabs)/ranks")}
                 onShare={handleShare}
                 onInfo={() => setInfoExercise(selectedLift.exercise)}
               />
             )}
 
-            {step === "simulator" && <SimulatorStep lift={selectedLift} currentWeightKg={loggedWeightKg} currentReps={loggedReps} profile={profile} />}
+            {step === "simulator" && (
+              <SimulatorStep
+                lift={selectedLift}
+                currentWeightKg={loggedWeightKg}
+                currentReps={loggedReps}
+                weightUnit={weightUnit}
+                profile={profile}
+              />
+            )}
           </Animated.View>
         </ScrollView>
       )}
@@ -767,7 +822,7 @@ export default function WhatsMyRankScreen() {
         visible={step === "pick"}
         title="What's My Rank?"
         subtitle="Pick any exercise — see its rank, log it as a PR, or simulate your progress."
-        onClose={() => router.back()}
+        onClose={() => goBack("/(tabs)/ranks")}
         onSelect={handleSelectExercise}
         hideCreateRow
         renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, cards, records, profile)} size={34} />}

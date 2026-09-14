@@ -1,11 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, Text, TextInput, View, type ImageSourcePropType } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
+import { FoodThumbnail } from "@/components/FoodThumbnail";
 import { IconBadge } from "@/components/IconBadge";
 import { SkewedStat } from "@/components/SkewedStat";
+import { nutritionIcons } from "@/constants/images";
 import type { Food } from "@/data/nutrition-foods";
 import { useOffSearch } from "@/hooks/use-off-search";
 import { toDateKey } from "@/lib/date";
@@ -25,50 +28,69 @@ function FoodResultRow({ food, onPress }: { food: Food; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-center gap-3 border-b border-divider py-3"
+      className="flex-row items-center gap-3 rounded-2xl py-2"
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
     >
-      <IconBadge icon={isOff ? "globe-outline" : "fast-food-outline"} color={isOff ? colors.semantic.info : colors.brand.yellow} size={32} iconSize={16} />
+      <FoodThumbnail photoUrl={food.photoUrl} icon={isOff ? "globe-outline" : "fast-food"} color={isOff ? colors.semantic.info : colors.brand.yellow} size={48} />
       <View className="flex-1 gap-0.5">
         <Text className="body-md font-body-semibold text-text-primary" numberOfLines={1}>
           {food.name}
           {food.brand ? <Text className="body-sm text-text-secondary"> — {food.brand}</Text> : null}
         </Text>
-        <Text className="caption text-text-secondary">
-          {`${Math.round(food.calories)} kcal · ${food.proteinG}g protein / ${food.servingSize}${food.servingUnit}`}
-        </Text>
+        <View className="flex-row items-center gap-2">
+          <Text className="caption font-body-bold" style={{ color: colors.brand.yellow }}>{`${Math.round(food.calories)} kcal`}</Text>
+          <Text className="caption text-text-secondary">{`${food.proteinG}g protein / ${food.servingSize}${food.servingUnit}`}</Text>
+        </View>
       </View>
       <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
     </Pressable>
   );
 }
 
-function QuickTile({ icon, label, color, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; color: string; onPress: () => void }) {
+function QuickTile({
+  icon,
+  imageIcon,
+  label,
+  color,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  /** Takes precedence over `icon` when set — the illustrated sheet icon for concepts it covers
+   * (My Meals, My Foods, ...), falling back to the plain Ionicon everywhere else. */
+  imageIcon?: ImageSourcePropType;
+  label: string;
+  color: string;
+  onPress: () => void;
+}) {
   return (
     <Pressable onPress={onPress} className="flex-1 items-center gap-1.5 rounded-2xl border border-divider bg-surface py-3.5">
-      <IconBadge icon={icon} color={color} size={32} />
-      <Text className="caption font-body-semibold text-center text-text-secondary">{label}</Text>
+      {imageIcon ? (
+        <Image source={imageIcon} resizeMode="contain" style={{ width: 26, height: 26 }} />
+      ) : (
+        <Ionicons name={icon} size={22} color={color} />
+      )}
+      <Text className="caption font-body-bold text-center text-text-secondary">{label}</Text>
     </Pressable>
   );
 }
 
 function TileRow({ label, subtitle, icon, color, onPress }: { label: string; subtitle: string; icon: keyof typeof Ionicons.glyphMap; color: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} className="flex-row items-stretch overflow-hidden rounded-2xl border border-divider bg-surface">
-      <View style={{ width: 4, backgroundColor: color }} />
-      <View className="flex-1 flex-row items-center gap-3 px-3.5 py-3">
-        <IconBadge icon={icon} color={color} size={32} iconSize={16} />
-        <Text className="flex-1 body-md font-body-semibold text-text-primary" numberOfLines={1}>
-          {label}
-        </Text>
-        <Text className="caption text-text-secondary">{subtitle}</Text>
-      </View>
+    <Pressable onPress={onPress} className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3.5">
+      <IconBadge icon={icon} color={color} size={44} />
+      <Text className="flex-1 body-md font-body-semibold text-text-primary" numberOfLines={1}>
+        {label}
+      </Text>
+      <Text className="caption font-body-semibold" style={{ color }}>{subtitle}</Text>
     </Pressable>
   );
 }
 
 export default function AddFoodScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
+  const { date } = useLocalSearchParams<{ date?: string }>();
+  const targetDateKey = date ?? toDateKey(new Date());
   const [query, setQuery] = useState("");
 
   const customFoods = useCustomFoodsStore((state) => state.foods);
@@ -98,7 +120,7 @@ export default function AddFoodScreen() {
   );
 
   function openFood(foodId: string) {
-    router.push({ pathname: "/nutrition/food/[id]", params: { id: foodId } });
+    router.push({ pathname: "/nutrition/food/[id]", params: { id: foodId, date: targetDateKey } });
   }
 
   function quickAddRecent(entry: (typeof recentEntries)[number]) {
@@ -114,13 +136,14 @@ export default function AddFoodScreen() {
       proteinG: entry.proteinG,
       carbsG: entry.carbsG,
       fatG: entry.fatG,
-      dateKey: toDateKey(new Date()),
+      dateKey: targetDateKey,
     });
+    posthog.capture("food_logged", { source: "recent_quick_add", quantity: entry.quantity, unit: entry.unit, calories: entry.calories });
     router.replace("/nutrition");
   }
 
   function addMeal(mealId: string) {
-    router.push({ pathname: "/nutrition/meal/[id]", params: { id: mealId } });
+    router.push({ pathname: "/nutrition/meal/[id]", params: { id: mealId, date: targetDateKey } });
   }
 
   return (
@@ -130,7 +153,7 @@ export default function AddFoodScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Add Food</Text>
-        <Pressable onPress={() => router.push("/nutrition/scan-barcode")} hitSlop={8} style={{ position: "absolute", right: 16 }}>
+        <Pressable onPress={() => router.push({ pathname: "/nutrition/scan-barcode", params: { date: targetDateKey } })} hitSlop={8} style={{ position: "absolute", right: 16 }}>
           <Ionicons name="barcode-outline" size={24} color={colors.brand.yellow} />
         </Pressable>
       </View>
@@ -160,7 +183,7 @@ export default function AddFoodScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <FoodResultRow food={item} onPress={() => openFood(item.id)} />}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24, gap: 4 }}
           ListFooterComponent={
             offLoading ? (
               <View className="flex-row items-center justify-center gap-2 py-4">
@@ -181,7 +204,7 @@ export default function AddFoodScreen() {
             offLoading ? null : (
               <View className="items-center gap-3 py-14">
                 <Text className="body-md text-text-secondary">No foods found for &quot;{query}&quot;.</Text>
-                <Pressable onPress={() => router.push({ pathname: "/nutrition/create-food", params: { name: query } })} className="rounded-full bg-brand-yellow px-5 py-2.5">
+                <Pressable onPress={() => router.push({ pathname: "/nutrition/create-food", params: { name: query, date: targetDateKey } })} className="rounded-full bg-brand-yellow px-5 py-2.5">
                   <Text className="body-sm font-body-semibold text-brand-iron">Create &quot;{query}&quot;</Text>
                 </Pressable>
               </View>
@@ -207,10 +230,25 @@ export default function AddFoodScreen() {
           </Pressable>
 
           <View className="flex-row gap-3">
-            <QuickTile icon="restaurant-outline" label="My Meals" color={colors.brand.yellow} onPress={() => router.push("/nutrition/my-meals")} />
+            <QuickTile
+              icon="restaurant-outline"
+              imageIcon={nutritionIcons.myMeals}
+              label="My Meals"
+              color={colors.brand.yellow}
+              onPress={() => router.push("/nutrition/my-meals")}
+            />
             <QuickTile icon="nutrition-outline" label="My Shakes" color={NUTRITION_COLORS.fat} onPress={() => router.push({ pathname: "/nutrition/my-meals", params: { tab: "shake" } })} />
-            <QuickTile icon="fast-food-outline" label="My Foods" color={NUTRITION_COLORS.protein} onPress={() => router.push("/nutrition/my-foods")} />
-            <QuickTile icon="add-circle-outline" label="Create Food" color={NUTRITION_COLORS.carbs} onPress={() => router.push("/nutrition/create-food")} />
+            <QuickTile
+              icon="fast-food-outline"
+              imageIcon={nutritionIcons.myFoods}
+              label="My Foods"
+              color={NUTRITION_COLORS.protein}
+              onPress={() => router.push("/nutrition/my-foods")}
+            />
+          </View>
+          <View className="flex-row gap-3">
+            <QuickTile icon="add-circle-outline" label="Create Food" color={NUTRITION_COLORS.carbs} onPress={() => router.push({ pathname: "/nutrition/create-food", params: { date: targetDateKey } })} />
+            <QuickTile icon="flash-outline" label="Quick Add" color={colors.semantic.warning} onPress={() => router.push({ pathname: "/nutrition/quick-add", params: { date: targetDateKey } })} />
           </View>
 
           {recentEntries.length > 0 && (

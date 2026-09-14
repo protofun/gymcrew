@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBack } from "@/lib/navigation";
 import { DayWorkoutsSheet } from "@/components/DayWorkoutsSheet";
 import { getMonthGrid, isSameMonth, startOfMonth, toDateKey } from "@/lib/date";
 import { useWorkoutHistoryStore, type CompletedWorkout } from "@/store/workout-history-store";
@@ -123,7 +124,7 @@ export default function WorkoutHistoryScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="flex-row items-center gap-3 border-b border-divider px-4 pb-4 pt-1">
-        <Pressable onPress={() => router.back()} hitSlop={8}>
+        <Pressable onPress={() => goBack()} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Workout History</Text>

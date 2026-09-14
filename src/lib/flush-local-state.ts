@@ -1,5 +1,6 @@
 import { pushState } from "@/lib/backend-sync";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
+import { useBlockedUsersStore } from "@/store/blocked-users-store";
 import { useCosmeticsStore } from "@/store/cosmetics-store";
 import { useCurrencyStore } from "@/store/currency-store";
 import { useCustomExercisesStore } from "@/store/custom-exercises-store";
@@ -79,6 +80,9 @@ export function flushLocalStateToServer(): void {
 
   const notifications = useNotificationsStore.getState();
   pushState("notifications", { readIds: notifications.readIds });
+
+  const blockedUsers = useBlockedUsersStore.getState();
+  pushState("blocked-users", { blockedUserIds: blockedUsers.blockedUserIds });
 
   const workoutSplit = useWorkoutSplitStore.getState();
   pushState("workout-split", { preferences: workoutSplit.preferences, plan: workoutSplit.plan, acceptedAt: workoutSplit.acceptedAt });

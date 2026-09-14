@@ -73,6 +73,12 @@ In the Expo app's `.env.local` (repo root, not this folder):
 EXPO_PUBLIC_API_BASE_URL=https://api.yourdomain.com
 ```
 
+## 5b. Admin panel
+
+There's also a full admin dashboard (users, crews, reports, support inbox, broadcast email,
+announcements) in `../admin/` — a separate static web app, with its own setup steps. See
+`../admin/README.md`.
+
 ## 6. Smoke-test
 
 ```bash

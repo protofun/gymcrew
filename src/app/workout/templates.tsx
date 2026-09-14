@@ -4,6 +4,7 @@ import { ScrollView, Text, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { WorkoutTemplateCard } from "@/components/WorkoutTemplateCard";
 import { EXERCISE_BY_ID } from "@/data/exercises";
 import { ALL_TEMPLATES, getTemplatesForSplit, type WorkoutTemplate } from "@/data/workout-templates";
@@ -46,7 +47,7 @@ export default function WorkoutTemplatesScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="close" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Choose from Templates</Text>

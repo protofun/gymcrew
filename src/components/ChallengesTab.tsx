@@ -165,16 +165,17 @@ export function ChallengesTab() {
   useEffect(() => {
     for (const challenge of [...weekly, ...custom, ...admin]) {
       if (challenge.isComplete && !awardedIds.includes(challenge.key)) {
-        addXp(CHALLENGE_XP_REWARD);
+        addXp(CHALLENGE_XP_REWARD, challenge.key);
         grantTokens(TOKENS_PER_CHALLENGE_COMPLETE);
         markAwarded(challenge.key);
       }
     }
     // A crew battle that's complete AND actually won gets a bonus on top — bonus crew XP plus tokens
-    // (the earnable-currency leveling reward), only once per battle.
+    // (the earnable-currency leveling reward), only once per battle. Suffixed so this doesn't share
+    // an idempotency key with the completion award above (see backend/routes/crews.php's awardCrewXp).
     for (const challenge of custom) {
       if (challenge.isComplete && challenge.isWinning && !battleWinAwardedIds.includes(challenge.key)) {
-        addXp(BATTLE_WIN_XP_BONUS);
+        addXp(BATTLE_WIN_XP_BONUS, `${challenge.key}:battle-win`);
         grantTokens(TOKENS_PER_BATTLE_WIN);
         markBattleWinAwarded(challenge.key);
       }

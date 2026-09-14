@@ -134,6 +134,10 @@ export type ApiCrew = {
   privacy: "invite-only" | "open" | "public";
   joinRequestsEnabled: boolean;
   maxMembers: number;
+  /** When true (the default), this crew is auto-entered into a new Crew War the moment it has
+   * none — see backend/routes/crew-wars.php's getOrStartWar. Off means the crew only ever enters
+   * one when a leader/co-leader explicitly starts it (`api.startWar`). */
+  warAutoMatchEnabled: boolean;
   inviteCode: string;
   xp: number;
   division: string;
@@ -152,8 +156,35 @@ export type CreateCrewInput = {
 };
 
 export type UpdateCrewInput = Partial<
-  Pick<ApiCrew, "name" | "tagline" | "icon" | "trainingType" | "privacy" | "joinRequestsEnabled" | "maxMembers">
+  Pick<ApiCrew, "name" | "tagline" | "icon" | "trainingType" | "privacy" | "joinRequestsEnabled" | "maxMembers" | "warAutoMatchEnabled">
 >;
+
+export type ApiDiscoverableCrew = {
+  id: string;
+  name: string;
+  tagline: string;
+  icon: string;
+  trainingType: string;
+  memberCount: number;
+  maxMembers: number;
+};
+
+/** One real crew in the "Crews" leaderboard scope — see backend/routes/crews.php's
+ * respondWithCrewLeaderboard (replaces the old static `OTHER_CREWS_POWER` mock). */
+export type ApiCrewLeaderboardEntry = { id: string; name: string; icon: string; xp: number };
+
+/** One real player in the "Global"/"Gym" leaderboard scopes — see
+ * backend/routes/leaderboards.php (replaces the old static `PLAYER_LEADERBOARD` mock). */
+export type ApiPlayerLeaderboardEntry = { id: string; name: string; avatarUrl: string; power: number; gymName: string | null; isMe: boolean };
+
+/** Real "where do you stand at your own gym" for one lift — `null` means not enough real data yet
+ * (no gym set, or fewer than 2 real peers) — see backend/routes/rank-standings.php. */
+export type RankStanding = { gymRank: number; gymPoolSize: number };
+
+export type ApiSupportTicket = { id: number; message: string; status: "open" | "resolved"; createdAt: number };
+export type ApiSupportReply = { id: number; senderType: "admin" | "user"; body: string; createdAt: number };
+
+export type ApiRoadmapItem = { id: number; title: string; description: string | null; status: "planned" | "in_progress" | "shipped"; updatedAt: number };
 
 export type ApiCrewMemberActivity = {
   recentWorkouts: CompletedWorkout[];
@@ -189,7 +220,9 @@ export type ApiCrewWar = {
   recentAttacks: ApiWarAttack[];
 };
 
-export type ApiActiveWarResponse = { war: ApiCrewWar };
+/** `war` is `null` when the crew has no active War and its `warAutoMatchEnabled` setting is off —
+ * see backend/routes/crew-wars.php's getOrStartWar. A leader/co-leader starts one with `startWar`. */
+export type ApiActiveWarResponse = { war: ApiCrewWar | null };
 
 /** A crew's real, currently-in-progress workout (see backend/routes/crew-live-sessions.php) — the
  * leader's own `active-workout-store` exercises, pushed here as they log, not chosen up front. */
@@ -299,6 +332,8 @@ export type ApiFoodLog = {
 
 export type CreateFoodLogInput = Omit<ApiFoodLog, "loggedAt"> & { loggedAt?: number };
 
+export type ApiWaterLog = { id: string; amountMl: number; dateKey: string; loggedAt: number };
+
 export type OffBarcodeLookupResponse = { found: false } | { found: true; food: Food };
 
 /** `hasMore` reflects Open Food Facts' own result count for the term, not just "did this page come
@@ -308,6 +343,11 @@ export type OffSearchResponse = { results: Food[]; hasMore: boolean; page: numbe
 
 export const api = {
   getProfile: () => request<ApiProfile>("/profile"),
+  /** The admin panel's active "Page Management" banner, if any — see backend/routes/announcement.php. */
+  getAnnouncement: () => request<{ message: string } | null>("/announcement"),
+  /** The public roadmap (planned / in progress / shipped) — see backend/routes/roadmap.php and
+   * the admin panel's Roadmap page. */
+  getRoadmap: () => request<ApiRoadmapItem[]>("/roadmap"),
   updateProfile: (data: Partial<Omit<ApiProfile, "id">>) => request<ApiProfile>("/profile", { method: "PUT", body: data }),
   /** Public (no auth) — see backend/routes/profile.php's handleUsernameAvailability. Used during
    * onboarding, before an account (and therefore a session) exists yet. */
@@ -354,6 +394,9 @@ export const api = {
   getMyCrew: () => request<ApiCrew | null>("/crews/mine"),
   createCrew: (data: CreateCrewInput) => request<ApiCrew>("/crews", { method: "POST", body: data }),
   joinCrewByCode: (inviteCode: string) => request<ApiCrew>("/crews/join", { method: "POST", body: { inviteCode } }),
+  /** Crews set to "Public" — see backend/routes/crews.php's respondWithDiscoverableCrews. */
+  discoverCrews: () => request<ApiDiscoverableCrew[]>("/crews/discover"),
+  joinPublicCrew: (crewId: string) => request<ApiCrew>(`/crews/${crewId}/join-public`, { method: "POST" }),
   updateCrew: (crewId: string, data: UpdateCrewInput) => request<ApiCrew>(`/crews/${crewId}`, { method: "PUT", body: data }),
   /** Uploads a real photo as the crew's icon (leader/co-leader only) — see
    * backend/routes/crews.php's uploadCrewIcon. Saved server-side and returned as a public URL,
@@ -365,12 +408,32 @@ export const api = {
     request<{ ok: true }>(`/crews/${crewId}/members/${memberId}`, { method: "DELETE" }),
   /** Every crewmate's real recent workouts/PRs/profile — see backend/routes/crews.php. */
   getCrewActivity: (crewId: string) => request<{ members: Record<string, ApiCrewMemberActivity> }>(`/crews/${crewId}/activity`),
+  /** Reports a completed challenge/battle's XP reward — see backend/routes/crews.php's
+   * awardCrewXp. `awardKey` must be a stable id for that specific completion (every crew member's
+   * device calls this independently; the server applies the first report and no-ops the rest). */
+  awardCrewXp: (crewId: string, amount: number, awardKey: string) =>
+    request<ApiCrew>(`/crews/${crewId}/xp`, { method: "POST", body: { amount, awardKey } }),
+  /** Real crews (including the permanent bot rivals) in the caller's own crew's division — see
+   * backend/routes/crews.php's respondWithCrewLeaderboard. */
+  getCrewLeaderboard: () => request<{ crews: ApiCrewLeaderboardEntry[]; myDivision: string | null }>("/crews/leaderboard"),
+  /** Real players in the caller's own division — see backend/routes/leaderboards.php. */
+  getPlayerLeaderboard: (scope: "global" | "gym") =>
+    request<{ players: ApiPlayerLeaderboardEntry[]; myDivision: string | null }>(`/leaderboards/players?scope=${scope}`),
+  /** Real per-lift "my gym" standing — see backend/routes/rank-standings.php. `null` per exerciseId
+   * means not enough real data yet. */
+  getRankStandings: (exerciseIds: string[]) =>
+    exerciseIds.length === 0
+      ? Promise.resolve<Record<string, RankStanding | null>>({})
+      : request<Record<string, RankStanding | null>>(`/rank-standings?exerciseIds=${exerciseIds.map(encodeURIComponent).join(",")}`),
 
-  /** Real crew-vs-crew Wars (see backend/routes/crew-wars.php) — a crew is never without an active
-   * one; `getActiveWar` auto-starts one server-side (real matchmaking if a crew's waiting, else an
-   * immediate same-division bot crew — a real row either way, not computed client-side) the moment
-   * there isn't one already. */
+  /** Real crew-vs-crew Wars (see backend/routes/crew-wars.php). `war` is `null` when the crew has
+   * none right now and its `warAutoMatchEnabled` setting is off — otherwise one auto-starts server
+   * side (real matchmaking against an active real crew if one's waiting, else an immediate
+   * same-division bot crew — a real row either way, not computed client-side). */
   getActiveWar: () => request<ApiActiveWarResponse>("/crew-wars/active"),
+  /** Leader/co-leader only: start (or match into) a War right now, regardless of the crew's
+   * `warAutoMatchEnabled` setting — see backend/routes/crew-wars.php's handleStartWar. */
+  startWar: () => request<{ war: ApiCrewWar }>("/crew-wars/start", { method: "POST" }),
   /** One logged workout = one attack. Called right after a workout finishes. */
   attackInWar: (volumeKg: number, prCount: number, workoutName: string) =>
     request<{ ok: true; attacked: boolean; score?: number }>("/crew-wars/attack", {
@@ -430,6 +493,14 @@ export const api = {
   copyFoodLogDay: (fromDateKey: string, toDateKey: string) =>
     request<ApiFoodLog[]>("/nutrition-logs/copy-day", { method: "POST", body: { fromDateKey, toDateKey } }),
 
+  /** Daily water intake (see backend/routes/nutrition-water.php) — same date-scoped flat-log shape
+   * as food_logs. */
+  getWaterLogsByDate: (dateKey: string) => request<ApiWaterLog[]>(`/nutrition-water?date=${encodeURIComponent(dateKey)}`),
+  getWaterLogsByRange: (startKey: string, endKey: string) =>
+    request<ApiWaterLog[]>(`/nutrition-water?start=${encodeURIComponent(startKey)}&end=${encodeURIComponent(endKey)}`),
+  addWaterLog: (data: ApiWaterLog) => request<{ ok: true }>("/nutrition-water", { method: "POST", body: data }),
+  removeWaterLog: (id: string) => request<{ ok: true }>(`/nutrition-water/${id}`, { method: "DELETE" }),
+
   /** Open Food Facts, proxied and cached server-side (see backend/routes/nutrition-off.php) — the
    * client never calls Open Food Facts directly. `found: false` is a normal, non-error outcome for
    * a barcode OFF doesn't have (see NUTRITION.md section 12). */
@@ -442,4 +513,22 @@ export const api = {
    * on that Food record's `photoUrl`. */
   uploadFoodPhoto: (imageBase64: string, contentType: string) =>
     request<{ url: string }>("/nutrition-food-photo", { method: "POST", body: { imageBase64, contentType } }),
+
+  /** Flags a Crew or a specific member as objectionable (see backend/routes/reports.php) — reviewed
+   * manually for now, no admin UI yet. */
+  reportContent: (targetType: "crew" | "user", targetId: string, reason: string, details?: string) =>
+    request<{ ok: true }>("/reports", { method: "POST", body: { targetType, targetId, reason, details } }),
+
+  /** Registers this device's Expo push token so server-triggered pushes (crew PRs, division-ups)
+   * can reach it — see lib/push-notifications.ts and backend/routes/push-token.php. */
+  registerPushToken: (token: string) => request<{ ok: true }>("/push-token", { method: "PUT", body: { token } }),
+
+  /** A user-submitted bug report / feedback message — becomes a two-way ticket, see
+   * backend/routes/support.php. Admins reply from the admin panel; this is what starts one. */
+  sendSupportMessage: (message: string, email?: string) =>
+    request<{ ok: true; id: number }>("/support", { method: "POST", body: { message, email } }),
+  /** This account's own support tickets, newest first. */
+  getMySupportTickets: () => request<ApiSupportTicket[]>("/support"),
+  getSupportTicketDetail: (id: number) => request<{ ticket: ApiSupportTicket; replies: ApiSupportReply[] }>(`/support/${id}`),
+  replySupportTicket: (id: number, body: string) => request<{ ok: true }>(`/support/${id}/reply`, { method: "POST", body: { body } }),
 };

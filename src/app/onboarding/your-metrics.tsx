@@ -2,6 +2,7 @@ import { useState } from "react";
 import { SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { router } from "expo-router";
+import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
@@ -24,6 +25,7 @@ function liftStepperProps(unit: string) {
 
 export default function YourMetricsScreen() {
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
+  const posthog = usePostHog();
   const benchPress = useUnitToggle({ initialValue: 80, units: ["kg", "lb"], factor: KG_TO_LB });
   const squat = useUnitToggle({ initialValue: 100, units: ["kg", "lb"], factor: KG_TO_LB });
   const deadlift = useUnitToggle({ initialValue: 120, units: ["kg", "lb"], factor: KG_TO_LB });
@@ -40,6 +42,7 @@ export default function YourMetricsScreen() {
       deadlift1RM: toKg(deadlift),
       bodyFatPercent: bodyFat,
     });
+    posthog.capture("onboarding_metrics_completed");
     router.push("/onboarding/workout-preferences");
   }
 

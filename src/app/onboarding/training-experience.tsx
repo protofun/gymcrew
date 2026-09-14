@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { router } from "expo-router";
+import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
@@ -17,10 +18,12 @@ const EXPERIENCE_LEVELS = [
 
 export default function TrainingExperienceScreen() {
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
+  const posthog = usePostHog();
   const [selected, setSelected] = useState<string>("intermediate");
 
   function handleContinue() {
     setOnboardingData({ experienceLevel: selected });
+    posthog.capture("onboarding_experience_selected", { experienceLevel: selected });
     router.push("/onboarding/your-metrics");
   }
 

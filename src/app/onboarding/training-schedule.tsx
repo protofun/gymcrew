@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, SafeAreaView, Text, TextInput, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
+import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
@@ -43,6 +44,7 @@ function WeekdayChip({
 
 export default function TrainingScheduleScreen() {
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
+  const posthog = usePostHog();
   const trainingSplit = useOnboardingStore((state) => state.onboarding.trainingSplit);
   const [assignments, setAssignments] = useState<Partial<Record<Weekday, string>>>({});
 
@@ -70,6 +72,7 @@ export default function TrainingScheduleScreen() {
 
   function handleContinue() {
     setOnboardingData({ weeklySchedule: assignments });
+    posthog.capture("onboarding_schedule_completed", { trainingDays: Object.keys(assignments).length });
     router.push("/onboarding/notifications");
   }
 

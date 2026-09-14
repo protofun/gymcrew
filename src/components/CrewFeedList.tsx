@@ -1,61 +1,21 @@
 import { useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useEffect } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { DivisionBadge } from "@/components/DivisionBadge";
-import type { ApiCrewActivityEvent, CrewActivityEventType } from "@/lib/api";
-import { DIVISIONS, type Division } from "@/lib/division";
+import { RankBadge } from "@/components/RankBadge";
+import { describeEvent, divisionFromEvent, EVENT_ICON, EVENT_TINT, tierForPrEvent } from "@/lib/crew-feed";
 import { formatShortAgo } from "@/lib/time-since";
+import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewFeedStore } from "@/store/crew-feed-store";
+import { useCustomExercisesStore } from "@/store/custom-exercises-store";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
-const EVENT_ICON: Record<CrewActivityEventType, keyof typeof Ionicons.glyphMap> = {
-  pr: "trophy",
-  streak: "flame",
-  long_session: "time",
-  division_up: "ribbon",
-};
-
-const EVENT_TINT: Record<CrewActivityEventType, string> = {
-  pr: colors.brand.yellow,
-  streak: colors.semantic.streak,
-  long_session: colors.semantic.info,
-  division_up: colors.semantic.success,
-};
-
-function describeEvent(event: ApiCrewActivityEvent, isMe: boolean): string {
-  const who = isMe ? "You" : event.userName;
-  switch (event.eventType) {
-    case "pr": {
-      const { exerciseName, weightKg, reps } = event.payload as { exerciseName: string; weightKg: number; reps: number };
-      return `${who} hit a new PR — ${exerciseName} ${weightKg}kg × ${reps}`;
-    }
-    case "streak": {
-      const { days } = event.payload as { days: number };
-      return `${who} ${isMe ? "are" : "is"} on a ${days}-day streak`;
-    }
-    case "long_session": {
-      const { durationMinutes, workoutName } = event.payload as { durationMinutes: number; workoutName: string };
-      return `${who} just crushed a ${durationMinutes}-minute ${workoutName} session`;
-    }
-    case "division_up": {
-      const { division } = event.payload as { division: string };
-      return `${who} reached ${division}`;
-    }
-    default:
-      return who;
-  }
-}
-
-/** The real division the "reached X" event is for, if the payload holds a recognized division name
- * — used so the feed row can show the actual medal instead of a generic ribbon icon. */
-function divisionFromEvent(event: ApiCrewActivityEvent): Division | null {
-  if (event.eventType !== "division_up") return null;
-  const { division } = event.payload as { division: string };
-  return (DIVISIONS as readonly string[]).includes(division) ? (division as Division) : null;
-}
+const PRESSED_STYLE = ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.7 : 1 });
 
 /** The crew-internal motivation feed — real, timestamped crewmate moments (PR / streak milestone /
  * long session / division up), logged from workout/active.tsx and profile-level-store.ts right when
@@ -66,6 +26,10 @@ export function CrewFeedList() {
   const { user } = useUser();
   const events = useCrewFeedStore((state) => state.events);
   const fetchEvents = useCrewFeedStore((state) => state.fetch);
+  const membersActivity = useCrewActivityStore((state) => state.membersActivity);
+  const gender = useOnboardingStore((state) => state.onboarding.gender);
+  const weightKg = useOnboardingStore((state) => state.onboarding.weightKg);
+  const customExercises = useCustomExercisesStore((state) => state.exercises);
 
   useEffect(() => {
     fetchEvents();
@@ -79,20 +43,35 @@ export function CrewFeedList() {
       entering={FadeInUp.delay(360).springify().damping(16).mass(0.6)}
       className="mx-4 mt-3 gap-3 rounded-2xl border border-divider bg-surface p-4"
     >
-      <View className="flex-row items-center gap-1.5">
-        <Ionicons name="pulse" size={13} color={colors.brand.yellow} />
-        <Text className="caption font-body-semibold text-text-secondary" style={{ letterSpacing: 1 }}>
-          CREW ACTIVITY
-        </Text>
+      <View className="flex-row items-center justify-between">
+        <View className="flex-row items-center gap-1.5">
+          <Ionicons name="pulse" size={13} color={colors.brand.yellow} />
+          <Text className="caption font-body-semibold text-text-secondary" style={{ letterSpacing: 1 }}>
+            CREW ACTIVITY
+          </Text>
+        </View>
+        <Pressable onPress={() => router.push("/crew/activity")} hitSlop={6} style={PRESSED_STYLE}>
+          <Text className="caption font-body-semibold text-brand-yellow">View all</Text>
+        </Pressable>
       </View>
 
       <View className="gap-3">
         {events.slice(0, 5).map((event) => {
+          const isMe = event.userId === user?.id;
           const division = divisionFromEvent(event);
+          const prTier = tierForPrEvent(
+            event,
+            isMe,
+            { gender: gender ?? undefined, weightKg: weightKg ?? undefined },
+            membersActivity,
+            customExercises,
+          );
           return (
             <View key={event.id} className="flex-row items-center gap-3">
               {division ? (
                 <DivisionBadge division={division} size={36} />
+              ) : prTier ? (
+                <RankBadge tier={prTier} size={36} />
               ) : (
                 <View
                   className="h-9 w-9 items-center justify-center rounded-full"
@@ -102,7 +81,7 @@ export function CrewFeedList() {
                 </View>
               )}
               <Text className="body-sm flex-1 text-text-secondary" numberOfLines={2}>
-                {describeEvent(event, event.userId === user?.id)}
+                {describeEvent(event, isMe)}
               </Text>
               <Text className="caption text-text-secondary">{formatShortAgo(event.createdAt)}</Text>
             </View>

@@ -12,6 +12,7 @@ import { RankBadge } from "@/components/RankBadge";
 import { SegmentedProportionBar } from "@/components/SegmentedProportionBar";
 import { StatTile } from "@/components/StatTile";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { perMemberContributions } from "@/lib/challenge-progress";
 import {
   crewExerciseVolume,
@@ -29,6 +30,7 @@ import { DIVISION_COLOR } from "@/lib/division";
 import { tierForExercise } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
 import type { RankProfile } from "@/lib/rank";
+import { displayWeight, formatWeight } from "@/lib/units";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
@@ -58,10 +60,10 @@ const headerStyle = {
   transform: [{ skewX: "-8deg" }],
 };
 
-const TOTAL_STATS: { key: keyof ReturnType<typeof crewTotals>; label: string; icon: keyof typeof Ionicons.glyphMap; suffix: string }[] = [
-  { key: "volumeKg", label: "VOLUME", icon: "barbell", suffix: "kg" },
-  { key: "workouts", label: "WORKOUTS", icon: "flame", suffix: "" },
-  { key: "sets", label: "SETS", icon: "layers", suffix: "" },
+const TOTAL_STATS: { key: keyof ReturnType<typeof crewTotals>; label: string; icon: keyof typeof Ionicons.glyphMap; isWeight: boolean }[] = [
+  { key: "volumeKg", label: "VOLUME", icon: "barbell", isWeight: true },
+  { key: "workouts", label: "WORKOUTS", icon: "flame", isWeight: false },
+  { key: "sets", label: "SETS", icon: "layers", isWeight: false },
 ];
 
 export function StatsTab() {
@@ -80,6 +82,7 @@ export function StatsTab() {
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
   const age = useOnboardingStore((state) => state.onboarding.age);
+  const weightUnit = useWeightUnit();
   const records = usePersonalRecordsStore((state) => state.records);
   const rankProfile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
   const rankCards = useMemo(() => buildLiftRankCards(records, rankProfile, "gym"), [records, rankProfile]);
@@ -143,8 +146,14 @@ export function StatsTab() {
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(140).springify().damping(16).mass(0.6)} className="flex-row gap-3">
-        {TOTAL_STATS.map(({ key, label, icon, suffix }) => (
-          <StatTile key={key} id={`crew.stats.${key}`} icon={icon} value={`${totals[key].toLocaleString("en-US")}${suffix}`} label={label} />
+        {TOTAL_STATS.map(({ key, label, icon, isWeight }) => (
+          <StatTile
+            key={key}
+            id={`crew.stats.${key}`}
+            icon={icon}
+            value={isWeight ? formatWeight(totals[key], weightUnit) : totals[key].toLocaleString("en-US")}
+            label={label}
+          />
         ))}
       </Animated.View>
 
@@ -188,7 +197,7 @@ export function StatsTab() {
                 <Ionicons name={lift.icon} size={16} color={index === 0 ? colors.brand.yellow : colors.neutral.textSecondary} />
               </View>
               <Text className="body-md flex-1 font-body-semibold text-text-primary">{lift.exerciseName}</Text>
-              <Text className="body-md font-body-bold text-brand-yellow">{lift.volume.toLocaleString("en-US")} KG</Text>
+              <Text className="body-md font-body-bold text-brand-yellow">{formatWeight(lift.volume, weightUnit).toUpperCase()}</Text>
             </View>
           ))}
         </View>
@@ -204,7 +213,10 @@ export function StatsTab() {
             TOP CONTRIBUTORS
           </Text>
         </View>
-        <ContributorsList contributors={topContributors} unit="kg" />
+        <ContributorsList
+          contributors={topContributors.map((entry) => ({ ...entry, amount: displayWeight(entry.amount, weightUnit) }))}
+          unit={weightUnit}
+        />
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(380).springify().damping(16).mass(0.6)} className="flex-row gap-3">
@@ -241,7 +253,12 @@ export function StatsTab() {
           <Text className="body-md text-text-primary">{selectedExercise.exerciseName}</Text>
           <Ionicons name="chevron-down" size={18} color={colors.neutral.textSecondary} />
         </Pressable>
-        <StrengthProgressChart exerciseName={selectedExercise.exerciseName} points={selectedTrend} title="Crew Volume" unit="kg" />
+        <StrengthProgressChart
+          exerciseName={selectedExercise.exerciseName}
+          points={selectedTrend.map((point) => ({ ...point, value: displayWeight(point.value, weightUnit) }))}
+          title="Crew Volume"
+          unit={weightUnit}
+        />
       </Animated.View>
 
       <ExercisePickerModal

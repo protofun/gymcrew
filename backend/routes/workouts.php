@@ -14,6 +14,7 @@ function workoutRowToJson(array $row): array
         'exercises' => json_decode($row['exercises_json'], true),
         'muscleIntensity' => json_decode($row['muscle_intensity_json'], true),
         'prs' => json_decode($row['prs_json'], true),
+        'isBackfilled' => (bool) ($row['is_backfilled'] ?? false),
     ];
 }
 
@@ -36,9 +37,9 @@ function handleWorkouts(PDO $pdo, string $userId, string $method, ?array $body, 
 
         $stmt = $pdo->prepare(
             'INSERT INTO workouts
-                (id, user_id, name, completed_at, duration_seconds, unit, notes, volume_kg, completed_sets, exercises_json, muscle_intensity_json, prs_json)
+                (id, user_id, name, completed_at, duration_seconds, unit, notes, volume_kg, completed_sets, exercises_json, muscle_intensity_json, prs_json, is_backfilled)
              VALUES
-                (:id, :user_id, :name, :completed_at, :duration_seconds, :unit, :notes, :volume_kg, :completed_sets, :exercises_json, :muscle_intensity_json, :prs_json)
+                (:id, :user_id, :name, :completed_at, :duration_seconds, :unit, :notes, :volume_kg, :completed_sets, :exercises_json, :muscle_intensity_json, :prs_json, :is_backfilled)
              ON DUPLICATE KEY UPDATE
                 name = VALUES(name),
                 completed_at = VALUES(completed_at),
@@ -49,8 +50,13 @@ function handleWorkouts(PDO $pdo, string $userId, string $method, ?array $body, 
                 completed_sets = VALUES(completed_sets),
                 exercises_json = VALUES(exercises_json),
                 muscle_intensity_json = VALUES(muscle_intensity_json),
-                prs_json = VALUES(prs_json)'
+                prs_json = VALUES(prs_json),
+                is_backfilled = VALUES(is_backfilled)'
         );
+        // A backfilled workout is never trusted to carry real PRs, regardless of what the client
+        // sent — checkPersonalRecords is skipped client-side for these (see workout/active.tsx), but
+        // stripping prs_json here too means a tampered request body can't sneak a fabricated PR in.
+        $isBackfilled = !empty($data['isBackfilled']);
         $stmt->execute([
             ':id' => $data['id'],
             ':user_id' => $userId,
@@ -63,7 +69,8 @@ function handleWorkouts(PDO $pdo, string $userId, string $method, ?array $body, 
             ':completed_sets' => $data['completedSets'] ?? 0,
             ':exercises_json' => json_encode($data['exercises'] ?? []),
             ':muscle_intensity_json' => json_encode($data['muscleIntensity'] ?? []),
-            ':prs_json' => json_encode($data['prs'] ?? []),
+            ':prs_json' => json_encode($isBackfilled ? [] : ($data['prs'] ?? [])),
+            ':is_backfilled' => $isBackfilled ? 1 : 0,
         ]);
         jsonResponse(['ok' => true], 201);
         return;

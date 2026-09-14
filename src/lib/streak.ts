@@ -7,7 +7,7 @@ import type { CompletedWorkout } from "@/store/workout-history-store";
  * (spent Streak Freezes — see store/currency-store.ts) count as trained too, without a real workout.
  */
 export function computeCurrentStreak(workouts: CompletedWorkout[], now: Date = new Date(), frozenDateKeys: string[] = []): number {
-  const trainedDays = new Set(workouts.map((workout) => toDateKey(new Date(workout.completedAt))));
+  const trainedDays = new Set(workouts.filter((workout) => !workout.isBackfilled).map((workout) => toDateKey(new Date(workout.completedAt))));
   for (const key of frozenDateKeys) trainedDays.add(key);
 
   const cursor = new Date(now);
@@ -26,7 +26,7 @@ export function computeCurrentStreak(workouts: CompletedWorkout[], now: Date = n
 
 /** Monday-first trained/untrained flags for the current week, for the week-progress strip. */
 export function computeTrainedDaysThisWeek(workouts: CompletedWorkout[], now: Date = new Date()): boolean[] {
-  const trainedDays = new Set(workouts.map((workout) => toDateKey(new Date(workout.completedAt))));
+  const trainedDays = new Set(workouts.filter((workout) => !workout.isBackfilled).map((workout) => toDateKey(new Date(workout.completedAt))));
   return getCurrentWeekDates(now).map((date) => trainedDays.has(toDateKey(date)));
 }
 
@@ -35,7 +35,9 @@ export function computeTrainedDaysThisWeek(workouts: CompletedWorkout[], now: Da
 export function computeLongestStreak(workouts: CompletedWorkout[]): number {
   if (workouts.length === 0) return 0;
 
-  const trainedDayKeys = [...new Set(workouts.map((workout) => toDateKey(new Date(workout.completedAt))))].sort();
+  const trainedDayKeys = [
+    ...new Set(workouts.filter((workout) => !workout.isBackfilled).map((workout) => toDateKey(new Date(workout.completedAt)))),
+  ].sort();
 
   let longest = 1;
   let current = 1;

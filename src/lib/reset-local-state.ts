@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
+import { useOnboardingStore } from "@/store/onboarding-store";
+
 /**
  * Wipes every locally-persisted store so the next account that signs in on this device never
  * inherits a previous account's cached data. This matters most for onboarding-store: the wizard
@@ -9,13 +11,16 @@ import { Platform } from "react-native";
  * second account on the same device (or a shared/test device in general) could push the FIRST
  * account's name/weight/gender/etc. onto the SECOND account's profile in the database.
  *
- * Reloads the page on web so every store's in-memory state resets too, not just its AsyncStorage
- * copy — Zustand has no built-in "reset every store to its initial state" hook, and a plain
- * `AsyncStorage.clear()` alone would leave already-mounted stores holding stale in-memory data
- * until the next full app load. Call this right after `signOut()` resolves.
+ * `AsyncStorage.clear()` alone only wipes the persisted copy — every already-mounted store keeps
+ * its in-memory state until the next full app load, which is what actually caused the leak: on web
+ * a page reload forces that reload, but native has no equivalent "reload the JS bundle" primitive
+ * without adding a new dependency (expo-updates). So onboarding-store — the one store that gets
+ * wholesale-pushed to a fresh account on sign-up — is explicitly reset in memory here too, on every
+ * platform, not just cleared from storage. Call this right after `signOut()` resolves.
  */
 export async function resetLocalStateForAccountSwitch(): Promise<void> {
   await AsyncStorage.clear();
+  useOnboardingStore.getState().resetForAccountSwitch();
   if (Platform.OS === "web") {
     window.location.reload();
   }

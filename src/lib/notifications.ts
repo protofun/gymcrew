@@ -1,8 +1,9 @@
 import { navIcons, rankTierImages } from "@/constants/images";
+import { exerciseByIdWithCustom, type Exercise } from "@/data/exercises";
 import type { AppNotification } from "@/data/notifications";
 import type { ApiCrewActivityEvent } from "@/lib/api";
 import { toDateKey } from "@/lib/date";
-import { calculateLiftRank, majorLiftForExerciseId } from "@/lib/rank";
+import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
 import type { Gender } from "@/store/onboarding-store";
 import type { CompletedWorkout } from "@/store/workout-history-store";
 
@@ -29,25 +30,33 @@ function formatRelative(fromMs: number, toMs: number = Date.now()): string {
 
 type RankProfileInput = { weightKg?: number; gender?: Gender; age?: number };
 
-/** The medal that PR actually earned, same calculation as the PR celebration screen — falls back to
- * the generic PR icon for lifts without an established strength standard (only the 4 major lifts have one). */
-function iconForPr(exerciseId: string, weightKg: number, profile: RankProfileInput) {
-  const majorLift = majorLiftForExerciseId(exerciseId);
-  if (!majorLift || !profile.weightKg || !profile.gender) return navIcons.prs;
-  const tier = calculateLiftRank(majorLift, weightKg, { bodyWeightKg: profile.weightKg, gender: profile.gender, age: profile.age });
+/** The medal that PR actually earned, same generic-proxy calculation as the workout summary screen's
+ * `prsWithTier` — works for any of the 800+ exercises, not just the 4 major lifts, so a PR on e.g. a
+ * cable curl shows its own real tier instead of always falling back to the same placeholder icon.
+ * Checks the user's own custom exercises too (see `exerciseByIdWithCustom`) — otherwise a PR on a
+ * user-created exercise could never resolve. */
+function iconForPr(exerciseId: string, weightKg: number, reps: number, profile: RankProfileInput, customExercises: Exercise[]) {
+  if (!profile.weightKg || !profile.gender) return navIcons.prs;
+  const exercise = exerciseByIdWithCustom(exerciseId, customExercises);
+  if (!exercise) return navIcons.prs;
+  const { tier } = genericExerciseRankDetail(exercise, weightKg, reps, { bodyWeightKg: profile.weightKg, gender: profile.gender, age: profile.age });
   return rankTierImages[tier];
 }
 
 /**
  * Real notifications derived from actual app state — every logged PR (from workout history, newest
  * first) plus a streak nudge once it's actually worth celebrating. Crewmate moments (PR/streak/long
- * session/division up) are folded in separately by `buildCrewNotifications` below.
+ * session/division up) are folded in separately by `buildCrewNotifications` below. `limit` defaults
+ * to the bell dropdown's cap; the "view all" history screen passes a much larger value so nothing
+ * from the workout history (already the user's full local history, no extra fetch needed) is cut off.
  */
 export function buildNotifications(
   workouts: CompletedWorkout[],
   streakDays: number,
   profile: RankProfileInput,
+  customExercises: Exercise[],
   now: number = Date.now(),
+  limit: number = NOTIFICATIONS_LIMIT,
 ): AppNotification[] {
   const notifications: AppNotification[] = [];
 
@@ -55,10 +64,11 @@ export function buildNotifications(
     for (const pr of workout.prs) {
       notifications.push({
         id: `pr-${workout.id}-${pr.exerciseId}`,
-        icon: iconForPr(pr.exerciseId, pr.weightKg, profile),
+        icon: iconForPr(pr.exerciseId, pr.weightKg, pr.reps, profile, customExercises),
         title: `New PR! Your ${pr.exerciseName} went up to ${pr.weightKg}${workout.unit}.`,
         time: formatRelative(workout.completedAt, now),
         timestamp: workout.completedAt,
+        category: "pr",
         workoutId: workout.id,
       });
     }
@@ -71,10 +81,11 @@ export function buildNotifications(
       title: `You're on a ${streakDays}-day streak. Keep it going!`,
       time: "Today",
       timestamp: now,
+      category: "streak",
     });
   }
 
-  return notifications.sort((a, b) => b.timestamp - a.timestamp).slice(0, NOTIFICATIONS_LIMIT);
+  return notifications.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
 }
 
 /**
@@ -100,6 +111,7 @@ export function buildCreatineReminderNotification(enabled: boolean, time: string
       title: "Don't forget your creatine today.",
       time: "Today",
       timestamp: now,
+      category: "reminder",
     },
   ];
 }
@@ -137,14 +149,16 @@ export function buildCrewNotifications(
   events: ApiCrewActivityEvent[],
   myUserId: string | null | undefined,
   now: number = Date.now(),
+  blockedUserIds: string[] = [],
 ): AppNotification[] {
   return events
-    .filter((event) => event.userId !== myUserId)
+    .filter((event) => event.userId !== myUserId && !blockedUserIds.includes(event.userId))
     .map((event) => ({
       id: `crew-${event.id}`,
       icon: navIcons.crew,
       title: describeCrewEvent(event),
       time: formatRelative(event.createdAt, now),
       timestamp: event.createdAt,
+      category: "crew" as const,
     }));
 }

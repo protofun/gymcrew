@@ -13,6 +13,7 @@ import { WorkoutLogger } from "@/components/WorkoutLogger";
 import { WorkoutSettingsModal } from "@/components/WorkoutSettingsModal";
 import { formatElapsed, useElapsedTimer } from "@/hooks/use-elapsed-timer";
 import { recordChallengeContributions } from "@/lib/challenge-progress";
+import { fromDateKey, toDateKey } from "@/lib/date";
 import { tierForExercise } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
 import type { RankProfile } from "@/lib/rank";
@@ -61,6 +62,7 @@ export default function ActiveWorkoutScreen() {
   );
 
   const startedAt = useActiveWorkoutStore((state) => state.startedAt);
+  const logDateKey = useActiveWorkoutStore((state) => state.logDateKey);
   const name = useActiveWorkoutStore((state) => state.name);
   const unit = useActiveWorkoutStore((state) => state.unit);
   const exercises = useActiveWorkoutStore((state) => state.exercises);
@@ -89,6 +91,9 @@ export default function ActiveWorkoutScreen() {
   const elapsedSeconds = useElapsedTimer(startedAt);
   const hasProgress = exercises.length > 0;
   const posthog = usePostHog();
+  // Only a workout logged for today can earn XP/streaks/PRs/Crew War points — otherwise backfilling
+  // every past day would be a free way to farm all of them. See "Log a Past Workout" on the Log tab.
+  const isBackfilled = logDateKey !== toDateKey(new Date());
 
   // Mirrors whatever the leader actually logs to the crew's shared live session, debounced — see
   // led-workout-store.ts. No-op (via pushExercises' own guard) once the session's ended, and for
@@ -115,21 +120,29 @@ export default function ActiveWorkoutScreen() {
     // Snapshot records before they're updated below — capping a challenge contribution against a
     // PR set in this same workout would let a fabricated set validate itself.
     const recordsBeforeThisWorkout = usePersonalRecordsStore.getState().records;
-    const prs = checkPersonalRecords(exercises);
+    // A backfilled workout (see isBackfilled above) never checks/updates PRs — otherwise claiming a
+    // huge lift on some past day would let anyone rank up instantly with nothing to disprove it.
+    const prs = isBackfilled ? [] : checkPersonalRecords(exercises);
     const volumeKg = computeVolumeKg(exercises);
     const completedSets = computeCompletedSets(exercises);
-    recordChallengeContributions(exercises, recordsBeforeThisWorkout);
+    if (!isBackfilled) recordChallengeContributions(exercises, recordsBeforeThisWorkout);
 
     // Snapshot the streak before this workout lands, so crossing a milestone (3/7/14/... days) can
-    // be detected and nudged to the crew feed exactly once — not on every workout past it.
+    // be detected and nudged to the crew feed exactly once — not on every workout past it. Skipped
+    // entirely for a backfilled workout, which never touches the streak (see streak.ts).
     const freezeDateKeys = useCurrencyStore.getState().freezeDateKeys;
     const workoutsBeforeThis = useWorkoutHistoryStore.getState().workouts;
-    const streakBefore = computeCurrentStreak(workoutsBeforeThis, new Date(), freezeDateKeys);
+    const streakBefore = isBackfilled ? 0 : computeCurrentStreak(workoutsBeforeThis, new Date(), freezeDateKeys);
+
+    // A backfilled workout's completedAt is the day it's for (midday, to sit safely inside that
+    // local calendar day) instead of the moment "Finish" was tapped — see toDateKey usages across
+    // streak.ts / crew-league.ts / challenge-progress.ts that bucket workouts by this timestamp.
+    const completedAt = isBackfilled ? fromDateKey(logDateKey).setHours(12, 0, 0, 0) : Date.now();
 
     useWorkoutHistoryStore.getState().addWorkout({
       id,
       name: name.trim() || "Workout",
-      completedAt: Date.now(),
+      completedAt,
       durationSeconds: elapsedSeconds,
       unit,
       notes: "",
@@ -138,6 +151,7 @@ export default function ActiveWorkoutScreen() {
       volumeKg,
       completedSets,
       prs,
+      isBackfilled,
     });
 
     posthog.capture("workout_completed", {
@@ -148,29 +162,35 @@ export default function ActiveWorkoutScreen() {
       volume_kg: volumeKg,
       pr_count: prs.length,
       unit,
+      is_backfilled: isBackfilled,
     });
 
-    const currency = useCurrencyStore.getState();
-    const xpEarned = workoutXpEarned(prs.length);
-    useProfileLevelStore.getState().addXp(currency.xpBoostActive ? xpEarned * 2 : xpEarned);
-    currency.grantTokens(TOKENS_PER_WORKOUT + prs.length * TOKENS_PER_PR);
-    if (currency.xpBoostActive) currency.consumeXpBoost();
+    // Everything below is how a same-day workout earns something — XP, tokens, Crew War points, and
+    // crew-feed nudges. None of it runs for a backfilled workout, or "log every day I skipped" would
+    // be a free way to farm all of them.
+    if (!isBackfilled) {
+      const currency = useCurrencyStore.getState();
+      const xpEarned = workoutXpEarned(prs.length);
+      useProfileLevelStore.getState().addXp(currency.xpBoostActive ? xpEarned * 2 : xpEarned);
+      currency.grantTokens(TOKENS_PER_WORKOUT + prs.length * TOKENS_PER_PR);
+      if (currency.xpBoostActive) currency.consumeXpBoost();
 
-    // Real crew-vs-crew War attack + the crew-internal motivation feed — all best-effort, no-ops
-    // without a crew (see crew-war-store.ts / crew-feed-store.ts). Fire-and-forget: finishing a
-    // workout shouldn't wait on a network round trip — see lib/war.ts for the instant preview shown
-    // on the summary screen right after this.
-    const crewFeed = useCrewFeedStore.getState();
-    useCrewWarStore.getState().attack(volumeKg, prs.length, name.trim() || "Workout");
-    for (const pr of prs) {
-      crewFeed.logEvent("pr", { exerciseName: pr.exerciseName, weightKg: pr.weightKg, reps: pr.reps });
-    }
-    const streakAfter = computeCurrentStreak(useWorkoutHistoryStore.getState().workouts, new Date(), freezeDateKeys);
-    if (STREAK_MILESTONES.some((milestone) => streakBefore < milestone && streakAfter >= milestone)) {
-      crewFeed.logEvent("streak", { days: streakAfter });
-    }
-    if (elapsedSeconds >= LONG_SESSION_MINUTES * 60) {
-      crewFeed.logEvent("long_session", { durationMinutes: Math.round(elapsedSeconds / 60), workoutName: name.trim() || "Workout" });
+      // Real crew-vs-crew War attack + the crew-internal motivation feed — all best-effort, no-ops
+      // without a crew (see crew-war-store.ts / crew-feed-store.ts). Fire-and-forget: finishing a
+      // workout shouldn't wait on a network round trip — see lib/war.ts for the instant preview shown
+      // on the summary screen right after this.
+      const crewFeed = useCrewFeedStore.getState();
+      useCrewWarStore.getState().attack(volumeKg, prs.length, name.trim() || "Workout");
+      for (const pr of prs) {
+        crewFeed.logEvent("pr", { exerciseId: pr.exerciseId, exerciseName: pr.exerciseName, weightKg: pr.weightKg, reps: pr.reps });
+      }
+      const streakAfter = computeCurrentStreak(useWorkoutHistoryStore.getState().workouts, new Date(), freezeDateKeys);
+      if (STREAK_MILESTONES.some((milestone) => streakBefore < milestone && streakAfter >= milestone)) {
+        crewFeed.logEvent("streak", { days: streakAfter });
+      }
+      if (elapsedSeconds >= LONG_SESSION_MINUTES * 60) {
+        crewFeed.logEvent("long_session", { durationMinutes: Math.round(elapsedSeconds / 60), workoutName: name.trim() || "Workout" });
+      }
     }
 
     if (isLeadingCrew) endLiveSession();
@@ -252,6 +272,15 @@ export default function ActiveWorkoutScreen() {
           </View>
         </View>
       </View>
+
+      {isBackfilled && (
+        <View className="flex-row items-center gap-2 border-b border-divider bg-surface px-4 py-2.5">
+          <Ionicons name="calendar-outline" size={14} color={colors.neutral.textSecondary} />
+          <Text className="caption text-text-secondary">
+            {`Logging for ${fromDateKey(logDateKey).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — won't count toward XP, streaks, PRs, or Crew War`}
+          </Text>
+        </View>
+      )}
 
       {/* contentContainerStyle is all-inline here, not contentContainerClassName — mixing the two
           is unreliable on native with this project's NativeWind preview version (same class of bug

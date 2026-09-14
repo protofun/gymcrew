@@ -1,10 +1,10 @@
 import { useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBack } from "@/lib/navigation";
 import { AdminChallengeFormSheet } from "@/components/AdminChallengeFormSheet";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import type { AdminChallengeInput, ApiAdminChallenge } from "@/lib/api";
@@ -94,7 +94,7 @@ export default function AdminChallengesScreen() {
     return (
       <View style={{ flex: 1, paddingTop: insets.top }} className="items-center justify-center bg-background px-6">
         <Text className="body-md text-center text-text-secondary">You don&apos;t have access to this screen.</Text>
-        <Pressable onPress={() => router.back()} className="mt-4">
+        <Pressable onPress={() => goBack("/(tabs)/profile")} className="mt-4">
           <Text className="body-md font-body-semibold text-brand-yellow">Go back</Text>
         </Pressable>
       </View>
@@ -138,7 +138,7 @@ export default function AdminChallengesScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/profile")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Manage Challenges</Text>

@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { SearchableSelectField } from "@/components/SearchableSelectField";
+import { displayWeight, lbsToKg } from "@/lib/units";
 import { useOnboardingStore, type Gender } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
@@ -79,14 +81,18 @@ function KeyedSelectField<T extends string>({
 
 export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const onboarding = useOnboardingStore((state) => state.onboarding);
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
+  const weightUnit = useOnboardingStore((state) => state.weightUnit);
 
   const [fullName, setFullName] = useState(onboarding.fullName ?? "");
   const [gymName, setGymName] = useState(onboarding.gymName ?? "");
   const [age, setAge] = useState(String(onboarding.age ?? ""));
   const [heightCm, setHeightCm] = useState(String(onboarding.heightCm ?? ""));
-  const [weightKg, setWeightKg] = useState(String(onboarding.weightKg ?? ""));
+  const [weightDisplay, setWeightDisplay] = useState(
+    onboarding.weightKg != null ? String(displayWeight(onboarding.weightKg, weightUnit)) : "",
+  );
   const [gender, setGender] = useState<Gender>(onboarding.gender ?? "male");
   const [goal, setGoal] = useState(onboarding.goal ?? GOALS[0].key);
   const [experienceLevel, setExperienceLevel] = useState(onboarding.experienceLevel ?? EXPERIENCE_LEVELS[0].key);
@@ -94,7 +100,12 @@ export default function EditProfileScreen() {
   function handleSave() {
     const parsedAge = parseInt(age, 10);
     const parsedHeight = parseFloat(heightCm.replace(",", "."));
-    const parsedWeight = parseFloat(weightKg.replace(",", "."));
+    const parsedWeightDisplay = parseFloat(weightDisplay.replace(",", "."));
+    const parsedWeightKg = Number.isFinite(parsedWeightDisplay)
+      ? weightUnit === "lbs"
+        ? lbsToKg(parsedWeightDisplay)
+        : parsedWeightDisplay
+      : NaN;
 
     setOnboardingData({
       fullName: fullName.trim(),
@@ -104,15 +115,16 @@ export default function EditProfileScreen() {
       experienceLevel,
       ...(Number.isFinite(parsedAge) && parsedAge > 0 ? { age: parsedAge } : {}),
       ...(Number.isFinite(parsedHeight) && parsedHeight > 0 ? { heightCm: parsedHeight } : {}),
-      ...(Number.isFinite(parsedWeight) && parsedWeight > 0 ? { weightKg: parsedWeight } : {}),
+      ...(Number.isFinite(parsedWeightKg) && parsedWeightKg > 0 ? { weightKg: parsedWeightKg } : {}),
     });
-    router.back();
+    posthog.capture("profile_edited", { goal, experienceLevel });
+    goBack("/(tabs)/profile");
   }
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/profile")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Edit Profile</Text>
@@ -135,7 +147,13 @@ export default function EditProfileScreen() {
             <TextField label="Height (cm)" value={heightCm} onChangeText={setHeightCm} keyboardType="numeric" placeholder="180" />
           </View>
           <View className="flex-1">
-            <TextField label="Weight (kg)" value={weightKg} onChangeText={setWeightKg} keyboardType="numeric" placeholder="85" />
+            <TextField
+              label={`Weight (${weightUnit})`}
+              value={weightDisplay}
+              onChangeText={setWeightDisplay}
+              keyboardType="numeric"
+              placeholder={weightUnit === "lbs" ? "187" : "85"}
+            />
           </View>
         </View>
 

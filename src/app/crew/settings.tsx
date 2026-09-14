@@ -5,13 +5,16 @@ import { useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInUp } from "react-native-reanimated";
+import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { AvatarActionSheet } from "@/components/AvatarActionSheet";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { CrewAvatarGeneratorModal } from "@/components/CrewAvatarGeneratorModal";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { EditableText } from "@/components/EditableText";
 import { InviteMembersModal } from "@/components/InviteMembersModal";
+import { ReportModal } from "@/components/ReportModal";
 import { SearchableSelectField } from "@/components/SearchableSelectField";
 import { CREW_TRAINING_TYPES } from "@/data/crew-training-types";
 import { useCrewStore, type CrewPrivacy } from "@/store/crew-store";
@@ -89,7 +92,9 @@ function StepperField({ label, value, onDecrement, onIncrement }: { label: strin
 
 export default function CrewSettingsScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
 
+  const crewId = useCrewStore((state) => state.id);
   const name = useCrewStore((state) => state.name);
   const tagline = useCrewStore((state) => state.tagline);
   const icon = useCrewStore((state) => state.icon);
@@ -98,6 +103,7 @@ export default function CrewSettingsScreen() {
   const maxMembers = useCrewStore((state) => state.maxMembers);
   const privacy = useCrewStore((state) => state.privacy);
   const joinRequestsEnabled = useCrewStore((state) => state.joinRequestsEnabled);
+  const warAutoMatchEnabled = useCrewStore((state) => state.warAutoMatchEnabled);
   const trainingType = useCrewStore((state) => state.trainingType);
   const notifications = useCrewStore((state) => state.notifications);
   const updateInfo = useCrewStore((state) => state.updateInfo);
@@ -105,6 +111,7 @@ export default function CrewSettingsScreen() {
   const uploadIcon = useCrewStore((state) => state.uploadIcon);
   const setPrivacy = useCrewStore((state) => state.setPrivacy);
   const toggleJoinRequests = useCrewStore((state) => state.toggleJoinRequests);
+  const toggleWarAutoMatch = useCrewStore((state) => state.toggleWarAutoMatch);
   const setTrainingType = useCrewStore((state) => state.setTrainingType);
   const setMaxMembers = useCrewStore((state) => state.setMaxMembers);
   const toggleNotification = useCrewStore((state) => state.toggleNotification);
@@ -120,9 +127,11 @@ export default function CrewSettingsScreen() {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
+  const [warAutoMatchOpen, setWarAutoMatchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [rolesOpen, setRolesOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const [editName, setEditName] = useState(name);
   const [editTagline, setEditTagline] = useState(tagline);
@@ -146,6 +155,7 @@ export default function CrewSettingsScreen() {
     }
     setEditError(null);
     setEditOpen(false);
+    posthog.capture("crew_info_updated");
   }
 
   async function handleChooseCrewPhoto() {
@@ -170,7 +180,9 @@ export default function CrewSettingsScreen() {
     setUploadingIcon(false);
     if (!uploadResult.ok) {
       Alert.alert("Couldn't update crew photo", uploadResult.error);
+      return;
     }
+    posthog.capture("crew_photo_updated");
   }
 
   function handleLeaveCrew() {
@@ -180,6 +192,7 @@ export default function CrewSettingsScreen() {
   async function confirmLeaveCrew() {
     setLeaveConfirmVisible(false);
     await leaveCrew();
+    posthog.capture("crew_left");
     resetCrewSelection();
     router.replace("/build-crew");
   }
@@ -187,7 +200,7 @@ export default function CrewSettingsScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/crew")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Crew Settings</Text>
@@ -220,10 +233,12 @@ export default function CrewSettingsScreen() {
           <SettingsRow label="Crew Preferences" onPress={() => setPreferencesOpen(true)} />
           <SettingsRow label="Privacy" value={PRIVACY_LABEL[privacy]} onPress={() => setPrivacyOpen(true)} />
           <SettingsRow label="Join Requests" value={joinRequestsEnabled ? "On" : "Off"} onPress={() => setJoinRequestsOpen(true)} />
+          <SettingsRow label="Crew War Auto-Match" value={warAutoMatchEnabled ? "On" : "Off"} onPress={() => setWarAutoMatchOpen(true)} />
           <SettingsRow label="Notifications" onPress={() => setNotificationsOpen(true)} />
           <SettingsRow label="Manage Members" onPress={() => router.push("/crew/members")} />
           <SettingsRow label="Invite Members" onPress={() => setInviteOpen(true)} />
           <SettingsRow label="Roles & Permissions" onPress={() => setRolesOpen(true)} />
+          <SettingsRow label="Report Crew" onPress={() => setReportOpen(true)} />
           <SettingsRow label="Danger Zone" danger isLast onPress={handleLeaveCrew} />
         </View>
 
@@ -297,6 +312,8 @@ export default function CrewSettingsScreen() {
 
       <InviteMembersModal visible={inviteOpen} onClose={() => setInviteOpen(false)} crewName={name} inviteCode={inviteCode} />
 
+      <ReportModal visible={reportOpen} targetType="crew" targetId={crewId} onClose={() => setReportOpen(false)} />
+
       <ConfirmModal
         visible={leaveConfirmVisible}
         title="Leave Crew"
@@ -316,6 +333,24 @@ export default function CrewSettingsScreen() {
           <Switch
             value={joinRequestsEnabled}
             onValueChange={toggleJoinRequests}
+            trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
+            thumbColor={colors.brand.white}
+          />
+        </View>
+      </SheetModal>
+
+      <SheetModal visible={warAutoMatchOpen} onClose={() => setWarAutoMatchOpen(false)} title="Crew War Auto-Match">
+        <View className="flex-row items-center justify-between rounded-xl border border-divider bg-background px-4 py-3.5">
+          <View className="flex-1 pr-3">
+            <Text className="body-md text-text-primary">Auto-match into a War</Text>
+            <Text className="body-sm text-text-secondary">
+              On (default): your crew always has an active War, matched automatically. Off: your crew only enters one when a leader or
+              co-leader starts it from the War tab.
+            </Text>
+          </View>
+          <Switch
+            value={warAutoMatchEnabled}
+            onValueChange={toggleWarAutoMatch}
             trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
             thumbColor={colors.brand.white}
           />
@@ -372,6 +407,7 @@ export default function CrewSettingsScreen() {
                 key={key}
                 onPress={() => {
                   setPrivacy(key);
+                  posthog.capture("crew_privacy_changed", { privacy: key });
                   setPrivacyOpen(false);
                 }}
                 className={`flex-row items-center gap-3 rounded-xl border p-4 ${active ? "border-brand-yellow bg-brand-yellow/10" : "border-divider bg-background"}`}

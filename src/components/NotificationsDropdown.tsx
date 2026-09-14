@@ -29,7 +29,18 @@ export function NotificationsDropdown({ visible, onClose, notifications, topOffs
         >
           {/* Swallows taps so they don't bubble to the backdrop Pressable and close the dropdown. */}
           <Pressable onPress={() => {}} className="gap-3 rounded-2xl border border-divider bg-surface p-4">
-            <Text className="heading-4 text-text-primary">Notifications</Text>
+            <View className="flex-row items-center justify-between">
+              <Text className="heading-4 text-text-primary">Notifications</Text>
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  router.push("/notifications");
+                }}
+                hitSlop={6}
+              >
+                <Text className="caption font-body-semibold text-brand-yellow">View all</Text>
+              </Pressable>
+            </View>
 
             {notifications.length === 0 ? (
               <Text className="body-md text-text-secondary">You don&apos;t have any notifications yet.</Text>

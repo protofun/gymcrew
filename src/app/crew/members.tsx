@@ -3,7 +3,9 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { type DuelMetric, DuelChallengeSheet } from "@/components/DuelChallengeSheet";
 import { EditableText } from "@/components/EditableText";
@@ -97,7 +99,7 @@ function MemberRow({
       </View>
 
       <EditableText id={`crew.members.${member.id}.level`} className="body-md font-body-bold text-brand-yellow">
-        {`LVL ${member.level}`}
+        {division.toUpperCase()}
       </EditableText>
 
       {canChallenge && (
@@ -117,6 +119,7 @@ function MemberRow({
 
 export default function CrewMembersScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const members = useCrewStore((state) => state.members);
   const crewName = useCrewStore((state) => state.name);
   const inviteCode = useCrewStore((state) => state.inviteCode);
@@ -145,7 +148,11 @@ export default function CrewMembersScreen() {
     if (!challengingId) return;
     setChallengingId(null);
     const result = await proposeDuel(challengingId, metric, toDateKey(new Date()));
-    if (!result.ok) Alert.alert("Couldn't send challenge", result.error);
+    if (!result.ok) {
+      Alert.alert("Couldn't send challenge", result.error);
+      return;
+    }
+    posthog.capture("crew_duel_proposed", { metric });
   }
 
   function divisionFor(member: CrewMember): Division {
@@ -180,7 +187,7 @@ export default function CrewMembersScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/crew")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Crew Members</Text>
@@ -264,11 +271,26 @@ export default function CrewMembersScreen() {
         visible={managingId !== null}
         member={managingMember}
         onClose={() => setManagingId(null)}
-        onPromote={() => managingId && setMemberRole(managingId, "co-leader")}
-        onDemote={() => managingId && setMemberRole(managingId, "member")}
-        onToggleAdmin={() => managingId && toggleMemberAdmin(managingId)}
+        onPromote={() => {
+          if (!managingId) return;
+          setMemberRole(managingId, "co-leader");
+          posthog.capture("crew_member_role_changed", { newRole: "co-leader" });
+        }}
+        onDemote={() => {
+          if (!managingId) return;
+          setMemberRole(managingId, "member");
+          posthog.capture("crew_member_role_changed", { newRole: "member" });
+        }}
+        onToggleAdmin={() => {
+          if (!managingId) return;
+          toggleMemberAdmin(managingId);
+          posthog.capture("crew_member_admin_toggled");
+        }}
         onRemove={() => {
-          if (managingId) removeMember(managingId);
+          if (managingId) {
+            removeMember(managingId);
+            posthog.capture("crew_member_removed");
+          }
           setManagingId(null);
         }}
       />

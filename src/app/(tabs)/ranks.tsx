@@ -1,12 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Modal, Platform, Pressable, ScrollView, Share, Text, View, type LayoutChangeEvent } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { captureRef } from "react-native-view-shot";
+import { usePostHog } from "posthog-react-native";
+import { AttachStep } from "react-native-spotlight-tour";
 
+import { ATTACH_INDEXES } from "@/components/AppTourOverlay";
 import { EditableText } from "@/components/EditableText";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -15,11 +18,14 @@ import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { images } from "@/constants/images";
 import type { Exercise } from "@/data/exercises";
 import { MAJOR_LIFT_CARDS, SEEDED_LIFT_CARDS, type LiftCardId } from "@/data/rank-lifts";
+import { api, isApiConfigured, type RankStanding } from "@/lib/api";
 import { tierForExercise } from "@/lib/generic-lift-rank";
 import { LIFT_CARD_SORT_OPTIONS, type LiftCardSortKey, type RankScope } from "@/lib/lift-rank-cards";
 import { buildSnapshotRecords } from "@/lib/profile-snapshot";
 import { ranksBoardCards, ranksBoardPowerScore, type DisplayLiftCard } from "@/lib/ranks-board";
 import { formatRankTier, RANK_TIER_COLOR, RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
+import { formatWeight } from "@/lib/units";
+import type { WeightUnit } from "@/store/active-workout-store";
 import { useDeveloperModeStore } from "@/store/developer-mode-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
@@ -75,7 +81,8 @@ type RanksBannerProps = {
 
 function RanksBanner({ power, tier, scope, onChangeScope, onShare, onOpenHistory, onOpenMuscleRank, onOpenBuildYourGraph, sharing }: RanksBannerProps) {
   return (
-    <View className="gap-4 rounded-3xl border border-divider bg-surface p-5">
+    <AttachStep index={ATTACH_INDEXES.ranks} fill>
+      <View className="gap-4 rounded-3xl border border-divider bg-surface p-5">
       <View className="flex-row items-start justify-between">
         <View className="flex-1 gap-3 pr-3">
           <Text className="caption font-body-semibold text-text-secondary" style={{ letterSpacing: 1.5 }}>
@@ -163,30 +170,15 @@ function RanksBanner({ power, tier, scope, onChangeScope, onShare, onOpenHistory
           );
         })}
       </View>
-    </View>
+      </View>
+    </AttachStep>
   );
 }
 
 const GRID_STAGGER_BASE_DELAY = 200;
 const GRID_STAGGER_STEP = 35;
 
-function LiftCard({
-  card,
-  width,
-  index,
-  editMode,
-  scope,
-  onPress,
-  onRemove,
-}: {
-  card: DisplayLiftCard;
-  width: number;
-  index: number;
-  editMode: boolean;
-  scope: RankScope;
-  onPress: () => void;
-  onRemove: () => void;
-}) {
+function LiftCard({ card, width, index, editMode, scope, weightUnit, onPress, onRemove }: { card: DisplayLiftCard; width: number; index: number; editMode: boolean; scope: RankScope; weightUnit: WeightUnit; onPress: () => void; onRemove: () => void }) {
   const tint = RANK_TIER_COLOR[card.tier];
   const percent = Math.round(card.percentileInTier * 100);
   const positivePr = (card.prDeltaKg ?? 0) >= 0;
@@ -232,19 +224,25 @@ function LiftCard({
             </EditableText>
           </View>
           <EditableText id={`ranks.lift.${card.id}.percentile`} className="caption font-body-semibold text-text-primary" numberOfLines={1}>
-            {scope === "gym" ? `#${card.gymRank}/${card.gymPoolSize}` : `${percent}%`}
+            {scope === "gym" ? (card.gymRank !== null && card.gymPoolSize !== null ? `#${card.gymRank}/${card.gymPoolSize}` : "Not ranked yet") : `${percent}%`}
           </EditableText>
         </View>
 
         <ProgressBar ratio={card.percentileInTier} color={tint} height={6} />
 
         {card.prDeltaKg !== null ? (
-          <EditableText id={`ranks.lift.${card.id}.prDelta`} className="caption font-body-semibold" style={{ color: positivePr ? colors.semantic.success : colors.semantic.error }}>
-            {`${positivePr ? "+" : ""}${card.prDeltaKg}kg PR`}
+          <EditableText
+            id={`ranks.lift.${card.id}.prDelta`}
+            className="caption font-body-semibold"
+            style={{
+              color: positivePr ? colors.semantic.success : colors.semantic.error,
+            }}
+          >
+            {`${positivePr ? "+" : ""}${formatWeight(card.prDeltaKg, weightUnit)} PR`}
           </EditableText>
         ) : (
           <EditableText id={`ranks.lift.${card.id}.best`} className="caption font-body-semibold text-text-secondary" numberOfLines={1}>
-            {card.bestWeightKg > 0 ? `Best: ${card.bestWeightKg}kg` : "No PR logged yet"}
+            {card.bestWeightKg > 0 ? `Best: ${formatWeight(card.bestWeightKg, weightUnit)}` : "No PR logged yet"}
           </EditableText>
         )}
       </Pressable>
@@ -376,19 +374,34 @@ export default function RanksScreen() {
   // guessing at outer padding.
   const [gridWidth, setGridWidth] = useState(0);
   const bannerRef = useRef<View>(null);
+  const posthog = usePostHog();
 
   const profile: RankProfile = useMemo(
     () => ({ gender, bodyWeightKg: snapshotAsOfMs != null && snapshotWeightKg != null ? snapshotWeightKg : weightKg, age }),
     [gender, weightKg, age, snapshotAsOfMs, snapshotWeightKg],
   );
+
+  // Real "where do you stand at your own gym" per lift (see backend/routes/rank-standings.php) —
+  // fetched once per set of achieved exercises rather than per-render; stays `{}` (every card falls
+  // back to its own honest "Not ranked yet" state) until this resolves or if there's no backend.
+  const [gymStandings, setGymStandings] = useState<Record<string, RankStanding | null>>({});
+  const exerciseIdsKey = useMemo(() => Object.keys(records).sort().join(","), [records]);
+  useEffect(() => {
+    if (!isApiConfigured || snapshotAsOfMs != null || !exerciseIdsKey) return;
+    api
+      .getRankStandings(exerciseIdsKey.split(","))
+      .then(setGymStandings)
+      .catch((error) => console.warn("Failed to load real gym rank standings", error));
+  }, [exerciseIdsKey, snapshotAsOfMs]);
+
   // Auto-curated: every exercise with a real record, best-rank-first, capped at 12 — a better
   // achievement always bumps a worse one out automatically. `customExerciseIds` pins tiles beyond
   // that (shown even with no record yet); `removedDefaultIds`/`hiddenAchievementIds` keep something
   // out regardless of rank. See lib/ranks-board.ts — the single source of truth for this board, also
   // used anywhere else "Overall Power" needs to match what's shown here.
   const cards = useMemo<DisplayLiftCard[]>(
-    () => ranksBoardCards(records, profile, scope, removedDefaultIds, hiddenAchievementIds, customExerciseIds),
-    [records, profile, scope, removedDefaultIds, hiddenAchievementIds, customExerciseIds],
+    () => ranksBoardCards(records, profile, scope, removedDefaultIds, hiddenAchievementIds, customExerciseIds, gymStandings),
+    [records, profile, scope, removedDefaultIds, hiddenAchievementIds, customExerciseIds, gymStandings],
   );
 
   const sortedCards = useMemo(() => sortDisplayCards(cards, sortKey), [cards, sortKey]);
@@ -422,6 +435,7 @@ export default function RanksScreen() {
     if (matchingDefault) restoreDefaultLift(matchingDefault.id);
     else addCustomLift(exercise.id);
     unhideAchievement(exercise.id);
+    posthog.capture("rank_lift_tracked", { exerciseId: exercise.id });
     setAddModalVisible(false);
   }
 
@@ -430,7 +444,9 @@ export default function RanksScreen() {
     // .catch() it so that never surfaces as an unhandled rejection (see pr-celebration.tsx).
     Share.share({
       message: `My GymCrew power score is ${power.toLocaleString("en-US")} — ${formatRankTier(topTier)} tier 💪`,
-    }).catch((error) => console.warn("Sharing is unavailable on this platform", error));
+    })
+      .then(() => posthog.capture("rank_shared"))
+      .catch((error) => console.warn("Sharing is unavailable on this platform", error));
   }
 
   async function handleShare() {
@@ -444,6 +460,7 @@ export default function RanksScreen() {
       const uri = await captureRef(bannerRef, { format: "png", quality: 1 });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: "image/png" });
+        posthog.capture("rank_shared");
       } else {
         shareAsText();
       }
@@ -461,94 +478,48 @@ export default function RanksScreen() {
         <SnapshotBanner asOfMs={snapshotAsOfMs} weightKg={snapshotWeightKg} weightUnit={weightUnit} onExit={clearSnapshot} />
       )}
       <ScrollView className="flex-1" contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
-      <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="px-4 pt-4">
-        <View ref={bannerRef} collapsable={false}>
-          <RanksBanner
-            power={power}
-            tier={topTier}
-            scope={scope}
-            onChangeScope={setScope}
-            onShare={handleShare}
-            onOpenHistory={() => router.push("/ranks/history")}
-            onOpenMuscleRank={() => router.push("/ranks/body-graph")}
-            onOpenBuildYourGraph={developerModeEnabled ? () => router.push("/ranks/build-your-graph") : undefined}
-            sharing={sharing}
-          />
-        </View>
-      </Animated.View>
-
-      <Animated.View entering={FadeInUp.delay(90).springify().damping(16).mass(0.6)}>
-        <Pressable
-          onPress={() => router.push("/ranks/whats-my-rank")}
-          style={PRESSED_STYLE}
-          className="mx-4 mt-4 flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4"
-        >
-          <Ionicons name="sparkles" size={18} color={colors.brand.iron} />
-          <Text className="body-lg font-body-semibold text-brand-iron">What&apos;s my rank?</Text>
-        </Pressable>
-      </Animated.View>
-
-      <Animated.View entering={FadeInUp.delay(150).springify().damping(16).mass(0.6)} className="mx-4 mt-6 gap-3">
-        <View className="flex-row items-center justify-between">
-          <Text style={sectionHeaderStyle} className="text-brand-white">
-            LIFTS
-          </Text>
-
-          <View className="flex-row items-center gap-2">
-            <Pressable
-              onPress={() => setSortMenuOpen(true)}
-              style={PRESSED_STYLE}
-              className="flex-row items-center gap-1 rounded-full border border-divider bg-surface px-3 py-1.5"
-            >
-              <Text className="caption font-body-semibold text-text-secondary">Sort: {sortLabel}</Text>
-              <Ionicons name="chevron-down" size={12} color={colors.neutral.textSecondary} />
-            </Pressable>
-
-            {snapshotAsOfMs == null && (
-              <Pressable
-                onPress={() => setEditMode((current) => !current)}
-                style={PRESSED_STYLE}
-                className={`rounded-full border px-3 py-1.5 ${editMode ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"}`}
-              >
-                <Text className={`caption font-body-semibold ${editMode ? "text-brand-iron" : "text-text-secondary"}`}>
-                  {editMode ? "Done" : "Edit"}
-                </Text>
-              </Pressable>
-            )}
+        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="px-4 pt-4">
+          <View ref={bannerRef} collapsable={false}>
+            <RanksBanner power={power} tier={topTier} scope={scope} onChangeScope={setScope} onShare={handleShare} onOpenHistory={() => router.push("/ranks/history")} onOpenMuscleRank={() => router.push("/ranks/body-graph")} onOpenBuildYourGraph={developerModeEnabled ? () => router.push("/ranks/build-your-graph") : undefined} sharing={sharing} />
           </View>
-        </View>
+        </Animated.View>
 
-        <View className="flex-row flex-wrap" style={{ gap: GRID_GAP }} onLayout={handleGridLayout}>
-          {cardWidth > 0 &&
-            sortedCards.map((card, index) => (
-              <LiftCard
-                key={card.id}
-                card={card}
-                width={cardWidth}
-                index={index}
-                editMode={editMode}
-                scope={scope}
-                onPress={() => handleCardPress(card)}
-                onRemove={() => handleRemoveCard(card)}
-              />
-            ))}
-          {cardWidth > 0 && snapshotAsOfMs == null && (
-            <AddLiftTile width={cardWidth} index={sortedCards.length} onPress={() => setAddModalVisible(true)} />
-          )}
-        </View>
-      </Animated.View>
+        <Animated.View entering={FadeInUp.delay(90).springify().damping(16).mass(0.6)}>
+          <Pressable onPress={() => router.push("/ranks/whats-my-rank")} style={PRESSED_STYLE} className="mx-4 mt-4 flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4">
+            <Ionicons name="sparkles" size={18} color={colors.brand.iron} />
+            <Text className="body-lg font-body-semibold text-brand-iron">What&apos;s my rank?</Text>
+          </Pressable>
+        </Animated.View>
 
-      <SortMenu visible={sortMenuOpen} sortKey={sortKey} onChange={setSortKey} onClose={() => setSortMenuOpen(false)} />
+        <Animated.View entering={FadeInUp.delay(150).springify().damping(16).mass(0.6)} className="mx-4 mt-6 gap-3">
+          <View className="flex-row items-center justify-between">
+            <Text style={sectionHeaderStyle} className="text-brand-white">
+              LIFTS
+            </Text>
 
-      <ExercisePickerModal
-        visible={addModalVisible}
-        title="Add a Lift"
-        subtitle="Track any exercise on your Ranks overview."
-        onClose={() => setAddModalVisible(false)}
-        onSelect={handleAddExercise}
-        hideCreateRow
-        renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, cards, records, profile)} size={34} />}
-      />
+            <View className="flex-row items-center gap-2">
+              <Pressable onPress={() => setSortMenuOpen(true)} style={PRESSED_STYLE} className="flex-row items-center gap-1 rounded-full border border-divider bg-surface px-3 py-1.5">
+                <Text className="caption font-body-semibold text-text-secondary">Sort: {sortLabel}</Text>
+                <Ionicons name="chevron-down" size={12} color={colors.neutral.textSecondary} />
+              </Pressable>
+
+              {snapshotAsOfMs == null && (
+                <Pressable onPress={() => setEditMode((current) => !current)} style={PRESSED_STYLE} className={`rounded-full border px-3 py-1.5 ${editMode ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"}`}>
+                  <Text className={`caption font-body-semibold ${editMode ? "text-brand-iron" : "text-text-secondary"}`}>{editMode ? "Done" : "Edit"}</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+
+          <View className="flex-row flex-wrap" style={{ gap: GRID_GAP }} onLayout={handleGridLayout}>
+            {cardWidth > 0 && sortedCards.map((card, index) => <LiftCard key={card.id} card={card} width={cardWidth} index={index} editMode={editMode} scope={scope} weightUnit={weightUnit} onPress={() => handleCardPress(card)} onRemove={() => handleRemoveCard(card)} />)}
+            {cardWidth > 0 && snapshotAsOfMs == null && <AddLiftTile width={cardWidth} index={sortedCards.length} onPress={() => setAddModalVisible(true)} />}
+          </View>
+        </Animated.View>
+
+        <SortMenu visible={sortMenuOpen} sortKey={sortKey} onChange={setSortKey} onClose={() => setSortMenuOpen(false)} />
+
+        <ExercisePickerModal visible={addModalVisible} title="Add a Lift" subtitle="Track any exercise on your Ranks overview." onClose={() => setAddModalVisible(false)} onSelect={handleAddExercise} hideCreateRow renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, cards, records, profile)} size={34} />} />
       </ScrollView>
     </View>
   );

@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { FLEX_TAGS } from "@/data/flex-tags";
 import { SPLIT_THEMES } from "@/data/split-themes";
 import { toDateKey } from "@/lib/date";
@@ -90,6 +91,7 @@ function BoostCard({
 
 export default function StoreScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const tokens = useCurrencyStore((state) => state.tokens);
   const freezeDateKeys = useCurrencyStore((state) => state.freezeDateKeys);
   const spendStreakFreeze = useCurrencyStore((state) => state.useStreakFreeze);
@@ -117,7 +119,7 @@ export default function StoreScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/profile")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Store</Text>
@@ -176,7 +178,11 @@ export default function StoreScreen() {
                       : `Freeze Yesterday · ${STREAK_FREEZE_COST} tokens`
               }
               disabled={!canFreeze}
-              onPress={() => canFreeze && spendStreakFreeze(key)}
+              onPress={() => {
+                if (!canFreeze) return;
+                spendStreakFreeze(key);
+                posthog.capture("store_item_purchased", { item: "streak_freeze", cost: STREAK_FREEZE_COST });
+              }}
             />
             <BoostCard
               icon="rocket"
@@ -185,7 +191,10 @@ export default function StoreScreen() {
               description="Doubles the XP from your next completed workout."
               actionLabel={xpBoostActive ? "Active — finish a workout" : tokens < XP_BOOST_COST ? `Need ${XP_BOOST_COST - tokens} more tokens` : `Activate · ${XP_BOOST_COST} tokens`}
               disabled={xpBoostActive || tokens < XP_BOOST_COST}
-              onPress={() => activateXpBoost()}
+              onPress={() => {
+                activateXpBoost();
+                posthog.capture("store_item_purchased", { item: "xp_boost", cost: XP_BOOST_COST });
+              }}
             />
           </View>
         </Animated.View>
@@ -207,7 +216,10 @@ export default function StoreScreen() {
                     <Text className="caption text-text-secondary">Normally unlocks at {theme.unlockDivision}</Text>
                   </View>
                   <Pressable
-                    onPress={() => purchaseTheme(theme.key, theme.earlyUnlockCost)}
+                    onPress={() => {
+                      purchaseTheme(theme.key, theme.earlyUnlockCost);
+                      posthog.capture("store_item_purchased", { item: "split_theme", themeKey: theme.key, cost: theme.earlyUnlockCost });
+                    }}
                     disabled={tokens < theme.earlyUnlockCost}
                     className={`flex-row items-center gap-1 rounded-full px-3.5 py-2 ${tokens >= theme.earlyUnlockCost ? "bg-brand-yellow" : "bg-background"}`}
                   >
@@ -250,7 +262,10 @@ export default function StoreScreen() {
                     </Pressable>
                   ) : (
                     <Pressable
-                      onPress={() => purchaseTag(tag.id)}
+                      onPress={() => {
+                        purchaseTag(tag.id);
+                        posthog.capture("store_item_purchased", { item: "flex_tag", tagId: tag.id, cost: tag.cost });
+                      }}
                       disabled={tokens < tag.cost}
                       className={`w-full flex-row items-center justify-center gap-1 rounded-full py-2 ${
                         tokens >= tag.cost ? "bg-brand-yellow" : "bg-background"

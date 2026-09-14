@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBack } from "@/lib/navigation";
 import { AchievementRow } from "@/components/AchievementRow";
 import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { EditableText } from "@/components/EditableText";
+import { ReportModal } from "@/components/ReportModal";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -14,17 +16,20 @@ import { RankBadge } from "@/components/RankBadge";
 import { StatTile } from "@/components/StatTile";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
 import { VisualTrainingCalendar, type CalendarWorkout } from "@/components/VisualTrainingCalendar";
-import { EXERCISE_BY_ID, type Exercise } from "@/data/exercises";
+import { EXERCISE_BY_ID, exerciseByIdWithCustom, type Exercise } from "@/data/exercises";
 import type { MuscleGroup } from "@/data/workout-log";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { memberLiftCards, muscleGroupRanksForCrewMember, profileForCrewMember } from "@/lib/crew-lift-compare";
 import { isSameMonth, startOfMonth } from "@/lib/date";
 import { xpRequiredFor, type Division } from "@/lib/division";
 import { tierForExercise } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards, type LiftRankCard } from "@/lib/lift-rank-cards";
-import { memberAchievements } from "@/lib/member-mock-profile";
+import type { Achievement } from "@/lib/member-mock-profile";
 import { realMemberAchievements, realMemberStats, realStrengthProgress } from "@/lib/member-real-profile";
 import { computeMuscleGroupRanks, type MuscleGroupRank } from "@/lib/muscle-group-rank";
-import { formatRankTier, MAJOR_LIFT_EXERCISE_IDS, RANK_TIER_COLOR, RANK_TIERS, type RankProfile } from "@/lib/rank";
+import { formatRankTier, MAJOR_LIFT_EXERCISE_IDS, RANK_TIER_COLOR, RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
+import { displayWeight, formatWeight } from "@/lib/units";
+import { useBlockedUsersStore } from "@/store/blocked-users-store";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
 import {
   BRO_MEMBER_ID,
@@ -35,6 +40,7 @@ import {
   type CrewMember,
   type CrewRole,
 } from "@/store/crew-store";
+import { useCustomExercisesStore } from "@/store/custom-exercises-store";
 import { useOnboardingStore, type Gender } from "@/store/onboarding-store";
 import { usePersonalRecordsStore, type PersonalRecord } from "@/store/personal-records-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
@@ -55,6 +61,12 @@ const NO_RECORDS: Record<string, PersonalRecord> = {};
 
 const TABS = ["Overview", "Workouts", "Stats", "Achievements"] as const;
 type Tab = (typeof TABS)[number];
+
+/** `realMemberAchievements` doesn't know which lift-card set/profile represents the pictured
+ * member (that's a page-level concern — see `pickerCards`/`pickerProfile` below), so the real rank
+ * tier for each PR is computed here and attached, rather than every achievement always reading as
+ * the same placeholder tier. */
+type AchievementWithTier = Achievement & { tier: RankTier };
 
 const ROLE_LABEL: Record<CrewRole, string | null> = { leader: "Leader", "co-leader": "Co-Leader", member: null };
 
@@ -88,7 +100,7 @@ function OverviewTab({
   member: CrewMember;
   division: Division;
   stats: { workoutsCount: number; volumeKg: number; prsCount: number };
-  achievements: ReturnType<typeof memberAchievements>;
+  achievements: AchievementWithTier[];
   onSeeAllAchievements: () => void;
 }) {
   // Real XP/division from the backend (see crew-store.ts's CrewMember doc comment) — `member.level`
@@ -96,6 +108,7 @@ function OverviewTab({
   const xp = member.level;
   const xpToNextLevel = xpRequiredFor(division);
   const roleLabel = ROLE_LABEL[member.role];
+  const weightUnit = useWeightUnit();
 
   return (
     <View className="gap-5 p-4">
@@ -117,7 +130,7 @@ function OverviewTab({
       <View className="gap-1.5">
         <View className="flex-row items-center justify-between">
           <EditableText id={`crew.member.${member.id}.level`} className="caption font-body-semibold text-text-secondary">
-            {`LVL ${member.level}`}
+            {division.toUpperCase()}
           </EditableText>
           <EditableText id={`crew.member.${member.id}.xpProgress`} className="caption text-text-secondary">
             {`${xp.toLocaleString("en-US")} / ${xpToNextLevel.toLocaleString("en-US")} XP`}
@@ -128,7 +141,7 @@ function OverviewTab({
 
       <View className="flex-row gap-3">
         <StatTile id={`crew.member.${member.id}.stats.workouts`} icon="barbell" label="Workouts" value={String(stats.workoutsCount)} />
-        <StatTile id={`crew.member.${member.id}.stats.volume`} icon="trending-up" label="Volume" value={`${stats.volumeKg.toLocaleString("en-US")} kg`} />
+        <StatTile id={`crew.member.${member.id}.stats.volume`} icon="trending-up" label="Volume" value={formatWeight(stats.volumeKg, weightUnit)} />
         <StatTile id={`crew.member.${member.id}.stats.prs`} icon="ribbon" label="PRs" value={String(stats.prsCount)} />
       </View>
 
@@ -147,7 +160,7 @@ function OverviewTab({
         ) : (
           <View className="gap-2.5">
             {achievements.slice(0, 2).map((achievement) => (
-              <AchievementRow key={achievement.id} achievement={achievement} />
+              <AchievementRow key={achievement.id} achievement={achievement} tier={achievement.tier} />
             ))}
           </View>
         )}
@@ -245,6 +258,7 @@ function StatsTab({
 }) {
   const myGender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const gender: Gender = memberId === CURRENT_MEMBER_ID ? myGender : "male";
+  const weightUnit = useWeightUnit();
   const rankedEntries = (Object.entries(muscleRanks) as [MuscleGroup, MuscleGroupRank][]).filter(
     (entry): entry is [MuscleGroup, Extract<MuscleGroupRank, { status: "ranked" }>] => entry[1]?.status === "ranked",
   );
@@ -304,13 +318,18 @@ function StatsTab({
           <Text className="body-md text-text-primary">{selectedExerciseName}</Text>
           <Ionicons name="chevron-down" size={18} color={colors.neutral.textSecondary} />
         </Pressable>
-        <StrengthProgressChart exerciseName={selectedExerciseName} points={strengthPoints} />
+        <StrengthProgressChart
+          exerciseName={selectedExerciseName}
+          points={strengthPoints.map((point) => ({ ...point, value: displayWeight(point.value, weightUnit) }))}
+          title={`1RM (${weightUnit})`}
+          unit={weightUnit}
+        />
       </View>
     </View>
   );
 }
 
-function AchievementsTab({ achievements }: { achievements: ReturnType<typeof memberAchievements> }) {
+function AchievementsTab({ achievements }: { achievements: AchievementWithTier[] }) {
   return (
     <View className="gap-2.5 p-4">
       {achievements.length === 0 ? (
@@ -319,7 +338,7 @@ function AchievementsTab({ achievements }: { achievements: ReturnType<typeof mem
           <Text className="body-md text-text-secondary">No achievements yet.</Text>
         </View>
       ) : (
-        achievements.map((achievement) => <AchievementRow key={achievement.id} achievement={achievement} />)
+        achievements.map((achievement) => <AchievementRow key={achievement.id} achievement={achievement} tier={achievement.tier} />)
       )}
     </View>
   );
@@ -334,6 +353,11 @@ export default function MemberProfileScreen() {
   const member = members.find((candidate) => candidate.id === id);
   const isMe = id === CURRENT_MEMBER_ID;
   const isCurated = !isMe && Boolean(member) && isCuratedMember(member!.id);
+  const isBlocked = useBlockedUsersStore((state) => (member ? state.isBlocked(member.id) : false));
+  const blockUser = useBlockedUsersStore((state) => state.blockUser);
+  const unblockUser = useBlockedUsersStore((state) => state.unblockUser);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   // Real division from the backend (see crew-store.ts's CrewMember doc comment) — never derived
   // from `level`, which is real total XP, not the old mock 1-30 "level" scale.
   const myDivision = useProfileLevelStore((state) => state.division);
@@ -345,6 +369,7 @@ export default function MemberProfileScreen() {
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
   const age = useOnboardingStore((state) => state.onboarding.age);
   const membersActivity = useCrewActivityStore((state) => state.membersActivity);
+  const customExercises = useCustomExercisesStore((state) => state.exercises);
   const otherActivity = member ? membersActivity[member.id] : undefined;
   const otherWorkouts = otherActivity?.recentWorkouts ?? NO_WORKOUTS;
   const otherRecords = otherActivity?.records ?? NO_RECORDS;
@@ -353,7 +378,7 @@ export default function MemberProfileScreen() {
   const displayGender: Gender = isMe ? gender : (otherActivity?.profile.gender ?? "male");
 
   const stats = isMe ? realMemberStats(realWorkouts) : realMemberStats(otherWorkouts);
-  const achievements = isMe ? realMemberAchievements(realRecords) : realMemberAchievements(otherRecords);
+  const rawAchievements = isMe ? realMemberAchievements(realRecords) : realMemberAchievements(otherRecords);
   const strengthByExercise = isMe ? realStrengthProgress(realWorkouts) : realStrengthProgress(otherWorkouts);
 
   const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
@@ -377,6 +402,15 @@ export default function MemberProfileScreen() {
   const pickerProfile = isMe ? profile : isCurated ? profileForCrewMember(member?.id ?? "") : otherProfile;
   const pickerRecords = isMe ? realRecords : isCurated ? {} : otherRecords;
 
+  // Each achievement's real rank tier — the pictured member's own lift cards/profile (same "which
+  // data represents this member" question `pickerCards` above already answers), not a hardcoded
+  // placeholder tier. Custom (user-created) exercises only resolve for "me" — a crewmate's own
+  // custom exercises aren't shared/synced data this screen has access to.
+  const achievements: AchievementWithTier[] = rawAchievements.map((achievement) => {
+    const exercise = isMe ? exerciseByIdWithCustom(achievement.id, customExercises) : EXERCISE_BY_ID[achievement.id];
+    return { ...achievement, tier: exercise ? tierForExercise(exercise, pickerCards, pickerRecords, pickerProfile) : "rookie" };
+  });
+
   const [selectedExercise, setSelectedExercise] = useState<Exercise>(() => EXERCISE_BY_ID[MAJOR_LIFT_EXERCISE_IDS.benchPress]);
   const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
 
@@ -395,7 +429,7 @@ export default function MemberProfileScreen() {
     return (
       <View style={{ flex: 1, paddingTop: insets.top }} className="items-center justify-center bg-background px-6">
         <Text className="body-md text-text-secondary">This member could not be found.</Text>
-        <Pressable onPress={() => router.back()} className="mt-4">
+        <Pressable onPress={() => goBack("/(tabs)/crew")} className="mt-4">
           <Text className="body-md font-body-semibold text-brand-yellow">Go back</Text>
         </Pressable>
       </View>
@@ -405,12 +439,17 @@ export default function MemberProfileScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/crew")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <EditableText id={`crew.member.${member.id}.headerTitle`} className="heading-4 text-text-primary" numberOfLines={1}>
           {`${member.name}'s Profile`}
         </EditableText>
+        {!isMe && !isCurated && (
+          <Pressable onPress={() => setActionsOpen(true)} hitSlop={8} style={{ position: "absolute", right: 16 }}>
+            <Ionicons name="ellipsis-horizontal" size={22} color={colors.neutral.textPrimary} />
+          </Pressable>
+        )}
       </View>
 
       <TabBar active={tab} onChange={setTab} />
@@ -452,6 +491,44 @@ export default function MemberProfileScreen() {
         hideCreateRow
         renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, pickerCards, pickerRecords, pickerProfile)} size={34} />}
       />
+
+      <Modal visible={actionsOpen} transparent animationType="fade" onRequestClose={() => setActionsOpen(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }} onPress={() => setActionsOpen(false)}>
+          <Pressable onPress={() => {}} className="gap-1 rounded-t-3xl border-t border-divider bg-surface p-2" style={{ paddingBottom: insets.bottom + 8 }}>
+            <Pressable
+              onPress={() => {
+                setActionsOpen(false);
+                setReportOpen(true);
+              }}
+              className="flex-row items-center gap-3 rounded-xl px-4 py-3.5"
+            >
+              <Ionicons name="flag-outline" size={20} color={colors.neutral.textPrimary} />
+              <Text className="body-md text-text-primary">Report Member</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setActionsOpen(false);
+                if (isBlocked) {
+                  unblockUser(member.id);
+                } else {
+                  Alert.alert("Block Member", `You won't see ${member.name}'s activity in your Crew feed anymore. They won't be notified.`, [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Block", style: "destructive", onPress: () => blockUser(member.id) },
+                  ]);
+                }
+              }}
+              className="flex-row items-center gap-3 rounded-xl px-4 py-3.5"
+            >
+              <Ionicons name="ban-outline" size={20} color={colors.semantic.error} />
+              <Text className="body-md" style={{ color: colors.semantic.error }}>
+                {isBlocked ? "Unblock Member" : "Block Member"}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <ReportModal visible={reportOpen} targetType="user" targetId={member.id} onClose={() => setReportOpen(false)} />
     </View>
   );
 }

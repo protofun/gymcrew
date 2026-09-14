@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBack } from "@/lib/navigation";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { RankBadge } from "@/components/RankBadge";
 import { WorkoutOptionsSheet } from "@/components/WorkoutOptionsSheet";
@@ -142,7 +143,7 @@ export default function BuildWorkoutScreen() {
               resetDraft();
               setMode("list");
             } else {
-              router.back();
+              goBack();
             }
           }}
           hitSlop={8}

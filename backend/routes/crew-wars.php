@@ -2,12 +2,18 @@
 
 /**
  * Real crew-vs-crew Wars — see db/schema.sql's `crew_war_queue`/`crew_wars`/`crew_war_attacks`.
- * A crew is never without a War to fight: `ensureActiveWar` below auto-starts a new one the moment
- * there isn't an active one, matching a real crew waiting in `crew_war_queue` if one exists, or
- * instantly a same-ish-division "bot" crew otherwise (real rows — see the seed block in
+ * By default a crew is auto-entered into a new War the moment it has none (`getOrStartWar` below,
+ * `force = false`) — matching a real, currently-active crew waiting in `crew_war_queue` if one
+ * exists, or a same-ish-division "bot" crew otherwise (real rows — see the seed block in
  * db/schema.sql — so the whole War, opponent included, is genuinely persisted, not computed
- * client-side). The old leader-gated "Find a War" / "Searching…" flow is gone — War is fully
- * passive now, same as the Weekly League's always-on weekly cycle.
+ * client-side). A crew's leader/co-leader can turn this off (`crews.war_auto_match_enabled`, see
+ * crews.php's updateCrew) so their crew only ever enters a War when a member explicitly asks for
+ * one (`POST /crew-wars/start`, `force = true`) — covering both "I don't want to always be at war"
+ * and "let me choose when."
+ *
+ * Real-crew matchmaking only ever pairs against a crew with genuine recent member activity (see
+ * `crewHasRecentActivity`) — an abandoned crew sitting stale in the queue is evicted instead of
+ * ever being matched, since a War against a crew that can't fight back isn't a War.
  *
  * Every "attack" is one real logged workout during an active War — real or bot, both sides log
  * real rows to `crew_war_attacks` (bot attacks are generated lazily on read, deterministically
@@ -15,7 +21,10 @@
  * generateDueBotAttacks). This is what powers the attack feed, not just a running total.
  *
  * Routes (all require auth, see index.php):
- *   GET  /crew-wars/active  -> this crew's current War (auto-starts one if there wasn't one)
+ *   GET  /crew-wars/active  -> this crew's current War, or `{ war: null }` if it has none and
+ *                              auto-match is off — never silently starts one in that case
+ *   POST /crew-wars/start   -> leader/co-leader only: start (or match into) a War right now,
+ *                              regardless of the auto-match setting
  *   POST /crew-wars/attack  -> record one attack from the caller's just-finished workout
  */
 function handleCrewWars(PDO $pdo, string $userId, string $method, ?array $body, array $segments): void
@@ -24,6 +33,11 @@ function handleCrewWars(PDO $pdo, string $userId, string $method, ?array $body, 
 
     if ($sub === 'active' && $method === 'GET') {
         respondWithActiveWar($pdo, $userId);
+        return;
+    }
+
+    if ($sub === 'start' && $method === 'POST') {
+        handleStartWar($pdo, $userId);
         return;
     }
 
@@ -36,8 +50,21 @@ function handleCrewWars(PDO $pdo, string $userId, string $method, ?array $body, 
 }
 
 const WAR_DURATION_MS = 3 * 24 * 60 * 60 * 1000;
+// A real crew with nobody having trained in this long is treated as abandoned for matchmaking
+// purposes — long enough that someone on a normal rest/deload week never gets flagged, short
+// enough that a War (itself only WAR_DURATION_MS long) doesn't get handed a dead opponent.
+const WAR_MATCH_ACTIVITY_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const ATTACK_PR_BONUS = 250;
 const BOT_ATTACK_MIN_INTERVAL_MS = 8 * 60 * 60 * 1000;
+// One attack is supposed to be one just-finished real workout (see the doc comment above) — these
+// guard against a client (or a raw replayed request, bypassing the app entirely) inflating a
+// crew's War score with an implausible volume or by firing the same "finished workout" repeatedly.
+// Generous on purpose: this is an abuse ceiling, not a fairness/anti-cheat mechanism — a bot attack
+// already tops out at 9,000kg (see generateDueBotAttacks), so a real session should never need to
+// exceed this by much even on a very heavy multi-exercise day.
+const MAX_ATTACK_VOLUME_KG = 20000;
+const MAX_ATTACK_PR_COUNT = 10;
+const MIN_ATTACK_INTERVAL_MS = 2 * 60 * 1000;
 const BOT_ATTACK_MAX_INTERVAL_MS = 16 * 60 * 60 * 1000;
 
 const DIVISION_ORDER = [
@@ -76,6 +103,57 @@ function crewPowerSnapshot(PDO $pdo, string $crewId): int
     );
     $stmt->execute([$crewId]);
     return (int) $stmt->fetch()['power'];
+}
+
+/** True if any real member of `$crewId` has completed a real workout within the last
+ * WAR_MATCH_ACTIVITY_WINDOW_MS — used to keep matchmaking from pairing a crew against one that's
+ * effectively abandoned. Bot crews are always "active" by definition (see isBotCrew) — their
+ * attacks are generated on a schedule, never from real member activity. */
+function crewHasRecentActivity(PDO $pdo, string $crewId): bool
+{
+    if (isBotCrew($crewId)) {
+        return true;
+    }
+
+    $cutoff = (int) round(microtime(true) * 1000) - WAR_MATCH_ACTIVITY_WINDOW_MS;
+    $stmt = $pdo->prepare(
+        'SELECT 1 FROM workouts w
+         JOIN crew_members cm ON cm.user_id = w.user_id
+         WHERE cm.crew_id = ? AND w.completed_at >= ?
+         LIMIT 1'
+    );
+    $stmt->execute([$crewId, $cutoff]);
+    return (bool) $stmt->fetch();
+}
+
+/**
+ * The best real, currently-active opponent waiting in `crew_war_queue`, closest in power first —
+ * `null` if the queue has nobody active right now. A queued crew with no recent activity is
+ * evicted as it's passed over (not just skipped) so the queue self-cleans of abandoned crews over
+ * time instead of accumulating them forever. Race-safe the same way the original single-candidate
+ * version was: only a successful DELETE (rowCount > 0) actually claims a candidate, so two crews
+ * racing to match the same queued one can't both win it.
+ */
+function findActiveQueuedOpponent(PDO $pdo, int $crewPower): ?string
+{
+    $stmt = $pdo->prepare('SELECT crew_id FROM crew_war_queue ORDER BY ABS(crew_power - ?) ASC, queued_at ASC');
+    $stmt->execute([$crewPower]);
+
+    foreach ($stmt->fetchAll() as $row) {
+        $candidateId = $row['crew_id'];
+        if (!crewHasRecentActivity($pdo, $candidateId)) {
+            $pdo->prepare('DELETE FROM crew_war_queue WHERE crew_id = ?')->execute([$candidateId]);
+            continue;
+        }
+
+        $deleteStmt = $pdo->prepare('DELETE FROM crew_war_queue WHERE crew_id = ?');
+        $deleteStmt->execute([$candidateId]);
+        if ($deleteStmt->rowCount() > 0) {
+            return $candidateId;
+        }
+    }
+
+    return null;
 }
 
 /** The closest-division bot crew to `$crewId`'s own division — a real row, see db/schema.sql. */
@@ -137,18 +215,35 @@ function resolveWarIfEnded(PDO $pdo, array $war): array
 }
 
 /**
- * Guarantees `$crewId` has an active War, starting one if it doesn't: a real crew already waiting
- * in `crew_war_queue` (closest in power) if there is one, otherwise an immediate match against the
- * nearest-division bot crew — `$crewId` also gets queued for real matchmaking in the background so
- * a genuine opponent can still be found later without ever leaving the crew stuck waiting for one.
+ * Returns `$crewId`'s active War, or starts one, or returns `null` — depending on `$force`:
+ *  - An already-active War (or one that just got resolved and immediately replaced, when allowed)
+ *    is always returned first, regardless of `$force`.
+ *  - Without an active War: `$force = true` (a member explicitly asked, see `handleStartWar`)
+ *    always starts one. `$force = false` (the passive path — `respondWithActiveWar`/`recordAttack`)
+ *    only starts one if this crew's own `war_auto_match_enabled` is still on; otherwise returns
+ *    `null` so the crew genuinely sits without a War until someone asks for one.
+ *
+ * Starting one matches a real, currently-active crew waiting in `crew_war_queue` (closest in
+ * power) if one exists, otherwise an immediate match against the nearest-division bot crew —
+ * `$crewId` also gets queued for real matchmaking in the background so a genuine opponent can
+ * still be found later without ever leaving the crew stuck waiting for one.
  */
-function ensureActiveWar(PDO $pdo, string $crewId): array
+function getOrStartWar(PDO $pdo, string $crewId, bool $force): ?array
 {
     $existing = activeWarForCrew($pdo, $crewId);
     if ($existing) {
         $existing = resolveWarIfEnded($pdo, $existing);
         if ($existing['status'] === 'active') {
             return $existing;
+        }
+    }
+
+    if (!$force) {
+        $autoStmt = $pdo->prepare('SELECT war_auto_match_enabled FROM crews WHERE id = ?');
+        $autoStmt->execute([$crewId]);
+        $autoRow = $autoStmt->fetch();
+        if (!$autoRow || !(bool) $autoRow['war_auto_match_enabled']) {
+            return null;
         }
     }
 
@@ -159,20 +254,7 @@ function ensureActiveWar(PDO $pdo, string $crewId): array
     try {
         $pdo->prepare('DELETE FROM crew_war_queue WHERE crew_id = ?')->execute([$crewId]);
 
-        $matchStmt = $pdo->prepare(
-            'SELECT crew_id FROM crew_war_queue ORDER BY ABS(crew_power - ?) ASC, queued_at ASC LIMIT 1'
-        );
-        $matchStmt->execute([$crewPower]);
-        $opponent = $matchStmt->fetch();
-
-        $opponentCrewId = null;
-        if ($opponent) {
-            $deleteOpponent = $pdo->prepare('DELETE FROM crew_war_queue WHERE crew_id = ?');
-            $deleteOpponent->execute([$opponent['crew_id']]);
-            if ($deleteOpponent->rowCount() > 0) {
-                $opponentCrewId = $opponent['crew_id'];
-            }
-        }
+        $opponentCrewId = findActiveQueuedOpponent($pdo, $crewPower);
 
         if ($opponentCrewId === null) {
             $pdo->prepare('INSERT INTO crew_war_queue (crew_id, crew_power, queued_at) VALUES (?, ?, ?)')
@@ -320,7 +402,11 @@ function respondWithActiveWar(PDO $pdo, string $userId): void
         return;
     }
 
-    $war = ensureActiveWar($pdo, $crewId);
+    $war = getOrStartWar($pdo, $crewId, false);
+    if ($war === null) {
+        jsonResponse(['war' => null]);
+        return;
+    }
     generateDueBotAttacks($pdo, $war);
 
     // Re-fetch — generateDueBotAttacks may have just updated the score columns.
@@ -331,10 +417,36 @@ function respondWithActiveWar(PDO $pdo, string $userId): void
     jsonResponse(['war' => warJson($pdo, $war, $crewId)]);
 }
 
+/** A member explicitly asking for a War right now — see `getOrStartWar`'s `$force = true` path.
+ * Leader/co-leader only, same gate as every other crew-wide setting/action in crews.php. */
+function handleStartWar(PDO $pdo, string $userId): void
+{
+    $crewId = findMyCrewId($pdo, $userId);
+    if ($crewId === null) {
+        errorResponse('You are not in a crew', 404);
+        return;
+    }
+    $role = myRoleInCrew($pdo, $userId, $crewId);
+    if ($role !== 'leader' && $role !== 'co-leader') {
+        errorResponse('Only the crew leader or co-leader can start a War', 403);
+        return;
+    }
+
+    $war = getOrStartWar($pdo, $crewId, true);
+    generateDueBotAttacks($pdo, $war);
+
+    $stmt = $pdo->prepare('SELECT * FROM crew_wars WHERE id = ?');
+    $stmt->execute([$war['id']]);
+    $war = $stmt->fetch();
+
+    jsonResponse(['war' => warJson($pdo, $war, $crewId)]);
+}
+
 function recordAttack(PDO $pdo, string $userId, array $data): void
 {
     $volumeKg = isset($data['volumeKg']) ? (float) $data['volumeKg'] : 0;
-    $prCount = isset($data['prCount']) ? max(0, (int) $data['prCount']) : 0;
+    $volumeKg = min($volumeKg, MAX_ATTACK_VOLUME_KG);
+    $prCount = isset($data['prCount']) ? max(0, min(MAX_ATTACK_PR_COUNT, (int) $data['prCount'])) : 0;
     $workoutName = isset($data['workoutName']) ? trim((string) $data['workoutName']) : null;
     if ($workoutName === '') $workoutName = null;
 
@@ -344,9 +456,22 @@ function recordAttack(PDO $pdo, string $userId, array $data): void
         return;
     }
 
-    $war = ensureActiveWar($pdo, $crewId);
+    // No active War and auto-match is off — nothing to attack. A member has to tap "Start War"
+    // first (see handleStartWar); a finished workout alone no longer drags the crew into one.
+    $war = getOrStartWar($pdo, $crewId, false);
+    if ($war === null) {
+        jsonResponse(['ok' => true, 'attacked' => false]);
+        return;
+    }
     generateDueBotAttacks($pdo, $war);
-    if ($war['status'] !== 'active') {
+
+    // A real user finishes at most one workout at a time — this can only trip on a replayed/looped
+    // request, not on normal use (see MIN_ATTACK_INTERVAL_MS's comment above).
+    $lastStmt = $pdo->prepare('SELECT MAX(attacked_at) AS last_at FROM crew_war_attacks WHERE war_id = ? AND user_id = ?');
+    $lastStmt->execute([$war['id'], $userId]);
+    $lastAt = (int) ($lastStmt->fetch()['last_at'] ?? 0);
+    $now = (int) round(microtime(true) * 1000);
+    if ($lastAt > 0 && $now - $lastAt < MIN_ATTACK_INTERVAL_MS) {
         jsonResponse(['ok' => true, 'attacked' => false]);
         return;
     }
@@ -355,7 +480,6 @@ function recordAttack(PDO $pdo, string $userId, array $data): void
     $nameStmt->execute([$userId]);
     $attackerName = $nameStmt->fetch()['full_name'] ?: 'You';
 
-    $now = (int) round(microtime(true) * 1000);
     $score = $volumeKg + $prCount * ATTACK_PR_BONUS;
 
     $pdo->prepare(

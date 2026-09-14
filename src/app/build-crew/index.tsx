@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { Dimensions, Pressable, SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
 
+import { goBack } from "@/lib/navigation";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
 import { colors, typography } from "@/theme";
@@ -16,7 +17,7 @@ export default function BuildCrewStartScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
       <View className="flex-1 pb-6 pt-4">
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={8}
           className="ml-6 mb-2 h-9 w-9 items-center justify-center rounded-full border border-divider"
         >

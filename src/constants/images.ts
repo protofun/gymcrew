@@ -111,6 +111,17 @@ import exerciseSkullCrusher from "@/assets/images/exercises/skull-crusher.png";
 import exerciseSquat from "@/assets/images/exercises/squat.png";
 import exerciseTricepDips from "@/assets/images/exercises/tricep-dips.png";
 import exerciseTricepPushdown from "@/assets/images/exercises/tricep-pushdown.png";
+import gymcrewNutrition from "@/assets/images/app_images/gymcrew_nutrition_cutout.png";
+import nutritionIconMyMeals from "@/assets/images/icons/nutrition/my-meals.png";
+import nutritionIconMyFoods from "@/assets/images/icons/nutrition/my-foods.png";
+import nutritionIconProgress from "@/assets/images/icons/nutrition/progress.png";
+import nutritionIconHistory from "@/assets/images/icons/nutrition/history.png";
+import nutritionIconCalories from "@/assets/images/icons/nutrition/calories.png";
+import nutritionIconProtein from "@/assets/images/icons/nutrition/protein.png";
+import nutritionIconTarget from "@/assets/images/icons/nutrition/target.png";
+import nutritionIconCalendar from "@/assets/images/icons/nutrition/calendar.png";
+import nutritionIconAchievements from "@/assets/images/icons/nutrition/achievements.png";
+import nutritionIconMore from "@/assets/images/icons/nutrition/more.png";
 import muscleAbs from "@/assets/images/musclegroup/muscle-abs.png";
 import muscleBack from "@/assets/images/musclegroup/muscle-back.png";
 import muscleBiceps from "@/assets/images/musclegroup/muscle-biceps.png";
@@ -155,6 +166,22 @@ export const images = {
   rankMythic,
   rankImmortal,
   rankLegend,
+  gymcrewNutrition,
+};
+
+/** Cropped from assets/images/icons/food-logger-icons.png — illustrated, tier-yellow icons used
+ * throughout the Nutrition section (except NutritionNavBar, which stays small line icons). */
+export const nutritionIcons = {
+  myMeals: nutritionIconMyMeals,
+  myFoods: nutritionIconMyFoods,
+  progress: nutritionIconProgress,
+  history: nutritionIconHistory,
+  calories: nutritionIconCalories,
+  protein: nutritionIconProtein,
+  target: nutritionIconTarget,
+  calendar: nutritionIconCalendar,
+  achievements: nutritionIconAchievements,
+  more: nutritionIconMore,
 };
 
 /** Division name (see lib/division.ts) to its illustrated badge — in ascending division order. */

@@ -3,14 +3,17 @@ import { Modal, Pressable, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { colors } from "@/theme";
 
 export type DuelMetric = "volume" | "sets";
 
-const METRIC_OPTIONS: { key: DuelMetric; label: string; description: string }[] = [
-  { key: "volume", label: "Most Volume Today", description: "Whoever logs more total kg by the end of today wins." },
-  { key: "sets", label: "Most Sets Today", description: "Whoever logs more completed sets by the end of today wins." },
-];
+function metricOptions(weightUnit: string): { key: DuelMetric; label: string; description: string }[] {
+  return [
+    { key: "volume", label: "Most Volume Today", description: `Whoever logs more total ${weightUnit} by the end of today wins.` },
+    { key: "sets", label: "Most Sets Today", description: "Whoever logs more completed sets by the end of today wins." },
+  ];
+}
 
 type DuelChallengeSheetProps = {
   visible: boolean;
@@ -23,6 +26,8 @@ type DuelChallengeSheetProps = {
  * MetricPickerSheet (a plain tap-to-pick list, no text input, so there's no keyboard to dodge). */
 export function DuelChallengeSheet({ visible, memberName, onClose, onChallenge }: DuelChallengeSheetProps) {
   const insets = useSafeAreaInsets();
+  const weightUnit = useWeightUnit();
+  const METRIC_OPTIONS = metricOptions(weightUnit);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

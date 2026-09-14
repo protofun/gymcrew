@@ -3,6 +3,7 @@ import { Redirect, Tabs } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 
+import { AppTourProvider } from "@/components/AppTourOverlay";
 import { TabBar } from "@/components/TabBar";
 import { TopBar } from "@/components/TopBar";
 import { XpProgressModal } from "@/components/XpProgressModal";
@@ -10,14 +11,17 @@ import { images } from "@/constants/images";
 import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
 import { useClerkFlagSync } from "@/hooks/use-clerk-flag-sync";
 import { isApiConfigured, waitForAuthToken } from "@/lib/api";
+import { appTourRef } from "@/lib/app-tour";
 import { computeCrewWeeklyPower, sameDivisionRivals } from "@/lib/crew-league";
 import { flushLocalStateToServer } from "@/lib/flush-local-state";
 import { xpRequiredFor } from "@/lib/division";
 import { buildCreatineReminderNotification, buildCrewNotifications, buildNotifications, NOTIFICATIONS_LIMIT } from "@/lib/notifications";
 import { getPostAuthRedirect } from "@/lib/onboarding-gate";
+import { reconcileNotificationSchedules, registerForPushNotifications } from "@/lib/push-notifications";
 import { computeCurrentStreak, computeTrainedDaysThisWeek } from "@/lib/streak";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { useAdminChallengeStore } from "@/store/admin-challenge-store";
+import { useBlockedUsersStore } from "@/store/blocked-users-store";
 import { useBodyLogStore } from "@/store/body-log-store";
 import { useChallengeStore } from "@/store/challenge-store";
 import { useCosmeticsStore } from "@/store/cosmetics-store";
@@ -43,6 +47,8 @@ import { useSyncStatusStore } from "@/store/sync-status-store";
 import { useThemeStore } from "@/store/theme-store";
 import { useTodayTrainingStore } from "@/store/today-training-store";
 import { useTrackedLiftsStore } from "@/store/tracked-lifts-store";
+import { useTutorialStore } from "@/store/tutorial-store";
+import { useWaterLogStore } from "@/store/water-log-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { useWorkoutSplitStore } from "@/store/workout-split-store";
 import { useWorkoutNotesStore } from "@/store/workout-notes-store";
@@ -61,22 +67,23 @@ export default function TabsLayout() {
   const trainedDaysThisWeek = computeTrainedDaysThisWeek(workouts);
   const onboarding = useOnboardingStore((state) => state.onboarding);
   const crewFeedEvents = useCrewFeedStore((state) => state.events);
+  const customExercises = useCustomExercisesStore((state) => state.exercises);
+  const blockedUserIds = useBlockedUsersStore((state) => state.blockedUserIds);
   const notifications = useMemo(() => {
-    const personal = buildNotifications(workouts, streakDays, { weightKg: onboarding.weightKg, gender: onboarding.gender, age: onboarding.age });
-    const crew = buildCrewNotifications(crewFeedEvents, user?.id);
+    const personal = buildNotifications(
+      workouts,
+      streakDays,
+      {
+        weightKg: onboarding.weightKg,
+        gender: onboarding.gender,
+        age: onboarding.age,
+      },
+      customExercises,
+    );
+    const crew = buildCrewNotifications(crewFeedEvents, user?.id, Date.now(), blockedUserIds);
     const creatine = buildCreatineReminderNotification(onboarding.creatineReminders ?? true, onboarding.creatineReminderTime ?? "09:00");
     return [...personal, ...crew, ...creatine].sort((a, b) => b.timestamp - a.timestamp).slice(0, NOTIFICATIONS_LIMIT);
-  }, [
-    workouts,
-    streakDays,
-    onboarding.weightKg,
-    onboarding.gender,
-    onboarding.age,
-    onboarding.creatineReminders,
-    onboarding.creatineReminderTime,
-    crewFeedEvents,
-    user?.id,
-  ]);
+  }, [workouts, streakDays, onboarding.weightKg, onboarding.gender, onboarding.age, onboarding.creatineReminders, onboarding.creatineReminderTime, crewFeedEvents, customExercises, user?.id, blockedUserIds]);
   const profileXp = useProfileLevelStore((state) => state.xp);
   const profileDivision = useProfileLevelStore((state) => state.division);
   const crewXp = useCrewStore((state) => state.xp);
@@ -175,6 +182,8 @@ export default function TabsLayout() {
         useNutritionTargetsStore.getState().syncFromServer(),
         useNutritionMealsStore.getState().syncFromServer(),
         useNutritionLogStore.getState().syncFromServer(),
+        useWaterLogStore.getState().syncFromServer(),
+        useBlockedUsersStore.getState().syncFromServer(),
       ]);
       if (cancelled) return;
 
@@ -184,6 +193,12 @@ export default function TabsLayout() {
       // and doesn't cover.
       flushLocalStateToServer();
       useSyncStatusStore.getState().markSyncedOnce();
+
+      // Registers this device's push token (idempotent, no-op if permission was already decided)
+      // and re-applies the reminder toggles' current state to this device's actual OS-level
+      // schedule — see lib/push-notifications.ts's reconcileNotificationSchedules doc comment for
+      // why that can't just be "set once and forget."
+      registerForPushNotifications().then(reconcileNotificationSchedules);
     });
     return () => {
       cancelled = true;
@@ -198,6 +213,19 @@ export default function TabsLayout() {
   useClerkFlagSync(Boolean(isSignedIn), hasCompletedOnboarding, clerkOnboarded, completeOnboarding);
   useClerkFlagSync(Boolean(isSignedIn), hasCompletedCrewSelection, clerkCrewSelected, completeCrewSelection);
 
+  // First time this device reaches the real app post-onboarding: auto-start the mascot-narrated
+  // app tour. A short delay lets the Home screen actually settle in behind it. Only ever fires
+  // once per device — see tutorial-store.ts's `hasSeenTutorial`. Admins can replay it manually via
+  // profile/account.tsx's "Open Tutorial Wizard" button, which doesn't touch this flag.
+  const hasSeenTutorial = useTutorialStore((state) => state.hasSeenTutorial);
+  useEffect(() => {
+    if (!(hasCompletedOnboarding || clerkOnboarded)) return;
+    if (!(hasCompletedCrewSelection || clerkCrewSelected)) return;
+    if (hasSeenTutorial) return;
+    const timer = setTimeout(() => appTourRef.current?.start(), 700);
+    return () => clearTimeout(timer);
+  }, [hasCompletedOnboarding, clerkOnboarded, hasCompletedCrewSelection, clerkCrewSelected, hasSeenTutorial]);
+
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect href="/onboarding" />;
 
@@ -208,27 +236,20 @@ export default function TabsLayout() {
   if (redirect) return <Redirect href={redirect} />;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <TopBar avatarSource={images.iconGorilla} streakDays={streakDays} notifications={notifications} />
+    <AppTourProvider>
+      <View style={{ flex: 1, backgroundColor: colors.neutral.background }}>
+        <TopBar avatarSource={images.iconGorilla} streakDays={streakDays} notifications={notifications} />
 
-      <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
-        <Tabs.Screen name="home" options={{ title: "Home" }} />
-        <Tabs.Screen name="crew" options={{ title: "Crew" }} />
-        <Tabs.Screen name="log" options={{ title: "Log" }} />
-        <Tabs.Screen name="ranks" options={{ title: "Ranks" }} />
-        <Tabs.Screen name="profile" options={{ title: "Profile" }} />
-      </Tabs>
+        <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
+          <Tabs.Screen name="home" options={{ title: "Home" }} />
+          <Tabs.Screen name="crew" options={{ title: "Crew" }} />
+          <Tabs.Screen name="log" options={{ title: "Log" }} />
+          <Tabs.Screen name="ranks" options={{ title: "Ranks" }} />
+          <Tabs.Screen name="profile" options={{ title: "Profile" }} />
+        </Tabs>
 
-      <XpProgressModal
-        visible={progressModalVisible}
-        onClose={() => setProgressModalVisible(false)}
-        streakDays={streakDays}
-        xp={profileXp}
-        xpToNextLevel={xpRequiredFor(profileDivision)}
-        crewPoints={crewXp}
-        crewPointsGoal={xpRequiredFor(crewDivision)}
-        trainedDays={trainedDaysThisWeek}
-      />
-    </View>
+        <XpProgressModal visible={progressModalVisible} onClose={() => setProgressModalVisible(false)} streakDays={streakDays} xp={profileXp} xpToNextLevel={xpRequiredFor(profileDivision)} crewPoints={crewXp} crewPointsGoal={xpRequiredFor(crewDivision)} trainedDays={trainedDaysThisWeek} />
+      </View>
+    </AppTourProvider>
   );
 }

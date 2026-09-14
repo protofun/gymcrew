@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
 
+import { goBack } from "@/lib/navigation";
 import { images } from "@/constants/images";
 import { colors } from "@/theme";
 
@@ -15,7 +15,7 @@ export function AuthHeader({ title, subtitle }: AuthHeaderProps) {
   return (
     <View className="gap-6">
       <Pressable
-        onPress={() => router.back()}
+        onPress={() => goBack()}
         hitSlop={12}
         className="h-6 w-6 items-center justify-center self-start"
       >

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { router } from "expo-router";
+import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
@@ -17,6 +18,7 @@ const KG_TO_LB = 2.20462;
 
 export default function YourStatsScreen() {
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
+  const posthog = usePostHog();
   const [age, setAge] = useState(24);
   const [gender, setGender] = useState<Gender>("male");
   const height = useUnitToggle({ initialValue: 180, units: ["cm", "in"], factor: CM_TO_IN });
@@ -26,6 +28,7 @@ export default function YourStatsScreen() {
     const heightCm = height.unit === "cm" ? height.value : height.value / CM_TO_IN;
     const weightKg = weight.unit === "kg" ? weight.value : weight.value / KG_TO_LB;
     setOnboardingData({ age, gender, heightCm, weightKg });
+    posthog.capture("onboarding_stats_completed", { age, gender });
     router.push("/onboarding/your-goal");
   }
 

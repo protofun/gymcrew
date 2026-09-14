@@ -1,13 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { ProgressBar } from "@/components/ProgressBar";
 import { useCountdown } from "@/hooks/use-countdown";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { formatShortAgo } from "@/lib/time-since";
-import { useCrewStore } from "@/store/crew-store";
+import { formatWeight } from "@/lib/units";
+import { CURRENT_MEMBER_ID, useCrewStore } from "@/store/crew-store";
 import { TOKENS_PER_BATTLE_WIN, useCurrencyStore } from "@/store/currency-store";
 import { useCrewWarStore } from "@/store/crew-war-store";
 import { colors, fontFamily } from "@/theme";
@@ -40,15 +42,32 @@ function formatCountdown(remainingSeconds: number): string {
 
 export function CrewWarTab() {
   const war = useCrewWarStore((state) => state.war);
+  const loading = useCrewWarStore((state) => state.loading);
   const rewardedWarIds = useCrewWarStore((state) => state.rewardedWarIds);
   const refresh = useCrewWarStore((state) => state.refresh);
+  const startWar = useCrewWarStore((state) => state.startWar);
   const markRewarded = useCrewWarStore((state) => state.markRewarded);
 
   const crewName = useCrewStore((state) => state.name);
   const crewIcon = useCrewStore((state) => state.icon);
   const crewDivision = useCrewStore((state) => state.division);
+  const warAutoMatchEnabled = useCrewStore((state) => state.warAutoMatchEnabled);
   const addCrewXp = useCrewStore((state) => state.addXp);
+  const myRole = useCrewStore((state) => state.members.find((member) => member.id === CURRENT_MEMBER_ID)?.role);
+  const canStartWar = myRole === "leader" || myRole === "co-leader";
   const grantTokens = useCurrencyStore((state) => state.grantTokens);
+  const weightUnit = useWeightUnit();
+
+  const [startingWar, setStartingWar] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+
+  async function handleStartWar() {
+    setStartingWar(true);
+    setStartError(null);
+    const result = await startWar();
+    setStartingWar(false);
+    if (!result.ok) setStartError(result.error);
+  }
 
   const remainingSeconds = useCountdown(war?.status === "active" ? war.endsAt : null);
 
@@ -60,7 +79,7 @@ export function CrewWarTab() {
   // Grants the win bonus exactly once per War, the first time any device notices it was actually won.
   useEffect(() => {
     if (war && war.status === "completed" && war.won === true && !rewardedWarIds.includes(war.id)) {
-      addCrewXp(WAR_WIN_XP_BONUS);
+      addCrewXp(WAR_WIN_XP_BONUS, `war:${war.id}`);
       grantTokens(TOKENS_PER_BATTLE_WIN);
       markRewarded(war.id);
     }
@@ -77,7 +96,7 @@ export function CrewWarTab() {
 
   const subtitle =
     isUrgent && war
-      ? `${formatCountdown(remainingSeconds)} — down ${Math.round(war.opponentScore - war.myScore).toLocaleString("en-US")}kg. One strong attack swings this.`
+      ? `${formatCountdown(remainingSeconds)} — down ${formatWeight(war.opponentScore - war.myScore, weightUnit)}. One strong attack swings this.`
       : war?.status === "active"
         ? "Every rep counts. Don't let them catch up."
         : "Real crew. Real stakes. A few days to prove it.";
@@ -99,8 +118,32 @@ export function CrewWarTab() {
         </View>
       </Animated.View>
 
-      {!war ? (
+      {!war && loading ? (
         <ActivityIndicator color={colors.brand.yellow} />
+      ) : !war ? (
+        <Animated.View
+          entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)}
+          className="items-center gap-3 rounded-2xl border border-dashed border-divider bg-surface p-6"
+        >
+          <Ionicons name="shield-outline" size={26} color={colors.neutral.textSecondary} />
+          <Text className="body-md text-center text-text-primary">No active War right now.</Text>
+          <Text className="body-sm text-center text-text-secondary">
+            {canStartWar
+              ? "Auto-match is off in Crew Settings. Start one whenever your crew's ready."
+              : "Auto-match is off — ask your leader or co-leader to start one in Crew Settings."}
+          </Text>
+          {canStartWar && (
+            <Pressable
+              onPress={handleStartWar}
+              disabled={startingWar}
+              className="mt-1 items-center rounded-full bg-brand-yellow px-6 py-3"
+              style={{ opacity: startingWar ? 0.7 : 1 }}
+            >
+              <Text className="body-md font-body-bold text-brand-iron">{startingWar ? "Starting…" : "Start War"}</Text>
+            </Pressable>
+          )}
+          {startError && <Text className="body-sm text-center text-error">{startError}</Text>}
+        </Animated.View>
       ) : war.status === "active" ? (
         <Animated.View entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)} className="gap-4 rounded-2xl border border-divider bg-surface p-4">
           <View className="flex-row items-center justify-between">
@@ -137,14 +180,14 @@ export function CrewWarTab() {
             <View className="gap-1.5">
               <View className="flex-row items-center justify-between">
                 <Text className="caption text-text-secondary">{crewName}</Text>
-                <Text className="caption font-body-semibold text-text-primary">{Math.round(war.myScore).toLocaleString("en-US")} kg</Text>
+                <Text className="caption font-body-semibold text-text-primary">{formatWeight(war.myScore, weightUnit)}</Text>
               </View>
               <ProgressBar ratio={war.myScore / maxScore} color={colors.brand.yellow} height={8} />
             </View>
             <View className="gap-1.5">
               <View className="flex-row items-center justify-between">
                 <Text className="caption text-text-secondary">{war.opponent.name}</Text>
-                <Text className="caption font-body-semibold text-text-primary">{Math.round(war.opponentScore).toLocaleString("en-US")} kg</Text>
+                <Text className="caption font-body-semibold text-text-primary">{formatWeight(war.opponentScore, weightUnit)}</Text>
               </View>
               <ProgressBar ratio={war.opponentScore / maxScore} color={colors.neutral.textSecondary} height={8} />
             </View>
@@ -161,7 +204,7 @@ export function CrewWarTab() {
                   <Text className="body-sm flex-1 font-body-semibold text-text-primary" numberOfLines={1}>
                     {contributor.name}
                   </Text>
-                  <Text className="body-sm font-body-bold text-brand-yellow">{Math.round(contributor.volumeKg).toLocaleString("en-US")} kg</Text>
+                  <Text className="body-sm font-body-bold text-brand-yellow">{formatWeight(contributor.volumeKg, weightUnit)}</Text>
                 </View>
               ))}
             </View>
@@ -179,10 +222,11 @@ export function CrewWarTab() {
           />
           <Text className="heading-4 text-text-primary">{war.won === true ? "War Won!" : war.won === false ? "War Lost" : "It's a Draw"}</Text>
           <Text className="body-sm text-center text-text-secondary">
-            {crewName} · {Math.round(war.myScore).toLocaleString("en-US")} kg vs {war.opponent.name} · {Math.round(war.opponentScore).toLocaleString("en-US")}{" "}
-            kg
+            {crewName} · {formatWeight(war.myScore, weightUnit)} vs {war.opponent.name} · {formatWeight(war.opponentScore, weightUnit)}
           </Text>
-          <Text className="caption text-center text-text-secondary">A new War starts automatically.</Text>
+          <Text className="caption text-center text-text-secondary">
+            {warAutoMatchEnabled ? "A new War starts automatically." : "Auto-match is off — come back to this tab to start the next one when ready."}
+          </Text>
         </Animated.View>
       )}
 

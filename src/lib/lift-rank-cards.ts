@@ -2,6 +2,7 @@ import type { ImageSourcePropType } from "react-native";
 
 import { EXERCISE_BY_ID } from "@/data/exercises";
 import { MAJOR_LIFT_CARDS, SEEDED_LIFT_CARDS, type LiftCardId } from "@/data/rank-lifts";
+import type { RankStanding } from "@/lib/api";
 import { calculateLiftRankDetail, estimateTierPositionForWeight, RANK_TIERS, type RankProfile, type RankTier } from "@/lib/rank";
 import type { PersonalRecord } from "@/store/personal-records-store";
 
@@ -19,10 +20,11 @@ export type LiftRankCard = {
   /** Position within the current tier, 0-1 — drives both the "progress to next tier" bar and the
    * displayed percentile. */
   percentileInTier: number;
-  /** Where you'd stand in a small local pool — only meaningful for the "gym" scope, but always
-   * computed (see `gymStandingForCard`) so switching scope doesn't need a recompute. */
-  gymRank: number;
-  gymPoolSize: number;
+  /** Real standing among other real users who share your gym (see backend/routes/rank-standings.php)
+   * — `null` when there's not enough real data yet (no gym set, or fewer than 2 real peers for this
+   * lift), which the UI shows as an honest "not enough data" state rather than a fake number. */
+  gymRank: number | null;
+  gymPoolSize: number | null;
   /** `null` until real PR-history tracking exists (personal-records-store only keeps the current
    * best, not a log of previous ones) — there's no real "since last PR" delta to show yet, so this
    * stays honestly unset rather than showing an illustrative/made-up number. */
@@ -39,27 +41,17 @@ export type LiftRankCard = {
  * Exported so custom (non-tracked) lifts added to the Ranks overview score on the same scale. */
 export const SCORE_PER_BODYWEIGHT_RATIO = 4000;
 
-/**
- * Placeholder until real gym-population data exists. A single gym is a much smaller, shallower pool
- * than the whole world — the same lifter naturally lands in a friendlier percentile locally than
- * globally, and that gap should actually read as different on screen, not just nudge a number by a
- * few points. Tier-scaled: the gap between "best in a 30-person gym" and "top X% of the planet"
- * widens as the tier climbs, since the global elite tail thins out far more slowly than a single
- * gym's does.
- */
-const GYM_PERCENTILE_BOOST_BASE = 0.3;
-const GYM_PERCENTILE_BOOST_PER_TIER = 0.015;
-
+/** Illustrative-only "your gym" pool per lift for a single curated comparison card (see
+ * crew-lift-compare.ts, e.g. the "boss" comparison cards) — kept separate from the real gym rank
+ * used on the Ranks tab itself (see backend/routes/rank-standings.php / `applyRankScope` below),
+ * since a one-off illustrative comparison to a specific curated person is a different, clearly
+ * scoped thing from "here's your real standing among real people at your gym." */
 function hashString(value: string): number {
   let hash = 0;
   for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
   return hash;
 }
 
-/** A deterministic, illustrative "your gym" pool per lift — sized like a real single gym (not the
- * whole worldwide population), so a gym-scope rank position feels like a genuinely different stat
- * from a worldwide percentile, not just the same number reframed. Exported so crew-lift-compare.ts
- * can fill in the same fields for other members' cards. */
 export function gymStandingForCard(liftId: string, tierIndex: number, progressToNextTier: number): { gymRank: number; gymPoolSize: number } {
   const gymPoolSize = 18 + (hashString(`${liftId}-gym-pool`) % 43); // 18-60 lifters, like one real gym
   const standing = (tierIndex + progressToNextTier) / RANK_TIERS.length;
@@ -81,7 +73,12 @@ function exerciseName(exerciseId: string): string {
   return EXERCISE_BY_ID[exerciseId]?.name ?? exerciseId;
 }
 
-export function buildLiftRankCards(records: Record<string, PersonalRecord>, profile: RankProfile, scope: RankScope): LiftRankCard[] {
+export function buildLiftRankCards(
+  records: Record<string, PersonalRecord>,
+  profile: RankProfile,
+  scope: RankScope,
+  realGymStandings: Record<string, RankStanding | null> = {},
+): LiftRankCard[] {
   const computed = MAJOR_LIFT_CARDS.map((lift) => {
     const record = records[lift.exerciseId];
     const weightKg = record?.bestWeightKg ?? 0;
@@ -160,7 +157,7 @@ export function buildLiftRankCards(records: Record<string, PersonalRecord>, prof
 
   return all.map((card) => {
     const tierIndex = RANK_TIERS.indexOf(card.tier);
-    const { percentileInTier, gymRank, gymPoolSize } = applyRankScope(card.id, tierIndex, card.progressToNextTier, scope);
+    const { percentileInTier, gymRank, gymPoolSize } = applyRankScope(card.progressToNextTier, realGymStandings[card.exerciseId] ?? null);
 
     return {
       id: card.id,
@@ -181,18 +178,20 @@ export function buildLiftRankCards(records: Record<string, PersonalRecord>, prof
   });
 }
 
-/** Scope-adjusts one lift's percentile (see `GYM_PERCENTILE_BOOST_BASE` above) and computes its gym
- * standing — exported so a custom (non-tracked) exercise added to the Ranks overview can go through
- * the exact same scope math as the 9 built-in lifts. */
+/** Folds in this lift's real gym standing (already fetched — see backend/routes/rank-standings.php
+ * and (tabs)/ranks.tsx) — exported so a custom (non-tracked) exercise added to the Ranks overview
+ * goes through the same shape as the 9 built-in lifts. `percentileInTier` is just the real,
+ * individual tier progress now — there's no artificial "gym pool feels friendlier" boost anymore,
+ * since the gym scope's own local flavor now comes from a real rank/pool number instead. */
 export function applyRankScope(
-  liftId: string,
-  tierIndex: number,
   rawProgressToNextTier: number,
-  scope: RankScope,
-): { percentileInTier: number; gymRank: number; gymPoolSize: number } {
-  const percentileBoost = scope === "gym" ? GYM_PERCENTILE_BOOST_BASE + tierIndex * GYM_PERCENTILE_BOOST_PER_TIER : 0;
-  const { gymRank, gymPoolSize } = gymStandingForCard(liftId, tierIndex, rawProgressToNextTier);
-  return { percentileInTier: Math.min(0.99, rawProgressToNextTier + percentileBoost), gymRank, gymPoolSize };
+  realGymStanding: RankStanding | null,
+): { percentileInTier: number; gymRank: number | null; gymPoolSize: number | null } {
+  return {
+    percentileInTier: Math.min(0.99, rawProgressToNextTier),
+    gymRank: realGymStanding?.gymRank ?? null,
+    gymPoolSize: realGymStanding?.gymPoolSize ?? null,
+  };
 }
 
 export type LiftCardSortKey = "strongest" | "weakest" | "recentPr" | "alphabetical";

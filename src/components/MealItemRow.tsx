@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
 
+import { FoodThumbnail } from "@/components/FoodThumbnail";
 import { SkewedStat } from "@/components/SkewedStat";
 import { Stepper } from "@/components/Stepper";
 import type { MealItem } from "@/lib/api";
@@ -23,35 +24,32 @@ export function MealItemRow({ item, onChangeQuantity, onRemove }: MealItemRowPro
   const step = isWhole ? 1 : 5;
 
   return (
-    <View className="flex-row items-stretch overflow-hidden rounded-2xl border border-divider bg-surface">
-      <View style={{ width: 4, backgroundColor: colors.brand.yellow }} />
-      <View className="flex-1 gap-2 p-3.5">
-        <View className="flex-row items-center justify-between">
-          <Text className="body-md font-body-semibold flex-1 text-text-primary" numberOfLines={1}>
-            {item.name}
-          </Text>
-          <SkewedStat size={18} color={colors.neutral.textPrimary}>{`${macros.calories}`}</SkewedStat>
-          <Text className="caption text-text-secondary"> kcal</Text>
-          <Pressable onPress={onRemove} hitSlop={8} className="ml-1">
-            <Ionicons name="close-circle" size={20} color={colors.neutral.textSecondary} />
-          </Pressable>
-        </View>
+    <View className="gap-2.5 rounded-2xl bg-surface p-3.5">
+      <View className="flex-row items-center gap-3">
+        <FoodThumbnail photoUrl={item.photoUrl} icon="fast-food" color={colors.brand.yellow} size={40} />
+        <Text className="body-md font-body-semibold flex-1 text-text-primary" numberOfLines={1}>
+          {item.name}
+        </Text>
+        <SkewedStat size={18} color={colors.neutral.textPrimary}>{`${macros.calories} kcal`}</SkewedStat>
+        <Pressable onPress={onRemove} hitSlop={8}>
+          <Ionicons name="close-circle" size={20} color={colors.neutral.textSecondary} />
+        </Pressable>
+      </View>
 
-        <Stepper
-          label=""
-          value={item.quantity}
-          onChange={onChangeQuantity}
-          step={step}
-          min={0}
-          max={5000}
-          rightAdornment={<Text className="caption text-text-secondary">{item.servingUnit}</Text>}
-        />
+      <Stepper
+        label=""
+        value={item.quantity}
+        onChange={onChangeQuantity}
+        step={step}
+        min={0}
+        max={5000}
+        rightAdornment={<Text className="caption text-text-secondary">{item.servingUnit}</Text>}
+      />
 
-        <View className="flex-row gap-3">
-          <Text className="caption font-body-semibold" style={{ color: NUTRITION_COLORS.protein }}>{`${macros.proteinG}g protein`}</Text>
-          <Text className="caption font-body-semibold" style={{ color: NUTRITION_COLORS.carbs }}>{`${macros.carbsG}g carbs`}</Text>
-          <Text className="caption font-body-semibold" style={{ color: NUTRITION_COLORS.fat }}>{`${macros.fatG}g fat`}</Text>
-        </View>
+      <View className="flex-row gap-3">
+        <Text className="caption font-body-semibold" style={{ color: NUTRITION_COLORS.protein }}>{`${macros.proteinG}g protein`}</Text>
+        <Text className="caption font-body-semibold" style={{ color: NUTRITION_COLORS.carbs }}>{`${macros.carbsG}g carbs`}</Text>
+        <Text className="caption font-body-semibold" style={{ color: NUTRITION_COLORS.fat }}>{`${macros.fatG}g fat`}</Text>
       </View>
     </View>
   );

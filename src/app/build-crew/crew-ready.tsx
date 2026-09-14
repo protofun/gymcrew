@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Linking, Platform, Pressable, SafeAreaView, ScrollView, Share, Text, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
+import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
@@ -101,6 +102,7 @@ export default function CrewReadyScreen() {
   const { crewName } = useLocalSearchParams<{ crewName?: string }>();
   const completeCrewSelection = useOnboardingStore((state) => state.completeCrewSelection);
   const createCrew = useCrewStore((state) => state.createCrew);
+  const posthog = usePostHog();
   const inviteCode = useCrewStore((state) => state.inviteCode);
   const [creating, setCreating] = useState(true);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -117,7 +119,11 @@ export default function CrewReadyScreen() {
       maxMembers: maxMembersFromWizardChoice(crewData.maxMembers),
     }).then((result) => {
       setCreating(false);
-      if (!result.ok) setCreateError(result.error);
+      if (!result.ok) {
+        setCreateError(result.error);
+        return;
+      }
+      posthog.capture("crew_created", { trainingType: crewData.trainingType ?? null });
     });
     // Only ever create once, on mount — re-running this on every render would try to create the
     // same crew again and fail with "already in a crew."
@@ -151,6 +157,7 @@ export default function CrewReadyScreen() {
   }
 
   async function handleSharePress(target: ShareTarget) {
+    posthog.capture("crew_invite_shared", { target: target.key });
     if (!target.getUrl) {
       await handleShareFallback();
       return;

@@ -1,6 +1,8 @@
 import PostHog from "posthog-react-native";
 import Constants from "expo-constants";
 
+import { trackEvent } from "@/lib/analytics";
+
 // Configuration loaded from app.config.js extras via expo-constants.
 // Environment variables (POSTHOG_PROJECT_TOKEN, POSTHOG_HOST) are read at
 // build time in app.config.js and embedded into the app bundle.
@@ -60,3 +62,15 @@ export const posthog = new PostHog(projectToken || "placeholder_key", {
 });
 
 export const isPostHogEnabled = isPostHogConfigured;
+
+// Mirrors every posthog.capture() call — all ~90 existing call sites across the app, present and
+// future, no per-call-site changes needed — into our own first-party analytics_events table (see
+// lib/analytics.ts, backend/routes/track.php). This is the one place that needs to know about both
+// systems; everywhere else in the app keeps calling posthog.capture() exactly as before. Patched
+// here (once, at the shared client instance) rather than duplicating each call site, per the "reuse
+// existing instrumentation, don't build a second one" goal for the admin panel's own analytics.
+const originalCapture = posthog.capture.bind(posthog);
+posthog.capture = ((event, properties, options) => {
+  trackEvent(event, properties as Record<string, unknown> | undefined);
+  return originalCapture(event, properties, options);
+}) as typeof posthog.capture;

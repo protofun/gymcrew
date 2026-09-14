@@ -5,6 +5,7 @@ import { Image, Modal, Pressable, ScrollView, Switch, Text, View } from "react-n
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBack } from "@/lib/navigation";
 import { EditableText } from "@/components/EditableText";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { MuscleRankRow } from "@/components/MuscleRankRow";
@@ -252,7 +253,7 @@ export default function MuscleRankScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/ranks")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">{viewedMember ? `${viewedMember.name}'s Muscle Rank` : "Muscle Rank"}</Text>

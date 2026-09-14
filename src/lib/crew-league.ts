@@ -38,6 +38,7 @@ export function computeCrewWeeklyPower(
 ): number {
   const myVolume = myWorkouts
     .filter((workout) => {
+      if (workout.isBackfilled) return false;
       const key = toDateKey(new Date(workout.completedAt));
       return key >= startKey && key <= endKey;
     })

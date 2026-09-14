@@ -4,15 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBack } from "@/lib/navigation";
 import { EditableText } from "@/components/EditableText";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { RankBadge } from "@/components/RankBadge";
 import { EXERCISE_BY_ID, type Exercise } from "@/data/exercises";
+import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { api, isApiConfigured } from "@/lib/api";
 import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards, type LiftRankCard } from "@/lib/lift-rank-cards";
 import { formatRankTier, RANK_TIER_COLOR, type RankProfile, type RankTier } from "@/lib/rank";
 import { realRankHistoryForLift, type RecordHistoryPoint } from "@/lib/rank-history";
+import { formatWeight } from "@/lib/units";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore, type PersonalRecord } from "@/store/personal-records-store";
 import { colors } from "@/theme";
@@ -45,6 +48,7 @@ export default function RankHistoryScreen() {
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
   const age = useOnboardingStore((state) => state.onboarding.age);
+  const weightUnit = useWeightUnit();
   const records = usePersonalRecordsStore((state) => state.records);
 
   const profile: RankProfile = useMemo(() => ({ gender, bodyWeightKg: weightKg, age }), [gender, weightKg, age]);
@@ -111,7 +115,7 @@ export default function RankHistoryScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/ranks")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Rank History</Text>
@@ -168,7 +172,7 @@ export default function RankHistoryScreen() {
                     </EditableText>
                   </View>
                   <EditableText id={`ranks.history.${index}.weight`} className="body-md font-body-bold text-text-primary">
-                    {`${entry.weightKg} kg`}
+                    {formatWeight(entry.weightKg, weightUnit)}
                   </EditableText>
                 </View>
               </View>

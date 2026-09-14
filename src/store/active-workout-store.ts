@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import type { Exercise } from "@/data/exercises";
 import { pullState, pushState } from "@/lib/backend-sync";
+import { toDateKey } from "@/lib/date";
 import { getLastPerformance } from "@/lib/exercise-history";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
@@ -51,6 +52,10 @@ function toLoggedExercise(exercise: Exercise, sets: LoggedSet[]): LoggedExercise
 type ActiveWorkoutStore = {
   /** Epoch ms the workout started, or null when no workout is in progress. */
   startedAt: number | null;
+  /** The calendar day (yyyy-mm-dd) this workout is being logged for — defaults to today. Set to an
+   * earlier date via the Log tab's "Log a Past Workout" flow to backfill a missed day; see
+   * workout/active.tsx's `isBackfilled` check, which skips XP/streaks/PRs/Crew War for that day. */
+  logDateKey: string;
   name: string;
   notes: string;
   unit: WeightUnit;
@@ -64,6 +69,7 @@ type ActiveWorkoutStore = {
   startWorkout: () => void;
   discardWorkout: () => void;
   finishWorkout: () => void;
+  setLogDateKey: (dateKey: string) => void;
   setName: (name: string) => void;
   setNotes: (notes: string) => void;
   setUnit: (unit: WeightUnit) => void;
@@ -89,16 +95,16 @@ type ActiveWorkoutStore = {
  * nothing here, since even mid-set values (unfinished weight/reps) are worth not losing. */
 type ActiveWorkoutSyncedState = Pick<
   ActiveWorkoutStore,
-  "startedAt" | "name" | "notes" | "unit" | "exercises" | "restEndTime" | "restDurationSeconds" | "autoFillPreviousSet"
+  "startedAt" | "logDateKey" | "name" | "notes" | "unit" | "exercises" | "restEndTime" | "restDurationSeconds" | "autoFillPreviousSet"
 >;
 
-function initialState(): Pick<ActiveWorkoutStore, "startedAt" | "name" | "notes" | "unit" | "exercises" | "restEndTime"> {
-  return { startedAt: null, name: "", notes: "", unit: "kg", exercises: [], restEndTime: null };
+function initialState(): Pick<ActiveWorkoutStore, "startedAt" | "logDateKey" | "name" | "notes" | "unit" | "exercises" | "restEndTime"> {
+  return { startedAt: null, logDateKey: toDateKey(new Date()), name: "", notes: "", unit: "kg", exercises: [], restEndTime: null };
 }
 
 function syncPush(get: () => ActiveWorkoutStore) {
-  const { startedAt, name, notes, unit, exercises, restEndTime, restDurationSeconds, autoFillPreviousSet } = get();
-  pushState("active-workout", { startedAt, name, notes, unit, exercises, restEndTime, restDurationSeconds, autoFillPreviousSet });
+  const { startedAt, logDateKey, name, notes, unit, exercises, restEndTime, restDurationSeconds, autoFillPreviousSet } = get();
+  pushState("active-workout", { startedAt, logDateKey, name, notes, unit, exercises, restEndTime, restDurationSeconds, autoFillPreviousSet });
 }
 
 export const useActiveWorkoutStore = create<ActiveWorkoutStore>()(
@@ -124,6 +130,10 @@ export const useActiveWorkoutStore = create<ActiveWorkoutStore>()(
       },
       finishWorkout: () => {
         set(initialState());
+        syncPush(get);
+      },
+      setLogDateKey: (logDateKey) => {
+        set({ logDateKey });
         syncPush(get);
       },
       setName: (name) => {

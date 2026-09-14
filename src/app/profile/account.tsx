@@ -4,9 +4,12 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
+import { goBack } from "@/lib/navigation";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { api, isApiConfigured } from "@/lib/api";
+import { appTourRef } from "@/lib/app-tour";
 import { resetLocalStateForAccountSwitch } from "@/lib/reset-local-state";
 import { DEVELOPER_MODE_EMAILS, useDeveloperModeStore } from "@/store/developer-mode-store";
 import { colors } from "@/theme";
@@ -37,6 +40,7 @@ function PasswordField({ label, value, onChangeText }: { label: string; value: s
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
+  const posthog = usePostHog();
   const { user } = useUser();
   const { signOut } = useClerk();
 
@@ -53,6 +57,13 @@ export default function AccountScreen() {
   const developerModeEnabled = useDeveloperModeStore((state) => state.enabled);
   const toggleDeveloperMode = useDeveloperModeStore((state) => state.toggleEnabled);
   const clearAllOverrides = useDeveloperModeStore((state) => state.clearAllOverrides);
+
+  function handleOpenTutorialWizard() {
+    router.replace("/home");
+    // The tour lives inside (tabs)/_layout.tsx's AppTourProvider — give it a beat to be the
+    // active screen before asking it to start (see lib/app-tour.ts).
+    setTimeout(() => appTourRef.current?.start(), 150);
+  }
 
   const hasPassword = user?.passwordEnabled ?? false;
 
@@ -87,6 +98,7 @@ export default function AccountScreen() {
         ...(hasPassword ? { currentPassword } : {}),
       });
       resetPasswordForm();
+      posthog.capture("account_password_changed", { hadPassword: hasPassword });
       Alert.alert("Password Updated", hasPassword ? "Your password has been changed." : "A password has been set for your account.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Something went wrong — double check your current password.";
@@ -98,6 +110,7 @@ export default function AccountScreen() {
 
   async function confirmSignOut() {
     setSignOutConfirmVisible(false);
+    posthog.capture("user_signed_out");
     await signOut();
     // Reloads the page (web) — see reset-local-state.ts for why this must fully wipe local storage
     // rather than just navigating away, so a different account signing in next never inherits this
@@ -108,6 +121,7 @@ export default function AccountScreen() {
   async function confirmDeleteAccount() {
     setDeleteConfirmVisible(false);
     try {
+      posthog.capture("account_deleted");
       // Deletes the server-side rows first — the JWT this call authenticates with stops being
       // valid the instant the Clerk account below is gone.
       if (isApiConfigured) await api.deleteAccount();
@@ -122,7 +136,7 @@ export default function AccountScreen() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+        <Pressable onPress={() => goBack("/(tabs)/profile")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">Account</Text>
@@ -204,6 +218,35 @@ export default function AccountScreen() {
             )}
           </View>
         )}
+
+        {isDeveloper && (
+          <View className="gap-2 rounded-2xl border border-brand-yellow/40 bg-surface p-4">
+            <Text className="body-sm font-body-semibold text-text-primary">Onboarding Tour</Text>
+            <Text className="body-sm text-text-secondary">Replays the mascot-narrated first-run walkthrough over the app, for testing.</Text>
+            <Pressable onPress={handleOpenTutorialWizard} className="mt-1 items-center rounded-full border border-brand-yellow py-3.5">
+              <Text className="body-sm font-body-bold text-brand-yellow">Open Tutorial Wizard</Text>
+            </Pressable>
+          </View>
+        )}
+
+        <View className="gap-1 rounded-2xl border border-divider bg-surface p-1">
+          <Pressable onPress={() => router.push("/profile/support")} className="flex-row items-center justify-between rounded-xl px-3 py-3.5">
+            <Text className="body-md text-text-primary">Contact & Support</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
+          </Pressable>
+          <Pressable onPress={() => router.push("/profile/blocked-users")} className="flex-row items-center justify-between rounded-xl px-3 py-3.5">
+            <Text className="body-md text-text-primary">Blocked Users</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
+          </Pressable>
+          <Pressable onPress={() => router.push("/legal/terms")} className="flex-row items-center justify-between rounded-xl px-3 py-3.5">
+            <Text className="body-md text-text-primary">Terms of Service</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
+          </Pressable>
+          <Pressable onPress={() => router.push("/legal/privacy")} className="flex-row items-center justify-between rounded-xl px-3 py-3.5">
+            <Text className="body-md text-text-primary">Privacy Policy</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
+          </Pressable>
+        </View>
 
         <View className="gap-2 rounded-2xl border border-error/40 bg-error/10 p-4">
           <Text className="body-sm font-body-semibold" style={{ color: colors.semantic.error }}>
