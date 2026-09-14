@@ -22,7 +22,7 @@ export function WorkoutStartCard({ icon, title, description, onPress, variant = 
       }`}
       style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
     >
-      <View className="flex-row items-center gap-3">
+      <View className="flex-1 flex-row items-center gap-3 pr-3">
         <View
           className={`h-11 w-11 items-center justify-center rounded-full ${
             isPrimary ? "bg-brand-iron/10" : "border border-divider"
@@ -30,7 +30,7 @@ export function WorkoutStartCard({ icon, title, description, onPress, variant = 
         >
           <Ionicons name={icon} size={20} color={isPrimary ? colors.brand.iron : colors.brand.yellow} />
         </View>
-        <View className="gap-0.5">
+        <View className="flex-1 gap-0.5">
           <Text className={`body-lg font-body-semibold ${isPrimary ? "text-brand-iron" : "text-text-primary"}`}>
             {title}
           </Text>

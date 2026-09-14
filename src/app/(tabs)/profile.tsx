@@ -57,7 +57,7 @@ const PRESSED_STYLE = ({ pressed }: { pressed: boolean }) => ({
   opacity: pressed ? 0.75 : 1,
 });
 
-type SettingsRoute = "/profile/edit" | "/profile/units" | "/profile/notifications" | "/profile/subscription" | "/profile/account" | "/profile/achievements" | "/profile/history" | "/profile/body-log" | "/profile/rank-history" | "/profile/all-stats" | "/profile/workout-split" | "/profile/rewards" | "/profile/support" | "/profile/roadmap" | "/crew/settings" | "/workout-split/intro";
+type SettingsRoute = "/profile/edit" | "/profile/units" | "/profile/notifications" | "/profile/subscription" | "/profile/account" | "/profile/achievements" | "/profile/history" | "/profile/body-log" | "/profile/rank-history" | "/profile/all-stats" | "/profile/workout-split" | "/profile/rewards" | "/profile/support" | "/profile/roadmap" | "/profile/changelog" | "/crew/settings" | "/workout-split/intro";
 
 type ProgressCard = {
   icon: ImageSourcePropType;
@@ -330,6 +330,7 @@ export default function ProfileScreen() {
             <SettingsRow icon="people-outline" label="My Crew" value={crewName} onPress={() => goTo("/crew/settings")} />
             <SettingsRow icon="card-outline" label="Subscription" onPress={() => goTo("/profile/subscription")} />
             <SettingsRow icon="help-buoy-outline" label="Contact & Support" onPress={() => goTo("/profile/support")} />
+            <SettingsRow icon="sparkles-outline" label="Changelog" onPress={() => goTo("/profile/changelog")} />
             <SettingsRow icon="map-outline" label="What's Coming" onPress={() => goTo("/profile/roadmap")} />
             <SettingsRow icon="settings-outline" label="Account" isLast onPress={() => goTo("/profile/account")} />
           </View>
