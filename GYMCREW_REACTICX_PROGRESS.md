@@ -6,7 +6,7 @@ Updated as of 2026-09-16.
 [x] Discovery
 [x] Reacticx setup
 [x] Design system
-[~] Core components
+[x] Core components
 [ ] Authentication
 [ ] Onboarding
 [ ] Home
@@ -44,7 +44,7 @@ Updated as of 2026-09-16.
 
 ---
 
-## Core components (Phase 3) — 2026-09-16 — IN PROGRESS
+## Core components (Phase 3) — 2026-09-16 — DONE
 
 **Files changed:** `src/components/ConfirmModal.tsx`, `ProgressBar.tsx`, `Skeleton.tsx`, `AvatarStack.tsx` (rewritten on Reacticx primitives, same public APIs, zero call-site changes); new `src/components/ui/primitives/dialog/`, `src/components/ui/organisms/progress/`, `src/components/ui/molecules/Shimmer/`, `src/components/ui/primitives/avatar/`, `src/components/ui/base/gradient-avatar/`, `src/shared/utils/create-compound-component/` (vendored via `reacticx add`, with hand-fixes: broken import path in `avatar/index.tsx`, missing `displayName` on 4 memo'd components — both are real CLI/registry bugs, documented in `GYMCREW_REACTICX_COMPONENT_MAP.md`).
 
@@ -54,7 +54,7 @@ Updated as of 2026-09-16.
 
 **Tests performed:** `npx tsc --noEmit` (clean), `npm run lint` (clean — 0 errors, 6 pre-existing warnings in vendor animation code, left alone), `npx expo export --platform web` (clean, all routes) — run after this batch.
 
-**Remaining work:** `Stepper`/`FormField`, chart-library evaluation (`charts/line-chart`/`bar-chart` vs. `gifted-charts`), and the `BottomSheet` decision (highest risk in the whole component map) are still open — see the "Recommended migration order" list in `GYMCREW_REACTICX_COMPONENT_MAP.md` for what's next.
+**Remaining work:** none for Phase 3 itself — all 8 items in the recommended migration order are resolved (4 migrated: `ConfirmModal`/`ProgressBar`/`Skeleton`/`AvatarStack`; 2 kept custom with documented reasoning: `Stepper`/`FormField`; 1 investigated and declined: chart swap; 1 decided against a swap: `BottomSheet` stays on `@gorhom/bottom-sheet` since Reacticx has no bottom-sheet primitive — `floating-sheet` turned out to be a media-player demo on a different third-party library). Second follow-up finding: that same `floating-sheet` investigation left broken vendor files behind (`@lodev09/react-native-true-sheet`/`expo-video` unresolved) that briefly broke `tsc --noEmit` until removed — a reminder to always re-run `tsc` immediately after any `reacticx add`, even one being evaluated rather than adopted. The rest of the component catalog (`RankBadge`, `MuscleHeatmap`, `EditableText`, etc.) is deliberately deferred to Phases 4-11, screen-by-screen, not migrated as a standalone batch — see `GYMCREW_REACTICX_COMPONENT_MAP.md`'s closing note.
 
 ---
 
