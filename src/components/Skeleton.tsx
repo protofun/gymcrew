@@ -1,38 +1,30 @@
-import { useEffect } from "react";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
-
+import { ShimmerEffect } from "@/components/ui/molecules/Shimmer/Shimmer";
 import { colors } from "@/theme";
 
 type SkeletonProps = {
   width: number | `${number}%`;
   height: number;
   radius?: number;
-  className?: string;
 };
 
-/** A pulsing placeholder block for content that's still loading — pair a few of these to sketch
- * the shape of the real layout underneath (see `HomeSkeleton` for an example) instead of leaving a
- * blank screen or a single centered spinner. */
-export function Skeleton({ width, height, radius = 8, className }: SkeletonProps) {
-  const opacity = useSharedValue(0.4);
+const SHIMMER_COLORS = [colors.neutral.divider, colors.neutral.surfaceElevated, colors.neutral.divider];
 
-  useEffect(() => {
-    opacity.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.4, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      false,
-    );
-  }, [opacity]);
-
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-
+/**
+ * A loading placeholder block — pair a few of these to sketch the shape of the real layout
+ * underneath (see `HomeSkeleton`) instead of leaving a blank screen or a single centered spinner.
+ *
+ * Built on Reacticx's `ShimmerEffect` using its `"shimmer"` sweep (the primitive's own `"pulse"`
+ * variant renders as a tinted overlay on top of a separate base color rather than one solid block
+ * changing opacity, so it doesn't reduce cleanly to the flat pulse this component used before) —
+ * `shimmerColors` are GymCrew's own `divider`/`surfaceElevated` tones so the sweep reads as an
+ * on-brand highlight rather than the primitive's default generic gray.
+ */
+export function Skeleton({ width, height, radius = 8 }: SkeletonProps) {
   return (
-    <Animated.View
-      className={className}
-      style={[{ width, height, borderRadius: radius, backgroundColor: colors.neutral.divider }, style]}
+    <ShimmerEffect
+      style={{ width, height, borderRadius: radius, backgroundColor: colors.neutral.divider }}
+      shimmerColors={SHIMMER_COLORS}
+      preset="custom"
     />
   );
 }

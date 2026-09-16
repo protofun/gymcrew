@@ -6,7 +6,7 @@ Updated as of 2026-09-16.
 [x] Discovery
 [x] Reacticx setup
 [x] Design system
-[ ] Core components
+[~] Core components
 [ ] Authentication
 [ ] Onboarding
 [ ] Home
@@ -41,6 +41,20 @@ Updated as of 2026-09-16.
 - NOT run: iOS/Android simulator, physical device, or opening the web bundle in a browser.
 
 **Remaining work:** Phase 1 is otherwise complete (dependency installed, CLI initialized, catalog verified, app confirmed still building). Phase 3's component-by-component migration order is documented in `GYMCREW_REACTICX_COMPONENT_MAP.md`.
+
+---
+
+## Core components (Phase 3) — 2026-09-16 — IN PROGRESS
+
+**Files changed:** `src/components/ConfirmModal.tsx`, `ProgressBar.tsx`, `Skeleton.tsx`, `AvatarStack.tsx` (rewritten on Reacticx primitives, same public APIs, zero call-site changes); new `src/components/ui/primitives/dialog/`, `src/components/ui/organisms/progress/`, `src/components/ui/molecules/Shimmer/`, `src/components/ui/primitives/avatar/`, `src/components/ui/base/gradient-avatar/`, `src/shared/utils/create-compound-component/` (vendored via `reacticx add`, with hand-fixes: broken import path in `avatar/index.tsx`, missing `displayName` on 4 memo'd components — both are real CLI/registry bugs, documented in `GYMCREW_REACTICX_COMPONENT_MAP.md`).
+
+**Reacticx components used:** `dialog`, `progress`, `Shimmer`, `avatar` (+ their shared deps `gradient-avatar`, `create-compound-component`).
+
+**Issues discovered:** Three real Reacticx CLI/registry bugs, all documented and worked around in `GYMCREW_REACTICX_COMPONENT_MAP.md`'s "CLI quirks" section — (1) `add` aborts entirely if a shared dependency file already exists, unless `--overwrite` is passed; (2) `primitives/avatar`'s vendored source has a broken import path pointing at `@/shared/components/...` instead of the project's real `outDir`; (3) several vendored components fail this project's lint (`react/display-name`) out of the box.
+
+**Tests performed:** `npx tsc --noEmit` (clean), `npm run lint` (clean — 0 errors, 6 pre-existing warnings in vendor animation code, left alone), `npx expo export --platform web` (clean, all routes) — run after this batch.
+
+**Remaining work:** `Stepper`/`FormField`, chart-library evaluation (`charts/line-chart`/`bar-chart` vs. `gifted-charts`), and the `BottomSheet` decision (highest risk in the whole component map) are still open — see the "Recommended migration order" list in `GYMCREW_REACTICX_COMPONENT_MAP.md` for what's next.
 
 ---
 
