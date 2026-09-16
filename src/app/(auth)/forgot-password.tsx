@@ -5,6 +5,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
 
 import { AuthHeader } from "@/components/AuthHeader";
+import { AuthSubmitButton } from "@/components/AuthSubmitButton";
 import { FormField } from "@/components/FormField";
 import { VerificationCodeModal } from "@/components/VerificationCodeModal";
 import { waitForAuthToken } from "@/lib/api";
@@ -103,15 +104,7 @@ export default function ForgotPasswordScreen() {
                 {formError && <Text className="body-sm text-error">{formError}</Text>}
               </View>
 
-              <Pressable
-                onPress={handleSendCode}
-                disabled={submitting}
-                className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4"
-                style={({ pressed }) => ({ opacity: pressed || submitting ? 0.85 : 1 })}
-              >
-                <Text className="heading-4 text-brand-iron">{submitting ? "Sending..." : "Send Reset Code"}</Text>
-                <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
-              </Pressable>
+              <AuthSubmitButton label="Send Reset Code" loading={submitting} onPress={handleSendCode} />
             </>
           ) : (
             <>
@@ -133,15 +126,7 @@ export default function ForgotPasswordScreen() {
                 {formError && <Text className="body-sm text-error">{formError}</Text>}
               </View>
 
-              <Pressable
-                onPress={handleSetNewPassword}
-                disabled={submitting}
-                className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4"
-                style={({ pressed }) => ({ opacity: pressed || submitting ? 0.85 : 1 })}
-              >
-                <Text className="heading-4 text-brand-iron">{submitting ? "Saving..." : "Save New Password"}</Text>
-                <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
-              </Pressable>
+              <AuthSubmitButton label="Save New Password" loading={submitting} onPress={handleSetNewPassword} />
             </>
           )}
         </ScrollView>
