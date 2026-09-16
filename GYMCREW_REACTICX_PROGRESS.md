@@ -4,7 +4,7 @@ Updated as of 2026-09-16.
 
 ```text
 [x] Discovery
-[ ] Reacticx setup
+[~] Reacticx setup
 [ ] Design system
 [ ] Core components
 [ ] Authentication
@@ -24,6 +24,25 @@ Updated as of 2026-09-16.
 [ ] Performance
 [ ] Final audit
 ```
+
+## Reacticx setup (Phase 1) — 2026-09-16 — IN PROGRESS
+
+**Files changed:** `package.json`, `package-lock.json` (added `expo-blur`), new `component.config.json`, `GYMCREW_REACTICX_MIGRATION.md` and `GYMCREW_REACTICX_COMPONENT_MAP.md` (corrected with live CLI registry data).
+
+**Reacticx components used:** none added yet (deliberately deferred to Phase 3).
+
+**Issues discovered:**
+- The Phase 0 catalog research (done via WebFetch against reacticx.com's docs pages) disagreed with the real CLI registry in material ways — undercounted components (104 vs. real 163) and wrongly claimed no chart component exists. Corrected by running `npx reacticx list`/`reacticx info <name>` directly. **Lesson recorded in the migration doc: verify against the CLI, not the docs website, for all future component decisions.**
+- The real registry has no bottom-sheet/drawer component at all (only `dialog` and a `floating-sheet` template) — changes the plan for `BottomSheet.tsx` (11+ dependents), which will likely keep `@gorhom/bottom-sheet` underneath rather than being replaced.
+
+**Tests performed:**
+- `npx tsc --noEmit` — clean, no errors.
+- `npx expo export --platform web` — clean, all ~90 routes bundled successfully. Confirms Babel/Metro/NativeWind 5/React Compiler still cooperate.
+- NOT run: iOS/Android simulator, physical device, or opening the web bundle in a browser.
+
+**Remaining work:** Phase 1 is otherwise complete (dependency installed, CLI initialized, catalog verified, app confirmed still building). Phase 3's component-by-component migration order is documented in `GYMCREW_REACTICX_COMPONENT_MAP.md`. Phase 2 (Design System) has not started.
+
+---
 
 ## Discovery — 2026-09-16 — DONE
 
