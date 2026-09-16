@@ -9,7 +9,7 @@ Updated as of 2026-09-16.
 [x] Core components
 [~] Authentication
 [~] Onboarding
-[ ] Home
+[~] Home
 [ ] Workout
 [ ] Ranking
 [ ] Crews
@@ -59,6 +59,20 @@ Updated as of 2026-09-16.
 **`UnitToggle` investigated and declined**: `organisms/segmented-control` defaults its width to "screen width minus 32" and is fundamentally a wide, both-options-visible picker (iOS-tab-switcher style) — `UnitToggle` is a compact single-button tap-to-cycle control that fits inline as a `SliderField`/`Stepper` `rightAdornment` (5 call sites in `your-stats.tsx`/`your-metrics.tsx`); a segmented control would not fit that tight slot without redesigning those rows. Kept custom.
 
 **Remaining work:** This covers the components shared across all auth/onboarding screens, not the full per-screen AGENTS.md §21 14-step process for each of the ~19 individual screens (content/navigation/state/asset reconnection review, keyboard-behavior check, per-screen empty/error state check). `FormField` was already kept custom (Phase 3). Native-platform (iOS/Android simulator) verification is still outstanding — only web has been visually confirmed. Both checklist items left `[~]` rather than `[x]` until a full per-screen pass happens.
+
+---
+
+## Home (Phase 5) — 2026-09-16 — IN PROGRESS
+
+**Files changed:** new `src/components/Card.tsx` (GymCrew-composed card shell built on Reacticx's `atoms/pressable`); `CrewCard.tsx`, `HomeNutritionWidget.tsx`, `LastWorkoutWidget.tsx`, `MuscleSuggestions.tsx`, `BiggestOpportunityCard.tsx`, `CrewWarWidget.tsx` migrated onto it (exact same classNames, just restructured between shell/layout). New: `src/components/ui/atoms/pressable/`.
+
+**Reacticx components used:** `atoms/pressable` (a real press-scale/haptics-capable Pressable — the app's first genuine "component," as opposed to compound primitives like `dialog`/`button`).
+
+**Issues discovered:** Two more real bugs in vendored Reacticx source: `atoms/pressable`'s long-press timer ref was typed `useRef<NodeJS.Timeout | null>`, which doesn't match what `setTimeout` returns in a React Native/web environment (fixed to `ReturnType<typeof setTimeout>`); and the same missing-`displayName` pattern on its two `memo()`-wrapped exports (`Pressable`, `PressableProvider`), fixed the same way as every previous instance this migration has hit.
+
+**Tests performed:** `tsc`/`lint`/`expo export` all clean. Home itself is behind Clerk auth *and* a data-sync gate (renders `HomeSkeleton` until a real backend sync completes) — confirmed the route still redirects cleanly to `/onboarding` when signed out, zero console errors, proving the app shell isn't broken. Since a real authenticated render isn't reachable without live credentials, built a temporary, uncommitted preview route rendering `Card` directly in all 4 shapes it's used in (default/pressable/accent/row-layout), screenshotted it (including mid-press), confirmed it works, then deleted the route before committing. The 6 migrated widgets' own visuals were not independently screenshotted.
+
+**Remaining work:** `WelcomeWidget`'s "Start Workout" CTA (the single most prominent button in the app) was evaluated for a `Button.Root` swap and deliberately reverted rather than ship an unverified layout — see `GYMCREW_REACTICX_COMPONENT_MAP.md`'s card section for why. `GoalsWidget`, `AnnouncementBanner`, `VisualTrainingCalendar` untouched this pass. Real device/authenticated-session verification of the whole Home screen is still outstanding — this is why the checklist item stays `[~]`, not `[x]`.
 
 ---
 
