@@ -4,8 +4,8 @@ Updated as of 2026-09-16.
 
 ```text
 [x] Discovery
-[~] Reacticx setup
-[ ] Design system
+[x] Reacticx setup
+[x] Design system
 [ ] Core components
 [ ] Authentication
 [ ] Onboarding
@@ -25,7 +25,7 @@ Updated as of 2026-09-16.
 [ ] Final audit
 ```
 
-## Reacticx setup (Phase 1) — 2026-09-16 — IN PROGRESS
+## Reacticx setup (Phase 1) — 2026-09-16 — DONE
 
 **Files changed:** `package.json`, `package-lock.json` (added `expo-blur`), new `component.config.json`, `GYMCREW_REACTICX_MIGRATION.md` and `GYMCREW_REACTICX_COMPONENT_MAP.md` (corrected with live CLI registry data).
 
@@ -40,7 +40,21 @@ Updated as of 2026-09-16.
 - `npx expo export --platform web` — clean, all ~90 routes bundled successfully. Confirms Babel/Metro/NativeWind 5/React Compiler still cooperate.
 - NOT run: iOS/Android simulator, physical device, or opening the web bundle in a browser.
 
-**Remaining work:** Phase 1 is otherwise complete (dependency installed, CLI initialized, catalog verified, app confirmed still building). Phase 3's component-by-component migration order is documented in `GYMCREW_REACTICX_COMPONENT_MAP.md`. Phase 2 (Design System) has not started.
+**Remaining work:** Phase 1 is otherwise complete (dependency installed, CLI initialized, catalog verified, app confirmed still building). Phase 3's component-by-component migration order is documented in `GYMCREW_REACTICX_COMPONENT_MAP.md`.
+
+---
+
+## Design system (Phase 2) — 2026-09-16 — DONE
+
+**Files changed:** new `src/theme/spacing.ts`, `src/theme/radius.ts`, `src/theme/shadows.ts`, `src/theme/motion.ts`; `src/theme/colors.ts` (added `neutral.surfaceElevated`), `global.css` (mirrored `--color-surface-elevated`), `src/theme/index.ts` (re-exports). No screens or components touched.
+
+**Reacticx components used:** none (still deferred to Phase 3).
+
+**Issues discovered:** none new. Confirmed GymCrew had no second/elevated surface tone anywhere before this — a genuine gap, not something overlooked in Discovery.
+
+**Tests performed:** `npx tsc --noEmit` (clean), `npm run lint` (clean), `npx expo export --platform web` (clean, all routes) — run after the change to confirm no regression.
+
+**Remaining work:** AGENTS.md §17's "component conventions" and "icon conventions" sub-items are deferred to Phase 3, where they can be documented against real Reacticx component usage instead of speculated abstractly. See `GYMCREW_REACTICX_MIGRATION.md` Phase 2 section for the full reasoning behind each token's derivation.
 
 ---
 

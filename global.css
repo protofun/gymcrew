@@ -27,6 +27,8 @@
     --color-text-secondary: #8b929e;
     --color-divider: #2c3138;
     --color-surface: #161a20;
+    /* surface lightened 8% toward white — see src/theme/colors.ts for how this was derived */
+    --color-surface-elevated: #292c32;
     --color-background: #0d1117;
 
     /* Fonts — one family per weight, since RN does not synthesize

@@ -22,6 +22,14 @@ export const colors = {
   neutral: {
     textPrimary: "#EDEFF2",
     textSecondary: "#8B929E",
+    /**
+     * No screen used a second, lighter surface tone before this — every card sits directly on
+     * `surface`. Added for the Reacticx migration's design system (AGENTS.md §17 wants a
+     * `surfaceElevated` tier): `surface` lightened 8% toward white via `lib/color.ts`'s
+     * `lighten()` (same helper already used for rank/division gradient tinting), then inlined
+     * as a literal hex here to match every other token in this file.
+     */
+    surfaceElevated: "#292C32",
     divider: "#2C3138",
     surface: "#161A20",
     background: "#0D1117",
