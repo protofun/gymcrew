@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Pressable, Text, View } from "react-native";
 
+import { BottomSheet } from "@/components/BottomSheet";
 import { colors } from "@/theme";
 
 const MINUTE_STEP = 5;
@@ -67,7 +67,6 @@ type TimePickerModalProps = {
  * time of day can actually be chosen. No native/date-time-picker dependency: two simple stepper
  * columns keep this consistent with the rest of the app's hand-built pickers (see DatePickerModal). */
 export function TimePickerModal({ visible, title = "Pick a time", value, onClose, onSelect }: TimePickerModalProps) {
-  const insets = useSafeAreaInsets();
   const [hour, setHour] = useState(() => parseTime(value).hour);
   const [minute, setMinute] = useState(() => parseTime(value).minute);
 
@@ -83,37 +82,30 @@ export function TimePickerModal({ visible, title = "Pick a time", value, onClose
   }, [visible]);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={onClose}>
-        <Pressable onPress={(event) => event.stopPropagation()}>
-          <View
-            style={{ paddingBottom: insets.bottom + 16, backgroundColor: colors.neutral.background }}
-            className="gap-5 rounded-t-3xl border border-divider p-4"
-          >
-            <View className="flex-row items-center justify-between">
-              <Text className="heading-4 text-text-primary">{title}</Text>
-              <Pressable onPress={onClose} hitSlop={8}>
-                <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
-              </Pressable>
-            </View>
+    <BottomSheet visible={visible} onClose={onClose}>
+      <View className="gap-5 p-4">
+        <View className="flex-row items-center justify-between">
+          <Text className="heading-4 text-text-primary">{title}</Text>
+          <Pressable onPress={onClose} hitSlop={8}>
+            <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
+          </Pressable>
+        </View>
 
-            <View className="flex-row items-center justify-center gap-4">
-              <StepperColumn label="Hour" value={hour} onChange={setHour} max={23} />
-              <Text style={{ fontFamily: "Poppins-Bold", fontSize: 28 }} className="text-text-secondary">
-                :
-              </Text>
-              <StepperColumn label="Minute" value={minute} onChange={setMinute} max={55} step={MINUTE_STEP} />
-            </View>
+        <View className="flex-row items-center justify-center gap-4">
+          <StepperColumn label="Hour" value={hour} onChange={setHour} max={23} />
+          <Text style={{ fontFamily: "Poppins-Bold", fontSize: 28 }} className="text-text-secondary">
+            :
+          </Text>
+          <StepperColumn label="Minute" value={minute} onChange={setMinute} max={55} step={MINUTE_STEP} />
+        </View>
 
-            <Pressable
-              onPress={() => onSelect(`${pad2(hour)}:${pad2(minute)}`)}
-              className="items-center rounded-full bg-brand-yellow py-4"
-            >
-              <Text className="body-md font-body-semibold text-brand-iron">Set Reminder Time</Text>
-            </Pressable>
-          </View>
+        <Pressable
+          onPress={() => onSelect(`${pad2(hour)}:${pad2(minute)}`)}
+          className="items-center rounded-full bg-brand-yellow py-4"
+        >
+          <Text className="body-md font-body-semibold text-brand-iron">Set Reminder Time</Text>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </View>
+    </BottomSheet>
   );
 }

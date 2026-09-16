@@ -26,7 +26,6 @@ export const typography = {
     fontFamily: fontFamily.heading,
     fontSize: 96,
     lineHeight: 96,
-    fontStyle: "italic" as const,
     textAlign: "center" as const,
     transform: [{ skewX: "-10deg" }],
   },

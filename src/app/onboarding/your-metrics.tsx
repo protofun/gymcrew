@@ -43,7 +43,7 @@ export default function YourMetricsScreen() {
       bodyFatPercent: bodyFat,
     });
     posthog.capture("onboarding_metrics_completed");
-    router.push("/onboarding/workout-preferences");
+    router.push("/onboarding/rank-reveal");
   }
 
   return (

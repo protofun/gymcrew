@@ -257,6 +257,15 @@ export default function MuscleRankScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
         </Pressable>
         <Text className="heading-4 text-text-primary">{viewedMember ? `${viewedMember.name}'s Muscle Rank` : "Muscle Rank"}</Text>
+        {!viewingOtherMember && (
+          <Pressable
+            onPress={() => router.push("/ranks/body-graph-history")}
+            hitSlop={8}
+            style={{ position: "absolute", right: 16 }}
+          >
+            <Ionicons name="time-outline" size={22} color={colors.neutral.textPrimary} />
+          </Pressable>
+        )}
       </View>
 
       <ScrollView

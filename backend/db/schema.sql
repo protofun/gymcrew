@@ -117,6 +117,22 @@ CREATE TABLE IF NOT EXISTS body_log_entries (
   INDEX idx_bodylog_user_date (user_id, logged_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- A user's own progress photos (front/side/back), captured with an on-screen alignment guide (see
+-- components/PhotoCaptureGuide.tsx) so any two can later be overlaid to make gradual physique change
+-- visible (components/ProgressPhotoOverlay.tsx) instead of relying on day-to-day memory. `photo_url`
+-- points at an uploaded file, same storage/URL pattern as crew icons and food photos (see
+-- saveUploadedImage in config.php).
+CREATE TABLE IF NOT EXISTS progress_photos (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  user_id VARCHAR(64) NOT NULL,
+  pose VARCHAR(32) NOT NULL,
+  photo_url VARCHAR(512) NOT NULL,
+  captured_at BIGINT NOT NULL,
+  created_at BIGINT NOT NULL,
+  CONSTRAINT fk_progressphoto_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_progressphoto_user_pose_date (user_id, pose, captured_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- A user's saved meal or shake — a reusable combination of foods, one tap away from being logged
 -- (see NUTRITION.md section 14-18). `items_json` mirrors `workouts.exercises_json`'s precedent:
 -- one JSON array of ingredient snapshots (name, per-serving macros, quantity), not a normalized

@@ -1,5 +1,6 @@
 import "../../global.css";
 
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { ClerkProvider, useUser } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
@@ -11,6 +12,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { PostHogProvider, usePostHog } from "posthog-react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+import { AppToast } from "@/components/AppToast";
 import { DivisionCelebrationWatcher } from "@/components/DivisionCelebrationWatcher";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAppFonts } from "@/hooks/use-app-fonts";
@@ -119,31 +121,34 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-          <PostHogProvider
-            client={posthog}
-            autocapture={{
-              captureScreens: false, // Manual screen tracking via PostHogScreenTracker
-              captureTouches: true,
-              propsToCapture: ["testID"],
-              maxElementsCaptured: 20,
-            }}
-          >
-            <PostHogUserSync />
-            <PostHogScreenTracker />
-            <PwaTracker />
-            <StatusBar style="light" />
-            <ThemeProvider value={navTheme}>
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: colors.neutral.background },
-                }}
-              />
-            </ThemeProvider>
-            <DivisionCelebrationWatcher />
-          </PostHogProvider>
-        </ClerkProvider>
+        <BottomSheetModalProvider>
+          <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+            <PostHogProvider
+              client={posthog}
+              autocapture={{
+                captureScreens: false, // Manual screen tracking via PostHogScreenTracker
+                captureTouches: true,
+                propsToCapture: ["testID"],
+                maxElementsCaptured: 20,
+              }}
+            >
+              <PostHogUserSync />
+              <PostHogScreenTracker />
+              <PwaTracker />
+              <StatusBar style="light" />
+              <ThemeProvider value={navTheme}>
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: colors.neutral.background },
+                  }}
+                />
+              </ThemeProvider>
+              <DivisionCelebrationWatcher />
+              <AppToast />
+            </PostHogProvider>
+          </ClerkProvider>
+        </BottomSheetModalProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>
   );

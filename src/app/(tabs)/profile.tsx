@@ -63,7 +63,7 @@ type ProgressCard = {
   icon: ImageSourcePropType;
   label: string;
   caption: string;
-  route: SettingsRoute | "/(tabs)/ranks" | "/nutrition";
+  route: SettingsRoute | "/(tabs)/ranks" | "/nutrition" | "/progress-photos/compare";
 };
 
 function SettingsRow({ icon, label, value, danger, isLast, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; value?: string; danger?: boolean; isLast?: boolean; onPress: () => void }) {
@@ -139,6 +139,7 @@ const PROGRESS_CARDS: ProgressCard[] = [
   { icon: navIcons.trainingHistory, label: "Training History", caption: "Calendar, streaks & charts", route: "/profile/history" },
   { icon: navIcons.nutrition, label: "Nutrition", caption: "Calories, macros & food log", route: "/nutrition" },
   { icon: navIcons.bodyLog, label: "Body Log", caption: "Weight & body fat over time", route: "/profile/body-log" },
+  { icon: navIcons.progress, label: "Progress Photos", caption: "See your physique change over time", route: "/progress-photos/compare" },
   { icon: navIcons.allStats, label: "All Stats", caption: "Every number, one place", route: "/profile/all-stats" },
 ];
 

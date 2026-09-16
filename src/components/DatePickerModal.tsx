@@ -1,12 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Calendar, type DateData } from "react-native-calendars";
 
-import { getMonthGrid, startOfMonth, toDateKey } from "@/lib/date";
+import { fromDateKey, startOfMonth, toDateKey } from "@/lib/date";
 import { colors } from "@/theme";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+// Replaces the Calendar's own title/arrows header — we render our own above it (see below) so the
+// two lay out in the same order as before (title row, then weekday labels, then the day grid).
+function NullHeader() {
+  return null;
+}
 
 type DatePickerModalProps = {
   visible: boolean;
@@ -20,14 +27,32 @@ type DatePickerModalProps = {
 
 export function DatePickerModal({ visible, title = "Pick a date", minDate, maxDate, selectedDate, onClose, onSelect }: DatePickerModalProps) {
   const insets = useSafeAreaInsets();
-  const [visibleMonth, setVisibleMonth] = useState(startOfMonth(selectedDate ?? minDate));
+  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(selectedDate ?? minDate));
 
-  const weeks = useMemo(() => getMonthGrid(visibleMonth), [visibleMonth]);
   const minKey = toDateKey(minDate);
   const maxKey = toDateKey(maxDate);
   const selectedKey = selectedDate ? toDateKey(selectedDate) : null;
   const canGoPrev = startOfMonth(visibleMonth) > startOfMonth(minDate);
   const canGoNext = startOfMonth(visibleMonth) < startOfMonth(maxDate);
+
+  function renderDay({ date }: { date?: DateData }) {
+    if (!date) return null;
+    const inRange = date.dateString >= minKey && date.dateString <= maxKey;
+    const isSelected = date.dateString === selectedKey;
+    return (
+      <Pressable disabled={!inRange} onPress={() => onSelect(fromDateKey(date.dateString))} className="h-9 w-9 items-center justify-center">
+        <View className={`h-8 w-8 items-center justify-center rounded-full ${isSelected ? "bg-brand-yellow" : ""}`}>
+          <Text
+            className={`body-sm ${
+              !inRange ? "text-text-secondary opacity-30" : isSelected ? "font-body-semibold text-brand-iron" : "text-text-primary"
+            }`}
+          >
+            {date.day}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  }
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -72,31 +97,15 @@ export function DatePickerModal({ visible, title = "Pick a date", minDate, maxDa
               ))}
             </View>
 
-            <View className="gap-1">
-              {weeks.map((week, weekIndex) => (
-                <View key={weekIndex} className="flex-row">
-                  {week.map((date, dayIndex) => {
-                    if (!date) return <View key={dayIndex} className="h-9 w-9" />;
-                    const key = toDateKey(date);
-                    const inRange = key >= minKey && key <= maxKey;
-                    const isSelected = key === selectedKey;
-                    return (
-                      <Pressable key={dayIndex} disabled={!inRange} onPress={() => onSelect(date)} className="h-9 w-9 items-center justify-center">
-                        <View className={`h-8 w-8 items-center justify-center rounded-full ${isSelected ? "bg-brand-yellow" : ""}`}>
-                          <Text
-                            className={`body-sm ${
-                              !inRange ? "text-text-secondary opacity-30" : isSelected ? "font-body-semibold text-brand-iron" : "text-text-primary"
-                            }`}
-                          >
-                            {date.getDate()}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ))}
-            </View>
+            <Calendar
+              initialDate={toDateKey(visibleMonth)}
+              firstDay={1}
+              hideExtraDays
+              customHeader={NullHeader}
+              dayComponent={renderDay}
+              style={{ paddingLeft: 0, paddingRight: 0 }}
+              theme={{ calendarBackground: "transparent", weekVerticalMargin: 2 }}
+            />
           </View>
         </Pressable>
       </Pressable>

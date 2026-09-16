@@ -16,6 +16,7 @@ import { recordChallengeContributions } from "@/lib/challenge-progress";
 import { fromDateKey, toDateKey } from "@/lib/date";
 import { tierForExercise } from "@/lib/generic-lift-rank";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
+import { reconcileNotificationSchedules } from "@/lib/push-notifications";
 import type { RankProfile } from "@/lib/rank";
 import { computeCurrentStreak } from "@/lib/streak";
 import { checkPersonalRecords, computeCompletedSets, computeMuscleIntensity, computeVolumeKg } from "@/lib/workout-finish";
@@ -191,6 +192,11 @@ export default function ActiveWorkoutScreen() {
       if (elapsedSeconds >= LONG_SESSION_MINUTES * 60) {
         crewFeed.logEvent("long_session", { durationMinutes: Math.round(elapsedSeconds / 60), workoutName: name.trim() || "Workout" });
       }
+
+      // Cancels today's streak-loss nudge immediately (it'd otherwise still fire at 20:00 even
+      // though the streak's now safe) and refreshes the weekly-recap/stronger-progress content
+      // with this workout's data. Fire-and-forget, same as the crew calls just above.
+      reconcileNotificationSchedules();
     }
 
     if (isLeadingCrew) endLiveSession();

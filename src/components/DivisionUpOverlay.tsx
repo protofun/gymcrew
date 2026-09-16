@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Platform, Pressable, Text, View } from "react-native";
 import Animated, {
   Easing,
   FadeIn,
@@ -13,11 +13,16 @@ import Animated, {
   withTiming,
   ZoomIn,
 } from "react-native-reanimated";
+import { PIConfetti } from "react-native-fast-confetti";
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 
 import { DivisionBadge } from "@/components/DivisionBadge";
+import { darken, lighten } from "@/lib/color";
 import { DIVISION_COLOR, type Division } from "@/lib/division";
 import { fontFamily } from "@/theme";
+
+/** Fires alongside `CelebrationRing`'s own impact beat below. */
+const CONFETTI_IMPACT_DELAY = 300;
 
 const BADGE_SIZE = 140;
 const GLOW_SIZE = BADGE_SIZE * 2.1;
@@ -90,6 +95,25 @@ function CelebrationRing({ triggerKey, color }: { triggerKey: string; color: str
   );
 }
 
+/** The confetti pop as the badge lands — same Skia burst `BadgeRevealFx` uses, tinted to the
+ * division color. Native only: Skia's web build needs its own CanvasKit/wasm load step this app
+ * hasn't wired up, and this overlay also renders on GymCrew's shipped web/PWA build. */
+function CelebrationConfetti({ color, size }: { color: string; size: number }) {
+  if (Platform.OS === "web") return null;
+
+  const palette = [color, lighten(color, 0.4), darken(color, 0.15)];
+
+  return (
+    <View pointerEvents="none" style={{ position: "absolute", width: size, height: size }}>
+      <PIConfetti autoplay autoStartDelay={CONFETTI_IMPACT_DELAY} gravity={2.6} containerStyle={{ width: size, height: size }}>
+        <PIConfetti.Origin blastPosition="center" count={28} initialSpeed={1.1} colors={palette}>
+          <PIConfetti.Flake size={7} radius={2} />
+        </PIConfetti.Origin>
+      </PIConfetti>
+    </View>
+  );
+}
+
 const SPARKLE_SPOTS: { style: object; delay: number }[] = [
   { style: { top: -4, left: -20 }, delay: 500 },
   { style: { top: 8, right: -24 }, delay: 570 },
@@ -137,6 +161,7 @@ export function DivisionUpOverlay({ visible, subjectLabel, from, to, onDismiss }
         <View className="items-center justify-center" style={{ width: BADGE_SIZE, height: BADGE_SIZE, marginTop: 20 }}>
           <CelebrationGlow key={`glow-${to}`} color={color} />
           <CelebrationRing triggerKey={to} color={color} />
+          <CelebrationConfetti key={`confetti-${to}`} color={color} size={BADGE_SIZE * 1.8} />
           <Animated.View key={`badge-${to}`} entering={ZoomIn.springify().damping(9).mass(0.8).delay(200)}>
             <DivisionBadge division={to} size={BADGE_SIZE} />
           </Animated.View>

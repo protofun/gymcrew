@@ -10,6 +10,7 @@ require_once __DIR__ . '/routes/profile_level.php';
 require_once __DIR__ . '/routes/workouts.php';
 require_once __DIR__ . '/routes/records.php';
 require_once __DIR__ . '/routes/body_log.php';
+require_once __DIR__ . '/routes/progress-photos.php';
 require_once __DIR__ . '/routes/crews.php';
 require_once __DIR__ . '/routes/crew-wars.php';
 require_once __DIR__ . '/routes/crew-live-sessions.php';
@@ -199,6 +200,9 @@ switch ($resource) {
         break;
     case 'body-log':
         handleBodyLog($pdo, $userId, $method, $body, $resourceId);
+        break;
+    case 'progress-photos':
+        handleProgressPhotos($pdo, $userId, $method, $body, $segments);
         break;
     case 'crews':
         handleCrews($pdo, $userId, $method, $body, $segments);

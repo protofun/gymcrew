@@ -11,8 +11,10 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 /** Also used by (tabs)/_layout.tsx when it merges in `buildCrewNotifications`'s results. */
 export const NOTIFICATIONS_LIMIT = 8;
-/** Below this, a streak isn't yet worth a nudge — every 1-day streak notifying would just be noise. */
-const STREAK_NOTIFY_MIN_DAYS = 3;
+/** Below this, a streak isn't yet worth a nudge — every 1-day streak notifying would just be noise.
+ * Also used by push-notifications.ts's streak-loss reminder, so the in-app nudge and the "you're
+ * about to lose it" push agree on when a streak becomes worth protecting. */
+export const STREAK_NOTIFY_MIN_DAYS = 3;
 
 function formatRelative(fromMs: number, toMs: number = Date.now()): string {
   const diff = Math.max(0, toMs - fromMs);

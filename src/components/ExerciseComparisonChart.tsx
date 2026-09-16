@@ -1,13 +1,11 @@
-import { Fragment } from "react";
+import { useState } from "react";
 import { Text, View } from "react-native";
-import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from "react-native-svg";
+import { LineChart, type lineDataItem } from "react-native-gifted-charts";
 
-import { colors } from "@/theme";
+import { colors, fontFamily } from "@/theme";
 
 const CHART_HEIGHT = 140;
-const CHART_WIDTH = 340;
 const Y_AXIS_WIDTH = 34;
-const PLOT_WIDTH = CHART_WIDTH - Y_AXIS_WIDTH;
 const Y_TICK_COUNT = 3;
 
 export type ComparisonPoint = {
@@ -24,11 +22,19 @@ type ExerciseComparisonChartProps = {
   emptyLabel: string;
 };
 
+function truncateLabel(label: string): string {
+  return label.length > 9 ? `${label.slice(0, 8)}…` : label;
+}
+
+const axisTextStyle = { fontFamily: fontFamily.bodyRegular, fontSize: 9, color: colors.neutral.textSecondary };
+
 /** This workout's per-exercise volume, overlaid against the previous session that trained the
  * same exercises — a solid green/red area+line for "now" (green if you beat that session's total,
  * red if not) against a dashed neutral line for "last time", so progress (or its absence) reads
  * at a glance instead of needing to compare two separate bar lists by eye. */
 export function ExerciseComparisonChart({ points, previousLabel, emptyLabel }: ExerciseComparisonChartProps) {
+  const [chartWidth, setChartWidth] = useState(0);
+
   if (points.length === 0) {
     return (
       <View className="items-center py-10">
@@ -44,82 +50,72 @@ export function ExerciseComparisonChart({ points, previousLabel, emptyLabel }: E
   const accentColor = improved ? colors.semantic.success : colors.semantic.error;
 
   const maxValue = Math.max(...points.map((point) => point.current), ...points.map((point) => point.previous ?? 0), 1);
-  const count = points.length;
-  const stepX = count > 1 ? PLOT_WIDTH / (count - 1) : 0;
 
-  function xFor(index: number) {
-    return count > 1 ? Y_AXIS_WIDTH + index * stepX : Y_AXIS_WIDTH + PLOT_WIDTH / 2;
-  }
-  function yFor(value: number) {
-    return CHART_HEIGHT - (value / maxValue) * CHART_HEIGHT;
-  }
+  const data: lineDataItem[] = points.map((point) => ({
+    value: point.current,
+    label: truncateLabel(point.label),
+    labelTextStyle: axisTextStyle,
+    dataPointColor: accentColor,
+    dataPointRadius: 3.5,
+  }));
 
-  const currentLinePath = points.map((point, i) => `${i === 0 ? "M" : "L"} ${xFor(i)} ${yFor(point.current)}`).join(" ");
-  const currentAreaPath = `${currentLinePath} L ${xFor(count - 1)} ${CHART_HEIGHT} L ${xFor(0)} ${CHART_HEIGHT} Z`;
-  const previousLinePath = hasPrevious
-    ? points.map((point, i) => `${i === 0 ? "M" : "L"} ${xFor(i)} ${yFor(point.previous ?? 0)}`).join(" ")
-    : null;
-
-  const yTicks = Array.from({ length: Y_TICK_COUNT }, (_, i) => {
-    const value = Math.round((maxValue * (Y_TICK_COUNT - 1 - i)) / (Y_TICK_COUNT - 1));
-    return { value, y: yFor(value) };
-  });
+  // Previous values default missing entries to 0 (matching the original path, which drew straight
+  // through 0 rather than skipping a gap) but hides the dot at those points.
+  const data2: lineDataItem[] | undefined = hasPrevious
+    ? points.map((point) => ({
+        value: point.previous ?? 0,
+        hideDataPoint: point.previous === null,
+        dataPointRadius: 3,
+        customDataPoint: () => (
+          <View
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: colors.neutral.background,
+              borderWidth: 1.5,
+              borderColor: colors.neutral.textSecondary,
+            }}
+          />
+        ),
+      }))
+    : undefined;
 
   return (
     <View className="gap-3">
-      <Svg width="100%" height={CHART_HEIGHT + 28} viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT + 28}`}>
-        <Defs>
-          <LinearGradient id="exerciseComparisonFill" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={accentColor} stopOpacity={0.35} />
-            <Stop offset="100%" stopColor={accentColor} stopOpacity={0} />
-          </LinearGradient>
-        </Defs>
-
-        {yTicks.map((tick, index) => (
-          <Fragment key={index}>
-            <Line
-              x1={Y_AXIS_WIDTH}
-              y1={tick.y}
-              x2={CHART_WIDTH}
-              y2={tick.y}
-              stroke={colors.neutral.divider}
-              strokeWidth={1}
-              strokeDasharray="2,4"
-            />
-            <SvgText x={Y_AXIS_WIDTH - 6} y={Math.max(9, tick.y - 2)} fontSize={9} fill={colors.neutral.textSecondary} textAnchor="end">
-              {tick.value}
-            </SvgText>
-          </Fragment>
-        ))}
-
-        <Path d={currentAreaPath} fill="url(#exerciseComparisonFill)" />
-        {previousLinePath && <Path d={previousLinePath} stroke={colors.neutral.textSecondary} strokeWidth={2} strokeDasharray="6,5" fill="none" />}
-        <Path d={currentLinePath} stroke={accentColor} strokeWidth={2.5} fill="none" />
-
-        {points.map((point, i) => (
-          <Circle key={point.id} cx={xFor(i)} cy={yFor(point.current)} r={3.5} fill={accentColor} />
-        ))}
-        {points.map(
-          (point, i) =>
-            point.previous !== null && (
-              <Circle
-                key={`prev-${point.id}`}
-                cx={xFor(i)}
-                cy={yFor(point.previous)}
-                r={3}
-                fill={colors.neutral.background}
-                stroke={colors.neutral.textSecondary}
-                strokeWidth={1.5}
-              />
-            ),
+      <View onLayout={(event) => setChartWidth(event.nativeEvent.layout.width)}>
+        {chartWidth > 0 && (
+          <LineChart
+            data={data}
+            data2={data2}
+            parentWidth={chartWidth}
+            adjustToWidth
+            height={CHART_HEIGHT}
+            initialSpacing={8}
+            endSpacing={8}
+            color={accentColor}
+            thickness={2.5}
+            color2={colors.neutral.textSecondary}
+            thickness2={2}
+            strokeDashArray2={[6, 5]}
+            areaChart
+            startFillColor={accentColor}
+            endFillColor={accentColor}
+            startOpacity={0.35}
+            endOpacity={0}
+            noOfSections={Y_TICK_COUNT - 1}
+            maxValue={maxValue}
+            roundToDigits={0}
+            rulesType="dashed"
+            rulesColor={colors.neutral.divider}
+            xAxisColor={colors.neutral.divider}
+            yAxisColor={colors.neutral.divider}
+            yAxisTextStyle={axisTextStyle}
+            yAxisLabelWidth={Y_AXIS_WIDTH}
+            backgroundColor="transparent"
+          />
         )}
-
-        {points.map((point, i) => (
-          <SvgText key={`label-${point.id}`} x={xFor(i)} y={CHART_HEIGHT + 18} fontSize={9} fill={colors.neutral.textSecondary} textAnchor="middle">
-            {point.label.length > 9 ? `${point.label.slice(0, 8)}…` : point.label}
-          </SvgText>
-        ))}
-      </Svg>
+      </View>
 
       <View className="flex-row items-center justify-center gap-4">
         <View className="flex-row items-center gap-1.5">

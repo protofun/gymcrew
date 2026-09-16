@@ -6,7 +6,14 @@ import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
 import { TimePickerModal } from "@/components/TimePickerModal";
-import { cancelDailyReminder, REMINDER_DEFAULTS, registerForPushNotifications, scheduleDailyReminder, type ReminderKind } from "@/lib/push-notifications";
+import {
+  cancelDailyReminder,
+  reconcileNotificationSchedules,
+  REMINDER_DEFAULTS,
+  registerForPushNotifications,
+  scheduleDailyReminder,
+  type ReminderKind,
+} from "@/lib/push-notifications";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
@@ -15,14 +22,16 @@ type ToggleKey = "workoutReminders" | "crewChallengeAlerts" | "progressUpdates" 
 const TOGGLES: { key: ToggleKey; label: string; description: string }[] = [
   { key: "workoutReminders", label: "Workout Reminders", description: "Nudges to keep your streak going" },
   { key: "crewChallengeAlerts", label: "Crew & Challenge Alerts", description: "PRs from teammates and new challenges" },
-  { key: "progressUpdates", label: "Progress Updates", description: "\"You're X% stronger this month\" style updates" },
+  { key: "progressUpdates", label: "Progress Updates", description: "Weekly recaps and \"You're X% stronger\" updates" },
   { key: "creatineReminders", label: "Creatine Reminder", description: "A daily nudge to take your creatine" },
   { key: "marketingTips", label: "Tips & Product News", description: "Occasional training tips and app updates" },
 ];
 
-/** The two toggles above that are actually backed by a real on-device scheduled notification (see
- * lib/push-notifications.ts) — Crew Alerts/Progress Updates/Tips are either server-pushed or not
- * time-of-day based, so they don't need a local schedule or a time picker. */
+/** The two toggles with a user-editable time-of-day (see lib/push-notifications.ts). Workout
+ * Reminders also gates the streak-loss nudge, and Progress Updates gates the weekly recap and "%
+ * stronger" nudge — both real on-device schedules too, just without a picker since their timing
+ * isn't user-configurable (see `handleToggle`'s `reconcileNotificationSchedules()` call). Crew
+ * Alerts/Tips remain server-pushed or not time-of-day based. */
 const REMINDER_TOGGLE_KEY: Record<ReminderKind, ToggleKey> = { workout: "workoutReminders", creatine: "creatineReminders" };
 const REMINDER_LABEL: Record<ReminderKind, string> = { workout: "Workout Reminder Time", creatine: "Creatine Reminder Time" };
 
@@ -54,14 +63,23 @@ export default function NotificationsScreen() {
     setOnboardingData({ [key]: value });
     posthog.capture("notification_setting_changed", { setting: key, enabled: value });
 
+    if (value) await registerForPushNotifications();
+
     const kind = reminderKindForToggle(key);
-    if (!kind) return;
-    if (value) {
-      await registerForPushNotifications();
-      const { title, body } = REMINDER_DEFAULTS[kind];
-      await scheduleDailyReminder(kind, reminderTime[kind], title, body);
-    } else {
-      await cancelDailyReminder(kind);
+    if (kind) {
+      if (value) {
+        const { title, body } = REMINDER_DEFAULTS[kind];
+        await scheduleDailyReminder(kind, reminderTime[kind], title, body);
+      } else {
+        await cancelDailyReminder(kind);
+      }
+    }
+
+    // Workout Reminders also gates the streak-loss nudge, and Progress Updates gates the weekly
+    // recap + "% stronger" nudge — both need a full reconcile since their content depends on
+    // current workout data, not just this one toggle (see push-notifications.ts).
+    if (key === "workoutReminders" || key === "progressUpdates") {
+      await reconcileNotificationSchedules();
     }
   }
 

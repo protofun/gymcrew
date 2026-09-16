@@ -1,8 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Modal, Pressable, Text, View } from "react-native";
-import Animated, { SlideInDown } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Pressable, Text, View } from "react-native";
 
+import { BottomSheet } from "@/components/BottomSheet";
 import { colors } from "@/theme";
 
 type WorkoutOptionsSheetProps = {
@@ -37,26 +36,17 @@ function ActionRow({
 }
 
 export function WorkoutOptionsSheet({ visible, workoutName, onClose, onEdit, onDelete }: WorkoutOptionsSheetProps) {
-  const insets = useSafeAreaInsets();
-
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onPress={onClose}>
-        <Animated.View
-          entering={SlideInDown.springify().damping(18).mass(0.7)}
-          style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom + 8 }}
-        >
-          <Pressable onPress={() => {}} className="gap-1 rounded-t-3xl border border-divider bg-surface px-5 pb-2 pt-4">
-            <Text className="body-sm mb-2 text-text-secondary" numberOfLines={1}>
-              {workoutName}
-            </Text>
+    <BottomSheet visible={visible} onClose={onClose}>
+      <View className="gap-1 px-5 pb-2 pt-4">
+        <Text className="body-sm mb-2 text-text-secondary" numberOfLines={1}>
+          {workoutName}
+        </Text>
 
-            <ActionRow icon="create-outline" label="Edit Workout" onPress={onEdit} />
-            <View className="h-px bg-divider" />
-            <ActionRow icon="trash-outline" label="Delete Workout" destructive onPress={onDelete} />
-          </Pressable>
-        </Animated.View>
-      </Pressable>
-    </Modal>
+        <ActionRow icon="create-outline" label="Edit Workout" onPress={onEdit} />
+        <View className="h-px bg-divider" />
+        <ActionRow icon="trash-outline" label="Delete Workout" destructive onPress={onDelete} />
+      </View>
+    </BottomSheet>
   );
 }

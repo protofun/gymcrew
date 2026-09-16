@@ -108,6 +108,9 @@ export type PrCheckResponse = {
 
 export type ApiDivisionHistoryEntry = { division: string; reachedAt: number };
 
+export type ProgressPhotoPose = "front" | "side" | "back";
+export type ProgressPhoto = { id: string; pose: ProgressPhotoPose; photoUrl: string; capturedAt: number };
+
 export type ApiProfileLevel = {
   xp: number;
   division: string;
@@ -375,6 +378,15 @@ export const api = {
   addBodyLogEntry: (entry: { weightKg: number; bodyFatPercent: number | null }) =>
     request<BodyLogEntry>("/body-log", { method: "POST", body: entry }),
   removeBodyLogEntry: (id: string) => request<{ ok: true }>(`/body-log/${id}`, { method: "DELETE" }),
+
+  /** This user's own progress photos, newest first — optionally filtered to one pose. See
+   * backend/routes/progress-photos.php. */
+  getProgressPhotos: (pose?: ProgressPhotoPose) =>
+    request<ProgressPhoto[]>(pose ? `/progress-photos?pose=${pose}` : "/progress-photos"),
+  /** Uploads a captured progress photo — same base64-upload pattern as `uploadCrewIcon`/`uploadFoodPhoto`. */
+  uploadProgressPhoto: (input: { pose: ProgressPhotoPose; imageBase64: string; contentType: string; capturedAt: number }) =>
+    request<ProgressPhoto>("/progress-photos", { method: "POST", body: input }),
+  deleteProgressPhoto: (id: string) => request<{ ok: true }>(`/progress-photos/${id}`, { method: "DELETE" }),
 
   /** Generic per-user JSON blob (see backend/routes/state.php) — backs the smaller personal stores
    * (goals, currency, cosmetics, ...) that don't need their own bespoke table. `getState` resolves

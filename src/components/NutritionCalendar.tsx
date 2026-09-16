@@ -1,19 +1,31 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { Calendar, type DateData } from "react-native-calendars";
 
 import { GoalRing } from "@/components/GoalRing";
 import type { ApiFoodLog } from "@/lib/api";
-import { getMonthGrid, isSameMonth, toDateKey } from "@/lib/date";
+import { fromDateKey, getMonthGrid, isSameMonth, toDateKey } from "@/lib/date";
 import { dayGoalStatus, dayHealthinessRatio } from "@/lib/nutrition-day-status";
 import { sumMacros, type Macros } from "@/lib/nutrition-macros";
 import { colors } from "@/theme";
 
 const WEEKDAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 const RING_SIZE = 32;
+const PILL_RADIUS = RING_SIZE / 2;
 const EMPTY_MACROS: Macros = { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 };
 
 type DaySegment = { type: "pill"; dates: Date[] } | { type: "ring"; date: Date } | { type: "blank" };
+
+/** Where a date falls within its (possibly joined) segment — drives which corners of its calendar
+ * cell get rounded so consecutive "pill" cells read as one continuous bar. */
+type CellRole = "ring" | "pillSingle" | "pillStart" | "pillMiddle" | "pillEnd";
+
+// Replaces the Calendar's own title/arrows header — we render our own above it, unchanged from
+// before, so the layout order (title + arrows, then weekday labels, then the day grid) stays the same.
+function NullHeader() {
+  return null;
+}
 
 /**
  * Groups one calendar week into render segments: a run of consecutive "fully hit" days becomes one
@@ -77,6 +89,25 @@ export function NutritionCalendar({ entries, targets }: { entries: ApiFoodLog[];
     [weeks, totalsByDay, targets, today],
   );
 
+  const cellRoleByDay = useMemo(() => {
+    const map = new Map<string, CellRole>();
+    for (const segments of weekSegments) {
+      for (const segment of segments) {
+        if (segment.type === "ring") {
+          map.set(toDateKey(segment.date), "ring");
+        } else if (segment.type === "pill") {
+          const lastIndex = segment.dates.length - 1;
+          segment.dates.forEach((date, index) => {
+            const role: CellRole =
+              segment.dates.length === 1 ? "pillSingle" : index === 0 ? "pillStart" : index === lastIndex ? "pillEnd" : "pillMiddle";
+            map.set(toDateKey(date), role);
+          });
+        }
+      }
+    }
+    return map;
+  }, [weekSegments]);
+
   const monthStats = useMemo(() => {
     let totalRatio = 0;
     let trackedDays = 0;
@@ -91,6 +122,49 @@ export function NutritionCalendar({ entries, targets }: { entries: ApiFoodLog[];
     }
     return { avgHealthiness: trackedDays > 0 ? totalRatio / trackedDays : 0, trackedDays };
   }, [weeks, totalsByDay, targets, today]);
+
+  function renderDay({ date }: { date?: DateData }) {
+    if (!date) return null;
+    const dateKey = date.dateString;
+    const role = cellRoleByDay.get(dateKey);
+    if (!role) return null;
+
+    if (role === "ring") {
+      const asDate = fromDateKey(dateKey);
+      const isFuture = asDate > today;
+      const ratio = isFuture ? 0 : dayHealthinessRatio(totalsByDay.get(dateKey) ?? EMPTY_MACROS, targets);
+      const isToday = dateKey === toDateKey(today);
+      return (
+        <View style={{ height: RING_SIZE }} className="w-full items-center justify-center">
+          <GoalRing ratio={ratio} color={colors.semantic.success} size={RING_SIZE} strokeWidth={3}>
+            <Text className="caption font-body-semibold" style={{ color: isToday ? colors.brand.yellow : colors.neutral.textPrimary }}>
+              {date.day}
+            </Text>
+          </GoalRing>
+        </View>
+      );
+    }
+
+    const roundLeft = role === "pillSingle" || role === "pillStart";
+    const roundRight = role === "pillSingle" || role === "pillEnd";
+    return (
+      <View
+        style={{
+          height: RING_SIZE,
+          backgroundColor: colors.semantic.success,
+          borderTopLeftRadius: roundLeft ? PILL_RADIUS : 0,
+          borderBottomLeftRadius: roundLeft ? PILL_RADIUS : 0,
+          borderTopRightRadius: roundRight ? PILL_RADIUS : 0,
+          borderBottomRightRadius: roundRight ? PILL_RADIUS : 0,
+        }}
+        className="w-full items-center justify-center"
+      >
+        <Text className="body-sm font-body-bold" style={{ color: colors.brand.iron }}>
+          {date.day}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View className="gap-4 rounded-3xl border border-divider bg-surface p-4">
@@ -123,46 +197,15 @@ export function NutritionCalendar({ entries, targets }: { entries: ApiFoodLog[];
         ))}
       </View>
 
-      <View className="gap-1.5">
-        {weekSegments.map((segments, weekIndex) => (
-          <View key={weekIndex} className="flex-row items-center" style={{ height: RING_SIZE }}>
-            {segments.map((segment, segmentIndex) => {
-              if (segment.type === "blank") return <View key={segmentIndex} style={{ flex: 1 }} />;
-
-              if (segment.type === "pill") {
-                return (
-                  <View
-                    key={segmentIndex}
-                    style={{ flex: segment.dates.length, height: RING_SIZE, borderRadius: RING_SIZE / 2, backgroundColor: colors.semantic.success }}
-                    className="mx-0.5 flex-row items-center"
-                  >
-                    {segment.dates.map((date) => (
-                      <View key={toDateKey(date)} style={{ flex: 1 }} className="items-center">
-                        <Text className="body-sm font-body-bold" style={{ color: colors.brand.iron }}>
-                          {date.getDate()}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                );
-              }
-
-              const isFuture = segment.date > today;
-              const ratio = isFuture ? 0 : dayHealthinessRatio(totalsByDay.get(toDateKey(segment.date)) ?? EMPTY_MACROS, targets);
-              const isToday = toDateKey(segment.date) === toDateKey(today);
-              return (
-                <View key={segmentIndex} style={{ flex: 1 }} className="items-center">
-                  <GoalRing ratio={ratio} color={colors.semantic.success} size={RING_SIZE} strokeWidth={3}>
-                    <Text className="caption font-body-semibold" style={{ color: isToday ? colors.brand.yellow : colors.neutral.textPrimary }}>
-                      {segment.date.getDate()}
-                    </Text>
-                  </GoalRing>
-                </View>
-              );
-            })}
-          </View>
-        ))}
-      </View>
+      <Calendar
+        initialDate={toDateKey(visibleMonth)}
+        firstDay={1}
+        hideExtraDays
+        customHeader={NullHeader}
+        dayComponent={renderDay}
+        style={{ paddingLeft: 0, paddingRight: 0 }}
+        theme={{ calendarBackground: "transparent", weekVerticalMargin: 3 }}
+      />
     </View>
   );
 }

@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useMemo } from "react";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { usePostHog } from "posthog-react-native";
 import { AttachStep } from "react-native-spotlight-tour";
 
@@ -10,6 +10,7 @@ import { CrewCard } from "@/components/CrewCard";
 import { CrewWarWidget } from "@/components/CrewWarWidget";
 import { GoalsWidget } from "@/components/GoalsWidget";
 import { HomeNutritionWidget } from "@/components/HomeNutritionWidget";
+import { HomeSkeleton } from "@/components/HomeSkeleton";
 import { LastWorkoutWidget } from "@/components/LastWorkoutWidget";
 import { MuscleSuggestions } from "@/components/MuscleSuggestions";
 import { VisualTrainingCalendar } from "@/components/VisualTrainingCalendar";
@@ -20,7 +21,6 @@ import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { useSyncStatusStore } from "@/store/sync-status-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
-import { colors } from "@/theme";
 
 export default function HomeScreen() {
   const hasSyncedOnce = useSyncStatusStore((state) => state.hasSyncedOnce);
@@ -43,11 +43,7 @@ export default function HomeScreen() {
   // ever showing whatever happens to be sitting in local storage as if it were confirmed — a stale
   // or wrong-account local cache must never flash on screen even for a moment.
   if (!hasSyncedOnce) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator size="large" color={colors.brand.yellow} />
-      </View>
-    );
+    return <HomeSkeleton />;
   }
 
   return (

@@ -31,7 +31,9 @@ export default function BuildCrewStartScreen() {
           >
             Build your
           </Animated.Text>
-          <Animated.View entering={FadeInDown.delay(80).springify().damping(14).mass(0.6)}>
+          {/* paddingHorizontal gives the skewed text's box room to actually contain the skew — see
+              onboarding/index.tsx's identical wordmark for why this is needed. */}
+          <Animated.View entering={FadeInDown.delay(80).springify().damping(14).mass(0.6)} style={{ paddingHorizontal: 20 }}>
             <Text style={typography.heroItalic}>
               <Text style={{ color: colors.neutral.textPrimary }}>GYM</Text>
               <Text style={{ color: colors.brand.yellow }}>CREW</Text>

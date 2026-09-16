@@ -17,7 +17,7 @@ import { flushLocalStateToServer } from "@/lib/flush-local-state";
 import { xpRequiredFor } from "@/lib/division";
 import { buildCreatineReminderNotification, buildCrewNotifications, buildNotifications, NOTIFICATIONS_LIMIT } from "@/lib/notifications";
 import { getPostAuthRedirect } from "@/lib/onboarding-gate";
-import { reconcileNotificationSchedules, registerForPushNotifications } from "@/lib/push-notifications";
+import { addForegroundNotificationToastListener, reconcileNotificationSchedules, registerForPushNotifications } from "@/lib/push-notifications";
 import { computeCurrentStreak, computeTrainedDaysThisWeek } from "@/lib/streak";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { useAdminChallengeStore } from "@/store/admin-challenge-store";
@@ -204,6 +204,14 @@ export default function TabsLayout() {
       cancelled = true;
     };
   }, [isSignedIn]);
+
+  // Surfaces a push that arrives while the app is open as the app's own toast (see
+  // lib/push-notifications.ts) instead of a generic OS banner. Lives for the whole signed-in tab
+  // shell, independent of the sync effect above.
+  useEffect(() => {
+    const subscription = addForegroundNotificationToastListener();
+    return () => subscription.remove();
+  }, []);
 
   // Same self-healing check as app/index.tsx — reaching a tab directly (e.g. a bookmark, or a
   // relaunched PWA resuming its last URL) with fresh local storage shouldn't bounce a genuinely

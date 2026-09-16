@@ -29,7 +29,11 @@ export default function OnboardingIntroScreen() {
             resizeMode="contain"
           />
 
-          <Animated.View entering={FadeInUp.delay(150).springify().damping(14).mass(0.6)}>
+          {/* `paddingHorizontal` gives the skewed text's box room to actually contain the skew —
+              without it, the wrapping Animated.View shrink-wraps to the *pre-skew* text measurement,
+              and reanimated's web "entering" animation clips anything outside that box, shaving the
+              top-right tip off the last letter ("W") even at this single ~10deg skew. */}
+          <Animated.View entering={FadeInUp.delay(150).springify().damping(14).mass(0.6)} style={{ paddingHorizontal: 20 }}>
             <Text style={typography.heroItalic}>
               <Text style={{ color: colors.neutral.textPrimary }}>GYM</Text>
               <Text style={{ color: colors.brand.yellow }}>CREW</Text>
