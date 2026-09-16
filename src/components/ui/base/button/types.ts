@@ -27,6 +27,11 @@ interface IButtonRoot {
    * — GymCrew's own buttons are full-width edge-to-edge within their padded container, unlike this
    * primitive's upstream default. Not part of the original Reacticx API. */
   readonly fullWidth?: boolean;
+  /** Extra style applied to the outer `Pressable` itself (e.g. `{ flex: 1 }` to grow inside a
+   * `flex-row` sibling layout) — `fullWidth` only toggles `alignSelf`, which controls the *cross*
+   * axis, not main-axis growth; this covers cases `fullWidth` can't. Not part of the original
+   * Reacticx API. */
+  readonly containerStyle?: StyleProp<ViewStyle>;
 }
 
 interface IButtonContent {

@@ -61,6 +61,7 @@ const ButtonRoot: React.FC<IButtonRoot> & React.FunctionComponent<IButtonRoot> =
     accessibilityLabel,
     style,
     fullWidth = false,
+    containerStyle,
   }: IButtonRoot): React.ReactNode &
     React.JSX.Element &
     React.ReactElement => {
@@ -144,6 +145,7 @@ const ButtonRoot: React.FC<IButtonRoot> & React.FunctionComponent<IButtonRoot> =
           style={({ pressed }) => [
             styles.pressable,
             fullWidth && styles.pressableFullWidth,
+            containerStyle,
             Platform.OS === "ios" && pressed && styles.pressed,
           ]}
           accessible={true}
