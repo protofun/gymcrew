@@ -6,7 +6,7 @@ import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
-import { colors, typography } from "@/theme";
+import { colors, spring, typography } from "@/theme";
 
 export default function OnboardingIntroScreen() {
   const { isSignedIn } = useAuth();
@@ -23,7 +23,7 @@ export default function OnboardingIntroScreen() {
       <View className="flex-1 px-6 pb-6 pt-4">
         <View className="flex-1 items-center justify-center gap-4">
           <Animated.Image
-            entering={ZoomIn.springify().damping(11).mass(0.7)}
+            entering={ZoomIn.springify().damping(spring.press.damping).mass(spring.press.mass)}
             source={images.mascotArmsCrossed}
             style={{ width: 180, height: 180 }}
             resizeMode="contain"
@@ -33,7 +33,7 @@ export default function OnboardingIntroScreen() {
               without it, the wrapping Animated.View shrink-wraps to the *pre-skew* text measurement,
               and reanimated's web "entering" animation clips anything outside that box, shaving the
               top-right tip off the last letter ("W") even at this single ~10deg skew. */}
-          <Animated.View entering={FadeInUp.delay(150).springify().damping(14).mass(0.6)} style={{ paddingHorizontal: 20 }}>
+          <Animated.View entering={FadeInUp.delay(150).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} style={{ paddingHorizontal: 20 }}>
             <Text style={typography.heroItalic}>
               <Text style={{ color: colors.neutral.textPrimary }}>GYM</Text>
               <Text style={{ color: colors.brand.yellow }}>CREW</Text>
@@ -41,7 +41,7 @@ export default function OnboardingIntroScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeInUp.delay(250).springify().damping(14).mass(0.6)}
+            entering={FadeInUp.delay(250).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="items-center"
           >
             <Text className="font-body-semibold text-2xl text-center uppercase tracking-wide text-text-primary">
@@ -53,7 +53,7 @@ export default function OnboardingIntroScreen() {
           </Animated.View>
 
           <Animated.Text
-            entering={FadeInUp.delay(350).springify().damping(14).mass(0.6)}
+            entering={FadeInUp.delay(350).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body text-lg px-2 text-center leading-relaxed text-text-secondary"
           >
             Track workouts, build your crew, compete and become the best version

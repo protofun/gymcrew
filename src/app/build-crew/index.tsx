@@ -6,7 +6,7 @@ import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated"
 import { goBack } from "@/lib/navigation";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
-import { colors, typography } from "@/theme";
+import { colors, spring, typography } from "@/theme";
 
 const MASCOT_ASPECT_RATIO = 520 / 420;
 const MASCOT_WIDTH = Dimensions.get("window").width;
@@ -26,21 +26,21 @@ export default function BuildCrewStartScreen() {
 
         <View className="items-center gap-2 px-6">
           <Animated.Text
-            entering={FadeInDown.springify().damping(14).mass(0.6)}
+            entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-semibold text-2xl text-center text-text-primary"
           >
             Build your
           </Animated.Text>
           {/* paddingHorizontal gives the skewed text's box room to actually contain the skew — see
               onboarding/index.tsx's identical wordmark for why this is needed. */}
-          <Animated.View entering={FadeInDown.delay(80).springify().damping(14).mass(0.6)} style={{ paddingHorizontal: 20 }}>
+          <Animated.View entering={FadeInDown.delay(80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} style={{ paddingHorizontal: 20 }}>
             <Text style={typography.heroItalic}>
               <Text style={{ color: colors.neutral.textPrimary }}>GYM</Text>
               <Text style={{ color: colors.brand.yellow }}>CREW</Text>
             </Text>
           </Animated.View>
           <Animated.Text
-            entering={FadeInUp.delay(180).springify().damping(14).mass(0.6)}
+            entering={FadeInUp.delay(180).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-medium text-xl leading-snug text-center text-text-secondary"
           >
             Stronger together.{"\n"}Unstoppable together.
@@ -49,7 +49,7 @@ export default function BuildCrewStartScreen() {
 
         <View className="flex-1 items-center justify-center">
           <Animated.Image
-            entering={ZoomIn.delay(150).springify().damping(11).mass(0.7)}
+            entering={ZoomIn.delay(150).springify().damping(spring.press.damping).mass(spring.press.mass)}
             source={images.mascotsCrew}
             style={{ width: MASCOT_WIDTH, height: MASCOT_HEIGHT }}
             resizeMode="contain"

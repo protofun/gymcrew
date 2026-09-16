@@ -5,7 +5,7 @@ import { usePostHog } from "posthog-react-native";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 export default function OnboardingWelcomeScreen() {
   const posthog = usePostHog();
@@ -15,7 +15,7 @@ export default function OnboardingWelcomeScreen() {
       <View className="flex-1 px-6 pb-6 pt-4">
         <View className="gap-2">
           <Animated.Text
-            entering={FadeInDown.springify().damping(14).mass(0.6)}
+            entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-bold text-5xl leading-none"
             style={{ fontStyle: "italic", transform: [{ skewX: "-10deg" }] }}
           >
@@ -23,7 +23,7 @@ export default function OnboardingWelcomeScreen() {
             <Text className="text-brand-yellow">GymCrew</Text>
           </Animated.Text>
           <Animated.Text
-            entering={FadeInUp.delay(180).springify().damping(14).mass(0.6)}
+            entering={FadeInUp.delay(180).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-medium text-xl leading-snug text-text-secondary"
           >
             Let&apos;s set up your profile and start your journey.
@@ -32,7 +32,7 @@ export default function OnboardingWelcomeScreen() {
 
         <View className="flex-1 items-center justify-center">
           <Animated.Image
-            entering={ZoomIn.delay(150).springify().damping(11).mass(0.7)}
+            entering={ZoomIn.delay(150).springify().damping(spring.press.damping).mass(spring.press.mass)}
             source={images.mascotFlexing}
             style={{ width: 382, height: 382 * (205 / 250) }}
             resizeMode="contain"

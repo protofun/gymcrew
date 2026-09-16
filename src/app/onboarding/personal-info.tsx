@@ -9,7 +9,7 @@ import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
 import { api, isApiConfigured } from "@/lib/api";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 function CameraIcon() {
   return (
@@ -115,7 +115,7 @@ export default function PersonalInfoScreen() {
           <OnboardingHeader title="Personal Info" subtitle="Tell us a bit about yourself." />
 
           <Animated.ScrollView
-            entering={FadeInUp.delay(200).springify().damping(14).mass(0.6)}
+            entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="flex-1"
             contentContainerClassName="flex-grow justify-center gap-6 py-6"
             keyboardShouldPersistTaps="handled"

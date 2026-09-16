@@ -4,7 +4,7 @@ import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated"
 
 import { goBack } from "@/lib/navigation";
 import { images } from "@/constants/images";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 type AuthHeaderProps = {
   title: string;
@@ -24,7 +24,7 @@ export function AuthHeader({ title, subtitle }: AuthHeaderProps) {
 
       <View className="items-center gap-2">
         <Animated.Text
-          entering={FadeInDown.springify().damping(14).mass(0.6)}
+          entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="font-heading text-5xl leading-none"
           style={{ fontStyle: "italic", transform: [{ skewX: "-10deg" }] }}
         >
@@ -33,14 +33,14 @@ export function AuthHeader({ title, subtitle }: AuthHeaderProps) {
         </Animated.Text>
 
         <Animated.Text
-          entering={FadeInUp.delay(80).springify().damping(14).mass(0.6)}
+          entering={FadeInUp.delay(80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="font-body-bold text-3xl text-text-primary"
         >
           {title}
         </Animated.Text>
 
         <Animated.View
-          entering={FadeInUp.delay(140).springify().damping(14).mass(0.6)}
+          entering={FadeInUp.delay(140).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="flex-row items-center gap-1.5"
         >
           <Text className="body-lg text-text-secondary">{subtitle}</Text>
@@ -48,7 +48,7 @@ export function AuthHeader({ title, subtitle }: AuthHeaderProps) {
         </Animated.View>
 
         <Animated.Image
-          entering={ZoomIn.delay(200).springify().damping(11).mass(0.7)}
+          entering={ZoomIn.delay(200).springify().damping(spring.press.damping).mass(spring.press.mass)}
           source={images.mascotAuthScreen}
           style={{ width: 340, height: 340 * (430 / 760) }}
           resizeMode="contain"

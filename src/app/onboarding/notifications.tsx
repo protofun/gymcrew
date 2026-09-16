@@ -8,7 +8,7 @@ import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
 import { registerForPushNotifications, reconcileNotificationSchedules } from "@/lib/push-notifications";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 type NotificationRowProps = {
   title: string;
@@ -68,7 +68,7 @@ export default function NotificationsScreen() {
       <View className="flex-1 px-6 pb-6 pt-4">
         <OnboardingHeader title="Notifications" subtitle="Stay on track with reminders and updates." />
 
-        <Animated.ScrollView entering={FadeInUp.delay(200).springify().damping(14).mass(0.6)} className="flex-1" contentContainerClassName="flex-grow justify-center gap-4 py-6" showsVerticalScrollIndicator={false}>
+        <Animated.ScrollView entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="flex-1" contentContainerClassName="flex-grow justify-center gap-4 py-6" showsVerticalScrollIndicator={false}>
           <NotificationRow
             title="Workout Reminders"
             subtitle="Get reminded to train"

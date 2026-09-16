@@ -10,7 +10,7 @@ import { OnboardingHeader } from "@/components/OnboardingHeader";
 import { WEEKDAY_SHORT_LABEL, WEEKDAYS, type Weekday } from "@/data/weekdays";
 import { getTemplatesForSplit } from "@/data/workout-templates";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 const CUSTOM_SPLIT = "Other / Custom";
 
@@ -85,7 +85,7 @@ export default function TrainingScheduleScreen() {
         />
 
         <Animated.ScrollView
-          entering={FadeInUp.delay(200).springify().damping(14).mass(0.6)}
+          entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="flex-1"
           contentContainerClassName="gap-4 py-6"
           showsVerticalScrollIndicator={false}

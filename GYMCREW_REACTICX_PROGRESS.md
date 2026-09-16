@@ -7,8 +7,8 @@ Updated as of 2026-09-16.
 [x] Reacticx setup
 [x] Design system
 [x] Core components
-[ ] Authentication
-[ ] Onboarding
+[~] Authentication
+[~] Onboarding
 [ ] Home
 [ ] Workout
 [ ] Ranking
@@ -41,6 +41,20 @@ Updated as of 2026-09-16.
 - NOT run: iOS/Android simulator, physical device, or opening the web bundle in a browser.
 
 **Remaining work:** Phase 1 is otherwise complete (dependency installed, CLI initialized, catalog verified, app confirmed still building). Phase 3's component-by-component migration order is documented in `GYMCREW_REACTICX_COMPONENT_MAP.md`.
+
+---
+
+## Authentication + Onboarding (Phase 4) — 2026-09-16 — IN PROGRESS
+
+**Files changed:** `src/theme/colors.ts`/`radius.ts` (used, not modified further); 21 auth/onboarding screens + `AuthHeader.tsx`/`OnboardingHeader.tsx` (Reanimated `.springify().damping(N).mass(M)` magic numbers replaced with `spring.entranceBouncy`/`spring.press` tokens from Phase 2's `src/theme/motion.ts` — mechanical, behavior-preserving, one deliberate exception left alone: `rank-reveal.tsx`'s bespoke `damping(16)` with no mass, a flagship one-off animation not meant to join the shared scale); `VerificationCodeModal.tsx` rebuilt on `base/otp-input`; `SocialAuthButton.tsx` and `OnboardingFooter.tsx` rebuilt on `base/button` (which needed a small `fullWidth` prop added — documented in its `types.ts` — since it has no built-in way to stretch full-width). New: `src/components/ui/base/otp-input/`, `src/components/ui/base/button/`.
+
+**Reacticx components used:** `otp-input`, `button` (+ shared `create-compound-component`).
+
+**Issues discovered:** Another vendored `react/display-name` lint error (`otp-input`'s default-export `memo()` wrap) — same pattern as Phase 3, fixed the same way. Confirmed `createCompoundComponent` (used by `dialog`/`avatar`/`button`) already sets `.displayName` internally, so only raw `memo()`-wrapped components (not routed through it) need the manual fix.
+
+**Tests performed:** `tsc --noEmit` (clean), `lint` (clean, same 6 pre-existing vendor warnings), `expo export --platform web` (clean). **Additionally — real visual verification**, not just compilation: exported the web build, served it statically, and drove it with Playwright (headless Chromium) — screenshotted `/sign-in`, `/onboarding/welcome`, `/onboarding` (intro), confirmed zero console/page errors, confirmed `SocialAuthButton`/`OnboardingFooter` render correctly full-width (the specific risk the `fullWidth` fix was for), and confirmed a real press-and-navigate interaction on the `OnboardingFooter` CTA works end to end (click → `router.push` → URL changed to `/onboarding/personal-info`). Screenshots are in this session's scratchpad, not committed to the repo.
+
+**Remaining work:** This covers the components shared across all auth/onboarding screens, not the full per-screen AGENTS.md §21 14-step process for each of the ~19 individual screens (content/navigation/state/asset reconnection review, keyboard-behavior check, per-screen empty/error state check). Not yet done: `FormField` (kept custom per Phase 3, no further action needed), `UnitToggle` → `segmented-control` (not attempted this pass), native-platform (iOS/Android simulator) verification — only web has been visually confirmed. Both checklist items left `[~]` rather than `[x]` until a full per-screen pass happens.
 
 ---
 

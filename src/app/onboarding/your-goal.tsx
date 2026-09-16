@@ -8,7 +8,7 @@ import { usePostHog } from "posthog-react-native";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 const GOALS = [
   { key: "build-muscle", label: "Build Muscle", icon: "dumbbell" },
@@ -35,7 +35,7 @@ export default function YourGoalScreen() {
       <View className="flex-1 px-6 pb-6 pt-4">
         <OnboardingHeader title="Your Goal" subtitle="What do you want to achieve?" />
 
-        <Animated.ScrollView entering={FadeInUp.delay(200).springify().damping(14).mass(0.6)} className="flex-1" contentContainerClassName="flex-grow justify-center py-6" showsVerticalScrollIndicator={false}>
+        <Animated.ScrollView entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="flex-1" contentContainerClassName="flex-grow justify-center py-6" showsVerticalScrollIndicator={false}>
           <View className="flex-row flex-wrap justify-between gap-y-4">
             {GOALS.map((goal) => {
               const active = selected === goal.key;

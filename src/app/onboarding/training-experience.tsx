@@ -7,7 +7,7 @@ import { usePostHog } from "posthog-react-native";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 const EXPERIENCE_LEVELS = [
   { key: "beginner", label: "Beginner", duration: "0-6 months" },
@@ -32,7 +32,7 @@ export default function TrainingExperienceScreen() {
       <View className="flex-1 px-6 pb-6 pt-4">
         <OnboardingHeader title="Training Experience" subtitle="How experienced are you in the gym?" />
 
-        <Animated.ScrollView entering={FadeInUp.delay(200).springify().damping(14).mass(0.6)} className="flex-1" contentContainerClassName="flex-grow justify-center gap-4 py-6" showsVerticalScrollIndicator={false}>
+        <Animated.ScrollView entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="flex-1" contentContainerClassName="flex-grow justify-center gap-4 py-6" showsVerticalScrollIndicator={false}>
           {EXPERIENCE_LEVELS.map((level) => {
             const active = selected === level.key;
             return (

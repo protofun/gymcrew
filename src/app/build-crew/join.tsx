@@ -9,7 +9,7 @@ import { goBack } from "@/lib/navigation";
 import { OnboardingDots } from "@/components/OnboardingDots";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 export default function JoinCrewScreen() {
   const setCrewData = useOnboardingStore((state) => state.setCrewData);
@@ -53,13 +53,13 @@ export default function JoinCrewScreen() {
 
         <View className="gap-2">
           <Animated.Text
-            entering={FadeInDown.springify().damping(14).mass(0.6)}
+            entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-bold text-3xl text-text-primary"
           >
             Join a Crew
           </Animated.Text>
           <Animated.Text
-            entering={FadeInUp.delay(80).springify().damping(14).mass(0.6)}
+            entering={FadeInUp.delay(80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-medium text-lg leading-snug text-text-secondary"
           >
             Ask a friend for their crew&apos;s invite code.
@@ -67,7 +67,7 @@ export default function JoinCrewScreen() {
         </View>
 
         <Animated.View
-          entering={FadeInUp.delay(150).springify().damping(14).mass(0.6)}
+          entering={FadeInUp.delay(150).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="mt-6 gap-3 rounded-2xl border border-divider bg-surface p-5"
         >
           <Text className="heading-4 text-text-primary">Enter Invite Code</Text>
@@ -97,7 +97,7 @@ export default function JoinCrewScreen() {
           </Pressable>
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.delay(200).springify().damping(14).mass(0.6)} className="mt-4">
+        <Animated.View entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="mt-4">
           <Pressable
             onPress={() => router.push("/build-crew/discover")}
             className="flex-row items-center justify-center gap-2 rounded-xl border border-divider py-3.5"

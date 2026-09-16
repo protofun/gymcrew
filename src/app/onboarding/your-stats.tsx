@@ -11,7 +11,7 @@ import { Stepper } from "@/components/Stepper";
 import { UnitToggle } from "@/components/UnitToggle";
 import { useUnitToggle } from "@/hooks/use-unit-toggle";
 import { type Gender, useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 const CM_TO_IN = 0.393701;
 const KG_TO_LB = 2.20462;
@@ -38,7 +38,7 @@ export default function YourStatsScreen() {
         <OnboardingHeader title="Your Stats" subtitle="Help us personalize your experience." />
 
         <Animated.ScrollView
-          entering={FadeInUp.delay(200).springify().damping(14).mass(0.6)}
+          entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="flex-1"
           contentContainerClassName="flex-grow justify-center gap-6 py-6"
           showsVerticalScrollIndicator={false}

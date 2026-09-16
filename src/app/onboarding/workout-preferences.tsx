@@ -9,7 +9,7 @@ import { OnboardingHeader } from "@/components/OnboardingHeader";
 import { SearchableSelectField } from "@/components/SearchableSelectField";
 import { TRAINING_SPLITS } from "@/data/training-splits";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 const DURATIONS = ["30 min", "45 min", "60+ min"] as const;
 const MIN_WORKOUTS_PER_WEEK = 1;
@@ -39,7 +39,7 @@ export default function WorkoutPreferencesScreen() {
       <View className="flex-1 px-6 pb-6 pt-4">
         <OnboardingHeader title="Workout Preferences" subtitle="How do you like to train?" />
 
-        <Animated.ScrollView entering={FadeInUp.delay(200).springify().damping(14).mass(0.6)} className="flex-1" contentContainerClassName="flex-grow justify-center gap-6 py-6" showsVerticalScrollIndicator={false}>
+        <Animated.ScrollView entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="flex-1" contentContainerClassName="flex-grow justify-center gap-6 py-6" showsVerticalScrollIndicator={false}>
           <SearchableSelectField
             label="Training Split"
             value={trainingSplit}

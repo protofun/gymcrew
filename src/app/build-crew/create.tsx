@@ -13,7 +13,7 @@ import { images } from "@/constants/images";
 import { CREW_ICONS } from "@/data/crew-icons";
 import { CREW_TRAINING_TYPES } from "@/data/crew-training-types";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 export default function CreateCrewScreen() {
   const setCrewData = useOnboardingStore((state) => state.setCrewData);
@@ -48,13 +48,13 @@ export default function CreateCrewScreen() {
 
         <View className="items-center gap-2">
           <Animated.Text
-            entering={FadeInDown.springify().damping(14).mass(0.6)}
+            entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-bold text-3xl text-center text-text-primary"
           >
             Create Your Crew
           </Animated.Text>
           <Animated.Text
-            entering={FadeInUp.delay(80).springify().damping(14).mass(0.6)}
+            entering={FadeInUp.delay(80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-medium text-lg text-center text-text-secondary"
           >
             Set up your crew and{"\n"}invite your friends.
@@ -62,14 +62,14 @@ export default function CreateCrewScreen() {
         </View>
 
         <Animated.View
-          entering={ZoomIn.delay(150).springify().damping(11).mass(0.7)}
+          entering={ZoomIn.delay(150).springify().damping(spring.press.damping).mass(spring.press.mass)}
           className="items-center py-6"
         >
           <Image source={images.mascotteCrossedArms} style={{ width: 220, height: 220 }} resizeMode="contain" />
         </Animated.View>
 
         <Animated.View
-          entering={FadeInUp.delay(220).springify().damping(14).mass(0.6)}
+          entering={FadeInUp.delay(220).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="gap-5"
         >
           <View className="gap-2">

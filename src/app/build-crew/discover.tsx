@@ -10,7 +10,7 @@ import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { api, isApiConfigured, type ApiDiscoverableCrew } from "@/lib/api";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 export default function DiscoverCrewsScreen() {
   const setCrewData = useOnboardingStore((state) => state.setCrewData);
@@ -57,10 +57,10 @@ export default function DiscoverCrewsScreen() {
         </Pressable>
 
         <View className="gap-2">
-          <Animated.Text entering={FadeInDown.springify().damping(14).mass(0.6)} className="font-body-bold text-3xl text-text-primary">
+          <Animated.Text entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="font-body-bold text-3xl text-text-primary">
             Discover Crews
           </Animated.Text>
-          <Animated.Text entering={FadeInUp.delay(80).springify().damping(14).mass(0.6)} className="font-body-medium text-lg leading-snug text-text-secondary">
+          <Animated.Text entering={FadeInUp.delay(80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="font-body-medium text-lg leading-snug text-text-secondary">
             Public crews anyone can join instantly — no invite code needed.
           </Animated.Text>
         </View>

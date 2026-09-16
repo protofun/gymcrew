@@ -2,6 +2,8 @@ import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { goBack } from "@/lib/navigation";
+import { spring } from "@/theme";
+
 type OnboardingHeaderProps = {
   title: string;
   subtitle: string;
@@ -20,13 +22,13 @@ export function OnboardingHeader({ title, subtitle }: OnboardingHeaderProps) {
 
       <View className="gap-2">
         <Animated.Text
-          entering={FadeInDown.springify().damping(14).mass(0.6)}
+          entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="font-body-bold text-5xl italic leading-tight text-brand-yellow"
         >
           {title}
         </Animated.Text>
         <Animated.Text
-          entering={FadeInUp.delay(100).springify().damping(14).mass(0.6)}
+          entering={FadeInUp.delay(100).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="font-body-medium text-xl leading-snug text-text-secondary"
         >
           {subtitle}

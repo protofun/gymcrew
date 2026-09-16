@@ -10,7 +10,7 @@ import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
 import { type CrewPrivacy, useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 /** Maps the wizard's plain-language crew-settings labels (crew-settings.tsx) onto the real
  * CrewPrivacy enum the backend understands. */
@@ -175,25 +175,25 @@ export default function CrewReadyScreen() {
       <ScrollView className="flex-1" contentContainerClassName="px-6 pb-6 pt-4" showsVerticalScrollIndicator={false}>
         <View className="items-center gap-2">
           <Animated.Text
-            entering={FadeInDown.springify().damping(14).mass(0.6)}
+            entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-bold text-3xl text-center text-text-primary"
           >
             Your Crew is Ready!
           </Animated.Text>
           <Animated.Text
-            entering={FadeInUp.delay(80).springify().damping(14).mass(0.6)}
+            entering={FadeInUp.delay(80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-medium text-lg text-center text-text-secondary"
           >
             Invite your friends and{"\n"}start your journey together.
           </Animated.Text>
         </View>
 
-        <Animated.View entering={ZoomIn.delay(150).springify().damping(11).mass(0.7)} className="items-center py-4">
+        <Animated.View entering={ZoomIn.delay(150).springify().damping(spring.press.damping).mass(spring.press.mass)} className="items-center py-4">
           <Image source={images.mascotsCrew} style={{ width: 340, height: 340 * (420 / 520) }} resizeMode="contain" />
         </Animated.View>
 
         <Animated.View
-          entering={FadeInUp.delay(220).springify().damping(14).mass(0.6)}
+          entering={FadeInUp.delay(220).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="gap-2 rounded-2xl border border-brand-yellow bg-surface p-4"
         >
           <Text className="body-sm text-text-secondary">Invite Code</Text>
@@ -222,7 +222,7 @@ export default function CrewReadyScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.delay(280).springify().damping(14).mass(0.6)} className="mt-6 gap-3">
+        <Animated.View entering={FadeInUp.delay(280).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="mt-6 gap-3">
           <Text className="body-md text-text-primary">Share your invite link</Text>
           <View className="flex-row flex-wrap gap-x-4 gap-y-4">
             {visibleTargets.map((target) => (

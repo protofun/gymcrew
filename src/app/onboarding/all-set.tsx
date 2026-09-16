@@ -5,7 +5,7 @@ import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 export default function AllSetScreen() {
   const { isSignedIn } = useAuth();
@@ -29,7 +29,7 @@ export default function AllSetScreen() {
     >
       <View className="flex-1 px-6 pb-6 pt-4">
         <Animated.View
-          entering={FadeInDown.springify().damping(14).mass(0.6)}
+          entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="items-center gap-2"
         >
           <Text className="font-body-bold text-5xl italic text-brand-yellow">
@@ -42,7 +42,7 @@ export default function AllSetScreen() {
 
         <View className="flex-1 items-center justify-center">
           <Animated.Image
-            entering={ZoomIn.delay(150).springify().damping(11).mass(0.7)}
+            entering={ZoomIn.delay(150).springify().damping(spring.press.damping).mass(spring.press.mass)}
             source={images.mascotSplash}
             style={{ width: 400, height: 400 * (250 / 261) }}
             resizeMode="contain"

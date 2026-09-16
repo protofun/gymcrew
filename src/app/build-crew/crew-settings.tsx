@@ -7,7 +7,7 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { goBack } from "@/lib/navigation";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 const VISIBILITY_OPTIONS = ["Public", "Private"] as const;
 const WHO_CAN_JOIN_OPTIONS = ["Anyone", "Invite Only", "Approval Required"] as const;
@@ -125,13 +125,13 @@ export default function CrewSettingsScreen() {
 
         <View className="items-center gap-2">
           <Animated.Text
-            entering={FadeInDown.springify().damping(14).mass(0.6)}
+            entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-bold text-3xl text-center text-text-primary"
           >
             Crew Settings
           </Animated.Text>
           <Animated.Text
-            entering={FadeInUp.delay(80).springify().damping(14).mass(0.6)}
+            entering={FadeInUp.delay(80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-medium text-lg text-center text-text-secondary"
           >
             Customize your crew{"\n"}preferences.
@@ -139,7 +139,7 @@ export default function CrewSettingsScreen() {
         </View>
 
         <Animated.View
-          entering={FadeInUp.delay(150).springify().damping(14).mass(0.6)}
+          entering={FadeInUp.delay(150).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="mt-6 gap-3"
         >
           <SettingsSelectRow

@@ -9,7 +9,7 @@ import { goBack } from "@/lib/navigation";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { images } from "@/constants/images";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 type PathKey = "join" | "create" | "later";
 
@@ -75,13 +75,13 @@ export default function ChoosePathScreen() {
 
         <View className="items-center gap-2">
           <Animated.Text
-            entering={FadeInDown.springify().damping(14).mass(0.6)}
+            entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-bold text-3xl text-center text-text-primary"
           >
             Choose Your Path
           </Animated.Text>
           <Animated.Text
-            entering={FadeInUp.delay(80).springify().damping(14).mass(0.6)}
+            entering={FadeInUp.delay(80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
             className="font-body-medium text-lg text-center text-text-secondary"
           >
             What do you want to do?
@@ -94,10 +94,7 @@ export default function ChoosePathScreen() {
             return (
               <Animated.View
                 key={path.key}
-                entering={FadeInUp.delay(150 + index * 80)
-                  .springify()
-                  .damping(14)
-                  .mass(0.6)}
+                entering={FadeInUp.delay(150 + index * 80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
               >
                 <Pressable
                   onPress={() => setSelected(path.key)}
