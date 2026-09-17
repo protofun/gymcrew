@@ -37,7 +37,26 @@ The user rejected the previous batch as insufficient: internally-Reacticx-but-pi
 
 **Tests performed:** `npx tsc --noEmit` (clean), `npm run lint` (0 errors, 30 pre-existing vendor warnings — none new), `npx expo export --platform web` (clean), Playwright screenshots of the real screens (`sign-in`, `your-stats`, and a temporary isolated preview route for `WelcomeWidget` since it needs store data Home's real route doesn't provide standalone) confirming the animated headlines render crisp and correctly laid out with no blur artifacts. The only console error was the already-documented, pre-existing, migration-unrelated React `#418` hydration warning (reproduces on untouched routes too; absent on the live Metro dev server).
 
-**Remaining work — the user's "gebruik alle components" (use all components) demand is not yet fully met.** Still on plain static text/pill-selectors, not yet given animated-text or other flashy treatment: the remaining onboarding screens (`your-goal.tsx`, `training-experience.tsx`, `workout-preferences.tsx`, `training-schedule.tsx`, `notifications.tsx`, `personal-info.tsx`, `all-set.tsx`), and other Home widgets/chrome (`GoalsWidget`, `AnnouncementBanner`, `TopBar`'s "GYMCREW" wordmark). Also still not reconsidered for a Reacticx swap: `UnitToggle`, the single-select pill patterns in `your-goal.tsx`/`training-experience.tsx`.
+**Remaining work — the user's "gebruik alle components" (use all components) demand is not yet fully met.** Still not reconsidered for a Reacticx swap: `UnitToggle`, the single-select pill patterns in `your-goal.tsx`/`training-experience.tsx`, `AnnouncementBanner`'s body text (a dismissable banner, not really a headline — likely not a good fit for character-reveal treatment).
+
+---
+
+## Visible-flair pass, part 2 (wider rollout) — 2026-09-17 — IN PROGRESS
+
+Continuation of the pass above, closing most of its "remaining work" list:
+
+- **`your-goal.tsx`, `training-experience.tsx`, `workout-preferences.tsx`, `training-schedule.tsx`, `notifications.tsx`, `personal-info.tsx`** — turned out to need **no direct changes**: all six already render their title through the shared `OnboardingHeader.tsx`, which was already converted to `StaggeredText` in part 1. They inherited the animated title automatically.
+- **`onboarding/all-set.tsx`** (the final "You're All Set!" celebration screen, the one screen in the wizard that doesn't go through `OnboardingHeader`) — converted its title from static `Text` to `StaggeredText` directly, matching `OnboardingHeader`'s styling (`fontFamily.bodyBold`, 48px, italic, brand yellow) and the same `NO_BLUR` workaround.
+- **`TopBar.tsx`** — the small persistent "GYMCREW" wordmark shown on every authenticated screen (not just auth/onboarding) now uses the same split-`StaggeredText` treatment as `AuthHeader`'s wordmark ("GYM" white / "CREW" yellow, offset stagger), at its original 22px/skewed size.
+- **`GoalsWidget.tsx`** (Home) — the "YOUR GOALS" headline converted from `EditableText` (a plain-`Text` wrapper that becomes tap-to-edit in Developer Mode, see that component's docstring) to `StaggeredText`. **Trade-off accepted, same precedent as `WelcomeWidget`'s headline in part 1**: this string can no longer be overridden via Developer Mode's demo-content tool. Every other `EditableText` usage on Home (goal labels/percentages, welcome greeting, etc.) is untouched.
+
+**Reacticx components used:** `organisms/animated-text` (no new components — same one as part 1, just wider rollout).
+
+**Issues discovered:** none new — same `NO_BLUR` workaround applied consistently.
+
+**Tests performed:** `npx tsc --noEmit` (clean), `npm run lint` (0 errors, same 30 pre-existing vendor warnings), `npx expo export --platform web` (clean, all routes). Playwright screenshots: `onboarding/all-set.html` (title renders crisp, correct), and a temporary combined preview route for `TopBar`+`GoalsWidget` (deleted after verification — neither renders standalone without mock props/store data) confirming both the header wordmark and the goals headline render crisp, correctly colored/skewed, with no blur artifacts. Only console output was the pre-existing, migration-unrelated React `#418` hydration warning.
+
+**Remaining work:** `UnitToggle` and the single-select pill patterns in `your-goal.tsx`/`training-experience.tsx` are still hand-rolled and not yet reconsidered against a Reacticx primitive — the last items on the "alle andere components die je zelf hebt gemaakt moeten weg" (all custom components must go) list from the direct-override instruction. `AnnouncementBanner` deliberately left as plain text (dismissable body copy, not a headline — animating it on every dismiss/remount would likely read as glitchy rather than premium).
 
 ---
 

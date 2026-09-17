@@ -4,8 +4,13 @@ import { SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
 
 import { OnboardingFooter } from "@/components/OnboardingFooter";
+import { StaggeredText } from "@/components/ui/organisms/animated-text";
 import { images } from "@/constants/images";
-import { colors, spring } from "@/theme";
+import { colors, fontFamily, spring } from "@/theme";
+
+// StaggeredText's default blur-reveal doesn't render correctly on web (expo-blur's animated
+// intensity misbehaves there) — disabled, keeping only the fade/slide/scale reveal.
+const NO_BLUR = { maxBlurIntensity: 0 };
 
 export default function AllSetScreen() {
   const { isSignedIn } = useAuth();
@@ -32,9 +37,11 @@ export default function AllSetScreen() {
           entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="items-center gap-2"
         >
-          <Text className="font-body-bold text-5xl italic text-brand-yellow">
-            You&apos;re All Set!
-          </Text>
+          <StaggeredText
+            text="You're All Set!"
+            style={{ fontFamily: fontFamily.bodyBold, fontSize: 48, fontStyle: "italic", color: colors.brand.yellow }}
+            animationConfig={NO_BLUR}
+          />
           <Text className="font-body-medium text-center text-xl leading-snug text-text-secondary">
             Let&apos;s get to work and become unstoppable.
           </Text>
