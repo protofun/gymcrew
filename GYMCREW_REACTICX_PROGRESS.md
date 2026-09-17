@@ -1,6 +1,21 @@
 # GymCrew Reacticx Migration Progress
 
-Updated as of 2026-09-16.
+Updated as of 2026-09-17.
+
+## Direct override (2026-09-17) — the scope correction below was itself reversed
+
+The user explicitly overrode the `AGENTS.md`-based correction above: login, onboarding, and Home must run on Reacticx after all, with GymCrew's own hand-rolled UI-chrome components removed in favor of it. Restored every reverted commit (`git revert` of the revert), then went further than before — components previously kept custom after a first "doesn't fit" pass were re-evaluated more aggressively:
+
+- **`FormField` → `base/animated-input-bar`** (single-entry `placeholders` array so its reveal animation never rotates). Trade-off: the old persistent label-above-value is gone, placeholder-only now. Visually confirmed on `sign-in`.
+- **`OnboardingDots` → `molecules/Pagination`**. Real upgrade (animated sliding pill vs. grow-in-place dot); accepted trade-off is an unused drag-to-jump gesture the primitive ships with.
+- **`SliderField` → `micro-interactions/elastic-slider`** (Root/Track/Fill), replacing the `@react-native-community/slider`-backed version. Visually confirmed on `your-stats` (Age, Height) — real elastic-overshoot feel.
+- **Gender picker in `your-stats.tsx` → `organisms/segmented-control`** (was a hand-rolled two-`Pressable` pair) — a good fit this time since it's already full-width, unlike `UnitToggle`'s tight inline slot. Visually confirmed, looks and animates correctly.
+- **`Stepper` → attempted via a new `RulerStepper` on `base/ruler` (a Skia-rendered drag-to-scroll scale), then reverted.** `Ruler` had a real, separate bug fixed along the way (no controlled initial-position — always opened scrolled to `minValue`, ignoring an existing default; fixed by adding an `initialValue` prop to the vendored component). But verification caught something more serious: **`Ruler`'s Skia `Canvas` renders as a completely blank box on web** — `CanvasKit is not defined` / `Cannot read properties of undefined (reading 'PictureRecorder')` in the console, exactly the "Skia/Expo Go incompatibility" class of problem `AGENTS.md`'s own Reacticx section warns about. Since the user is testing live via a browser, shipping this would mean an invisible weight/lift input — reverted `your-stats.tsx`/`your-metrics.tsx` back to the original `Stepper`, deleted `RulerStepper.tsx` and the vendored `ui/base/ruler` (unused, and broken on the platform being tested). **Not ruled out for native** (Skia doesn't need CanvasKit/WASM on iOS/Android) — worth revisiting specifically for a native build/simulator test, not web.
+- **Not yet touched**: `UnitToggle` (previously investigated and kept custom — that reasoning still holds, tight inline slot), the single-select pill patterns in `your-goal.tsx`/`training-experience.tsx` (not yet reconsidered against `segmented-control`/`check-box`), and `Card`/`AuthSubmitButton` (already Reacticx-based internally via `Button`/`atoms/pressable` — read as satisfying "runs on Reacticx" rather than needing to be inlined everywhere, since they're thin compositions over the primitive, not competing hand-rolled UI).
+
+Verified after every step: `tsc --noEmit` (clean throughout), `lint` (0 errors — 30 warnings, all the same pre-existing vendor `exhaustive-deps` pattern scaled up with more vendored components), `expo export --platform web` (clean), and Playwright screenshots of the actual changed screens (not synthetic preview routes) — `sign-in`, `your-stats`, `your-metrics` — with a full before/after pass specifically to catch the `Ruler` regression, which is exactly what caught it.
+
+---
 
 ```text
 [x] Discovery

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Pressable, SafeAreaView, Text, View } from "react-native";
+import { Dimensions, SafeAreaView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { router } from "expo-router";
 import { usePostHog } from "posthog-react-native";
 
+import SegmentedControl from "@/components/ui/organisms/segmented-control";
 import { OnboardingFooter } from "@/components/OnboardingFooter";
 import { OnboardingHeader } from "@/components/OnboardingHeader";
 import { SliderField } from "@/components/SliderField";
@@ -12,6 +13,14 @@ import { UnitToggle } from "@/components/UnitToggle";
 import { useUnitToggle } from "@/hooks/use-unit-toggle";
 import { type Gender, useOnboardingStore } from "@/store/onboarding-store";
 import { colors, spring } from "@/theme";
+
+const GENDER_OPTIONS: { value: Gender; icon: string; label: string }[] = [
+  { value: "male", icon: "♂", label: "Male" },
+  { value: "female", icon: "♀", label: "Female" },
+];
+// Screen uses px-6 (24px each side); segmented control needs an explicit width (defaults to
+// full-bleed screen width otherwise).
+const SEGMENTED_CONTROL_WIDTH = Dimensions.get("window").width - 48;
 
 const CM_TO_IN = 0.393701;
 const KG_TO_LB = 2.20462;
@@ -55,20 +64,22 @@ export default function YourStatsScreen() {
 
           <View className="gap-2">
             <Text className="body-md text-text-primary">Gender</Text>
-            <View className="flex-row gap-3">
-              {(["male", "female"] as const).map((option) => (
-                <Pressable
-                  key={option}
-                  onPress={() => setGender(option)}
-                  className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl border py-4 ${
-                    gender === option ? "border-brand-yellow" : "border-divider"
-                  } bg-surface`}
-                >
-                  <Text className="text-lg text-text-primary">{option === "male" ? "♂" : "♀"}</Text>
-                  <Text className="body-md text-text-primary">{option === "male" ? "Male" : "Female"}</Text>
-                </Pressable>
+            <SegmentedControl
+              currentIndex={GENDER_OPTIONS.findIndex((option) => option.value === gender)}
+              onChange={(index) => setGender(GENDER_OPTIONS[index].value)}
+              width={SEGMENTED_CONTROL_WIDTH}
+              borderRadius={12}
+              segmentedControlBackgroundColor={colors.neutral.surface}
+              activeSegmentBackgroundColor={colors.brand.yellow}
+              dividerColor={colors.neutral.divider}
+            >
+              {GENDER_OPTIONS.map((option) => (
+                <View key={option.value} className="flex-row items-center justify-center gap-2 py-2">
+                  <Text className={gender === option.value ? "text-brand-iron" : "text-text-primary"}>{option.icon}</Text>
+                  <Text className={`body-md ${gender === option.value ? "text-brand-iron" : "text-text-primary"}`}>{option.label}</Text>
+                </View>
               ))}
-            </View>
+            </SegmentedControl>
           </View>
 
           <SliderField
