@@ -2,9 +2,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image, Text, View } from "react-native";
 
 import { Button } from "@/components/ui/base/button";
+import { StaggeredText } from "@/components/ui/organisms/animated-text";
 import { EditableText } from "@/components/EditableText";
 import { images } from "@/constants/images";
-import { colors, radius } from "@/theme";
+import { colors, fontFamily, radius } from "@/theme";
+
+const HEADLINE_STYLE = {
+  fontFamily: fontFamily.heading,
+  fontSize: 40,
+  lineHeight: 40 * 1.2,
+  fontWeight: "700" as const,
+  fontStyle: "italic" as const,
+  color: colors.brand.white,
+};
 
 type WelcomeWidgetProps = {
   name: string;
@@ -32,9 +42,10 @@ export function WelcomeWidget({ name, onPressStartWorkout }: WelcomeWidgetProps)
               {`Welcome back, ${name}! 👋`}
             </EditableText>
           </View>
-          <EditableText id="home.welcome.headline" className="heading-2 mt-1 text-brand-white" style={{ fontStyle: "italic" }}>
-            {"READY TO\nBE UNSTOPPABLE?"}
-          </EditableText>
+          <View className="mt-1">
+            <StaggeredText text="READY TO" style={HEADLINE_STYLE} animationConfig={{ maxBlurIntensity: 0 }} />
+            <StaggeredText text="BE UNSTOPPABLE?" style={HEADLINE_STYLE} animationConfig={{ maxBlurIntensity: 0 }} />
+          </View>
         </View>
       </View>
 

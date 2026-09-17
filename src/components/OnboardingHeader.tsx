@@ -1,8 +1,13 @@
 import { Pressable, Text, View } from "react-native";
-import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import Animated, { FadeInUp } from "react-native-reanimated";
 
+import { StaggeredText } from "@/components/ui/organisms/animated-text";
 import { goBack } from "@/lib/navigation";
-import { spring } from "@/theme";
+import { colors, fontFamily, spring } from "@/theme";
+
+// StaggeredText's default blur-reveal doesn't render correctly on web (expo-blur's animated
+// intensity misbehaves there) — disabled, keeping only the fade/slide/scale reveal.
+const NO_BLUR = { maxBlurIntensity: 0 };
 
 type OnboardingHeaderProps = {
   title: string;
@@ -21,12 +26,11 @@ export function OnboardingHeader({ title, subtitle }: OnboardingHeaderProps) {
       </Pressable>
 
       <View className="gap-2">
-        <Animated.Text
-          entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-          className="font-body-bold text-5xl italic leading-tight text-brand-yellow"
-        >
-          {title}
-        </Animated.Text>
+        <StaggeredText
+          text={title}
+          style={{ fontFamily: fontFamily.bodyBold, fontSize: 48, fontStyle: "italic", color: colors.brand.yellow }}
+          animationConfig={NO_BLUR}
+        />
         <Animated.Text
           entering={FadeInUp.delay(100).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
           className="font-body-medium text-xl leading-snug text-text-secondary"

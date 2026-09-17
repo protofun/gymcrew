@@ -17,6 +17,30 @@ Verified after every step: `tsc --noEmit` (clean throughout), `lint` (0 errors �
 
 ---
 
+## Visible-flair pass (animated text) — 2026-09-17 — IN PROGRESS
+
+The user rejected the previous batch as insufficient: internally-Reacticx-but-pixel-identical isn't what was asked for — they want dramatic, *visible* change (their words: "kom aan met nieuwe dingen zoals de animated tekst... maak het ziek"). This pass targets that directly by rolling out `organisms/animated-text` (exported as `StaggeredText`, a per-character entrance/exit reveal built on pure Reanimated) to the highest-visibility headline text in the three screens already in scope (auth, onboarding, Home):
+
+- **`AuthHeader.tsx`** — the "GYMCREW" wordmark (split into two `StaggeredText` runs, "GYM" in white / "CREW" in yellow, staggered relative to each other via a later `characterDelay`) and the screen title (e.g. "Welcome back") both now animate in character-by-character instead of appearing as static `Text`.
+- **`OnboardingHeader.tsx`** — the big italic yellow title (e.g. "Your Stats") now uses `StaggeredText` instead of static `Text`, styled inline to match the original look (`fontFamily.bodyBold`, 48px, italic, brand yellow).
+- **`WelcomeWidget.tsx`** (Home) — the "READY TO / BE UNSTOPPABLE?" headline is now two `StaggeredText` lines instead of a static `Animated.Text`.
+
+**Reacticx components used:** `organisms/animated-text` (new addition this batch).
+
+**Issues discovered:**
+- `StaggeredText`'s default look includes a per-character blur reveal via `expo-blur`'s animated `intensity` prop. **This is broken on web** — the animated intensity doesn't interpolate correctly and the text renders as a permanent unreadable smudge instead of resolving to sharp. Since the user tests live in a browser, this had to be disabled everywhere it's used: `animationConfig={{ maxBlurIntensity: 0 }}`. The fade/slide/scale/rotate portion of the reveal (the rest of the animation) works correctly on web and is what actually ships. Documented as a reusable `NO_BLUR` constant in each consuming file.
+- Two other flashy Reacticx components were evaluated and rejected before landing on `animated-text`, both for the same underlying reason — **Skia-based rendering breaks on web in this project** (CanvasKit/WASM doesn't load correctly in the Metro web bundle):
+  - `base/ruler` — see the entry above; already reverted.
+  - `molecules/gradient-wave-text` — a Skia-`Canvas`-based gradient text-reveal, which would otherwise have been a strong fit for the wordmark/headlines. Confirmed broken the same way (blank canvas), and it also doesn't support multi-line text (`numberOfLines={1}` hardcoded). Added, verified broken, then deleted along with the `@react-native-masked-view/masked-view` dependency it required (uninstalled via `npm uninstall` after confirming no other file references it).
+  - Also added-then-deleted as unused/not-a-fit after the same Skia-safety sweep: `organisms/staggered-text` (Skia, name-confusingly similar to the kept `animated-text`'s `StaggeredText` export but a completely different Skia implementation), `molecules/letter-swarm` (Skia), `base/border-beam` (Skia), `organisms/aura-lift` (Skia). And safe-but-unused, also removed: `molecules/dynamic-text`, `molecules/number-flow`, `organisms/fade-text`, `micro-interactions/verified-shine`.
+- Fixed the same recurring vendor bug pattern as every other component this session: `Character` and `StaggeredText` in `organisms/animated-text/index.tsx` are wrapped in raw `memo()` without a `.displayName`, tripping `react/display-name`. Added `Character.displayName = "Character"` and `StaggeredText.displayName = "StaggeredText"`.
+
+**Tests performed:** `npx tsc --noEmit` (clean), `npm run lint` (0 errors, 30 pre-existing vendor warnings — none new), `npx expo export --platform web` (clean), Playwright screenshots of the real screens (`sign-in`, `your-stats`, and a temporary isolated preview route for `WelcomeWidget` since it needs store data Home's real route doesn't provide standalone) confirming the animated headlines render crisp and correctly laid out with no blur artifacts. The only console error was the already-documented, pre-existing, migration-unrelated React `#418` hydration warning (reproduces on untouched routes too; absent on the live Metro dev server).
+
+**Remaining work — the user's "gebruik alle components" (use all components) demand is not yet fully met.** Still on plain static text/pill-selectors, not yet given animated-text or other flashy treatment: the remaining onboarding screens (`your-goal.tsx`, `training-experience.tsx`, `workout-preferences.tsx`, `training-schedule.tsx`, `notifications.tsx`, `personal-info.tsx`, `all-set.tsx`), and other Home widgets/chrome (`GoalsWidget`, `AnnouncementBanner`, `TopBar`'s "GYMCREW" wordmark). Also still not reconsidered for a Reacticx swap: `UnitToggle`, the single-select pill patterns in `your-goal.tsx`/`training-experience.tsx`.
+
+---
+
 ```text
 [x] Discovery
 [x] Reacticx setup

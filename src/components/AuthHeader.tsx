@@ -1,10 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
-import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
+import Animated, { FadeInUp, ZoomIn } from "react-native-reanimated";
 
+import { StaggeredText } from "@/components/ui/organisms/animated-text";
 import { goBack } from "@/lib/navigation";
 import { images } from "@/constants/images";
-import { colors, spring } from "@/theme";
+import { colors, fontFamily, spring } from "@/theme";
+
+// StaggeredText's blur-reveal (its default look) doesn't render correctly on web (expo-blur's
+// animated intensity misbehaves there) — disabled everywhere it's used, keeping only the
+// fade/slide/scale per-character reveal, which is confirmed working on web.
+const NO_BLUR = { maxBlurIntensity: 0 };
+const WORDMARK_STYLE = { fontFamily: fontFamily.heading, fontSize: 48, fontStyle: "italic" as const, transform: [{ skewX: "-10deg" as const }] };
 
 type AuthHeaderProps = {
   title: string;
@@ -23,21 +30,16 @@ export function AuthHeader({ title, subtitle }: AuthHeaderProps) {
       </Pressable>
 
       <View className="items-center gap-2">
-        <Animated.Text
-          entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-          className="font-heading text-5xl leading-none"
-          style={{ fontStyle: "italic", transform: [{ skewX: "-10deg" }] }}
-        >
-          <Text className="text-text-primary">GYM</Text>
-          <Text className="text-brand-yellow">CREW</Text>
-        </Animated.Text>
+        <View className="flex-row">
+          <StaggeredText text="GYM" style={[WORDMARK_STYLE, { color: colors.neutral.textPrimary }]} animationConfig={NO_BLUR} />
+          <StaggeredText text="CREW" style={[WORDMARK_STYLE, { color: colors.brand.yellow }]} animationConfig={{ ...NO_BLUR, characterDelay: 40 }} />
+        </View>
 
-        <Animated.Text
-          entering={FadeInUp.delay(80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-          className="font-body-bold text-3xl text-text-primary"
-        >
-          {title}
-        </Animated.Text>
+        <StaggeredText
+          text={title}
+          style={{ fontFamily: fontFamily.bodyBold, fontSize: 30, color: colors.neutral.textPrimary }}
+          animationConfig={NO_BLUR}
+        />
 
         <Animated.View
           entering={FadeInUp.delay(140).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
