@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, Text } from "react-native";
 
-import { AuthSubmitButton } from "@/components/AuthSubmitButton";
 import { waitForAuthToken } from "@/lib/api";
 import { getClerkErrorMessage } from "@/lib/clerk";
 import { useOnboardingStore } from "@/store/onboarding-store";
@@ -63,7 +62,9 @@ export default function AuthHandoffScreen() {
     return (
       <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.neutral.background, gap: 12, padding: 24 }}>
         <Text className="body-md text-center text-text-secondary">This link is missing what it needs to sign you in.</Text>
-        <AuthSubmitButton variant="compact" label="Go to Sign In" onPress={() => router.replace("/sign-in")} />
+        <Pressable onPress={() => router.replace("/sign-in")} className="rounded-full bg-brand-yellow px-6 py-3">
+          <Text className="body-md font-body-bold text-brand-iron">Go to Sign In</Text>
+        </Pressable>
       </SafeAreaView>
     );
   }
@@ -72,14 +73,15 @@ export default function AuthHandoffScreen() {
     return (
       <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.neutral.background, gap: 16, padding: 24 }}>
         <Text className="body-md text-center text-text-secondary">{error}</Text>
-        <AuthSubmitButton
-          variant="compact"
-          label="Try Again"
+        <Pressable
           onPress={() => {
             setError(null);
             setAttempt((n) => n + 1);
           }}
-        />
+          className="rounded-full bg-brand-yellow px-6 py-3"
+        >
+          <Text className="body-md font-body-bold text-brand-iron">Try Again</Text>
+        </Pressable>
         <Pressable onPress={() => router.replace("/sign-in")} hitSlop={8}>
           <Text className="body-sm text-brand-yellow">Sign in manually instead</Text>
         </Pressable>

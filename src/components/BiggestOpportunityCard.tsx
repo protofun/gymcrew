@@ -1,9 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
-import { Card } from "@/components/Card";
 import { RankBadge } from "@/components/RankBadge";
 import { ALL_MUSCLE_GROUPS } from "@/data/workout-log";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
@@ -34,11 +33,10 @@ export function BiggestOpportunityCard() {
   }).reduce((min, entry) => (entry.tierIndex < min.tierIndex ? entry : min));
 
   return (
-    <Card
+    <Pressable
       onPress={() => router.push("/workout-split/intro")}
-      variant="accent"
-      cornerRadius="medium"
-      className="mx-4 mt-6 flex-row items-center gap-3 p-4"
+      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+      className="mx-4 mt-6 flex-row items-center gap-3 rounded-2xl border border-brand-yellow/30 bg-brand-yellow/5 p-4"
     >
       {weakest.tierIndex >= 0 ? (
         <RankBadge tier={RANK_TIERS[weakest.tierIndex]} size={36} />
@@ -56,6 +54,6 @@ export function BiggestOpportunityCard() {
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color={colors.brand.yellow} />
-    </Card>
+    </Pressable>
   );
 }

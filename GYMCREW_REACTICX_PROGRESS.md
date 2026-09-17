@@ -1,28 +1,31 @@
 # GymCrew Reacticx Migration Progress
 
-Updated as of 2026-09-16.
+Updated as of 2026-09-17.
+
+## ⚠️ Scope correction (2026-09-17) — read before anything below
+
+`AGENTS.md` was updated to restrict Reacticx to a new marketing site (`app/(marketing)/`) only, explicitly **not** inside the app itself — contradicting `REACTICX_AGENT_BRIEF.md`, the original brief this whole checklist was built against. **Reverted** all in-app Reacticx component usage from Phases 3-5 (`ConfirmModal`, `ProgressBar`, `Skeleton`, `AvatarStack`, `VerificationCodeModal`, `SocialAuthButton`, `OnboardingFooter`'s button, `AuthSubmitButton` — deleted, `WelcomeWidget`'s CTA, `Card` and 7 Home widgets built on it — all restored to their pre-Reacticx state from commit `9af414c`; `src/components/ui/` and `src/shared/` — the vendored Reacticx primitives — deleted entirely since nothing in the app references them anymore). Kept: the motion-token substitutions (`spring.entranceBouncy`/`spring.press` from `src/theme/motion.ts`) on the 21 onboarding/build-crew screens and `OnboardingFooter`'s wrapper animation — those never used a Reacticx component, only GymCrew's own Reanimated tokens, so they don't conflict with the new rule and were re-applied after the revert. Verified clean: `tsc`, `lint` (0 errors, 0 warnings — the vendor-code warnings are gone along with the vendor code), `expo export --platform web`.
+
+The checklist below is retired for the app-screen phases (Authentication/Onboarding/Home/Workout/etc. no longer get Reacticx work) and replaced with a marketing-site checklist per `AGENTS.md`'s actual scope.
 
 ```text
 [x] Discovery
 [x] Reacticx setup
 [x] Design system
-[x] Core components
-[~] Authentication
-[~] Onboarding
-[~] Home
-[ ] Workout
-[ ] Ranking
-[ ] Crews
-[ ] Nutrition
-[ ] Profile
-[ ] History
-[ ] Progress
-[ ] Settings
-[ ] Support
-[ ] Global polish
-[ ] QA
-[ ] Performance
-[ ] Final audit
+[x] Core components (in-app) — REVERTED 2026-09-17, see correction above
+[x] Authentication — REVERTED 2026-09-17
+[x] Onboarding — REVERTED 2026-09-17 (motion tokens kept)
+[x] Home — REVERTED 2026-09-17
+[ ] Marketing site — hero/landing
+[ ] Marketing site — features
+[ ] Marketing site — pricing (free vs. paid tier)
+[ ] Marketing site — about/testimonials
+[ ] Marketing site — FAQ
+[ ] Marketing site — download/CTA
+[ ] Marketing site — legal pages
+[ ] Marketing site — footer/nav
+[ ] Marketing site — polish pass (motion/scroll effects)
+[ ] Marketing site — QA (iOS/Android/web, since Reacticx targets all three)
 ```
 
 ## Reacticx setup (Phase 1) — 2026-09-16 — DONE

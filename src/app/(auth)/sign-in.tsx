@@ -8,7 +8,6 @@ import { usePostHog } from "posthog-react-native";
 
 import { AuthDivider } from "@/components/AuthDivider";
 import { AuthHeader } from "@/components/AuthHeader";
-import { AuthSubmitButton } from "@/components/AuthSubmitButton";
 import { FormField } from "@/components/FormField";
 import { SocialAuthButton } from "@/components/SocialAuthButton";
 import { VerificationCodeModal } from "@/components/VerificationCodeModal";
@@ -84,7 +83,12 @@ export default function SignInScreen() {
     return (
       <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.neutral.background, gap: 16, padding: 24 }}>
         <Text className="body-md text-center text-text-secondary">Taking longer than expected to sign you in.</Text>
-        <AuthSubmitButton variant="compact" label="Try Again" onPress={() => setResumeAttempt((n) => n + 1)} />
+        <Pressable
+          onPress={() => setResumeAttempt((n) => n + 1)}
+          className="flex-row items-center gap-2 rounded-full bg-brand-yellow px-6 py-3"
+        >
+          <Text className="body-md font-body-bold text-brand-iron">Try Again</Text>
+        </Pressable>
       </SafeAreaView>
     );
   }
@@ -196,7 +200,15 @@ export default function SignInScreen() {
             </Pressable>
           </View>
 
-          <AuthSubmitButton label="Log In" loading={submitting} onPress={handleSignIn} />
+          <Pressable
+            onPress={handleSignIn}
+            disabled={submitting}
+            className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4"
+            style={({ pressed }) => ({ opacity: pressed || submitting ? 0.85 : 1 })}
+          >
+            <Text className="heading-4 text-brand-iron">{submitting ? "Logging In..." : "Log In"}</Text>
+            <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
+          </Pressable>
 
           <AuthDivider />
 
