@@ -1,5 +1,6 @@
-import { Image, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
+import { Avatar } from "@/components/ui/primitives/avatar";
 import { colors } from "@/theme";
 
 const SIZE = 28;
@@ -12,6 +13,12 @@ type AvatarStackProps = {
   max?: number;
 };
 
+/**
+ * Built on Reacticx's `Avatar` primitive rather than a raw `Image`. Skips `Avatar.Fallback` —
+ * its default mesh-gradient placeholder doesn't fit GymCrew's palette, and `Avatar.Root`'s own
+ * `backgroundColor` already shows through on a failed/loading image exactly like the previous
+ * `bg-divider` did, so the divider-colored circle is already the fallback.
+ */
 export function AvatarStack({ avatarUrls, totalCount, max = 3 }: AvatarStackProps) {
   const shown = avatarUrls.slice(0, max);
   const overflow = (totalCount ?? avatarUrls.length) - shown.length;
@@ -19,12 +26,18 @@ export function AvatarStack({ avatarUrls, totalCount, max = 3 }: AvatarStackProp
   return (
     <View className="flex-row items-center">
       {shown.map((url, index) => (
-        <Image
+        <Avatar.Root
           key={url}
-          source={{ uri: url }}
-          className="rounded-full border-2 border-surface bg-divider"
-          style={{ width: SIZE, height: SIZE, marginLeft: index === 0 ? 0 : -OVERLAP }}
-        />
+          size={SIZE}
+          style={{
+            marginLeft: index === 0 ? 0 : -OVERLAP,
+            borderWidth: 2,
+            borderColor: colors.neutral.surface,
+            backgroundColor: colors.neutral.divider,
+          }}
+        >
+          <Avatar.Image source={{ uri: url }} />
+        </Avatar.Root>
       ))}
       {overflow > 0 && (
         <View

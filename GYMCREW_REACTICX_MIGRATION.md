@@ -1,22 +1,8 @@
-# GymCrew × Reacticx Migration Plan — SUPERSEDED, see correction below
+# GymCrew × Reacticx Migration Plan
 
-> ## ⚠️ Scope correction (2026-09-17)
->
-> This document, `GYMCREW_SCREEN_INVENTORY.md`, `GYMCREW_FEATURE_INVENTORY.md`, `GYMCREW_ASSET_INVENTORY.md`, and `GYMCREW_REACTICX_COMPONENT_MAP.md` were all written against **`REACTICX_AGENT_BRIEF.md`** (this project's original brief for this work), which instructed a full migration of the entire GymCrew app onto Reacticx components.
->
-> **The project's own `AGENTS.md` — the authoritative, current source of truth for how to build this app — has since been updated and explicitly contradicts that brief.** It now states, in a dedicated "Marketing Site & Landing Page — Reacticx UI Library (MANDATORY, NO EXCEPTIONS)" section:
-> - Reacticx is used **only** for a new marketing site under `app/(marketing)/` (landing page, pricing, features, about, FAQ, download, legal).
-> - Reacticx is **not used inside the app itself** — `(auth)/`, `(tabs)/`, and every other real app screen keep using NativeWind and GymCrew's own hand-rolled `components/`, exactly as before this work started.
->
-> **Everything Phases 3-5 below did to the app's own screens (`ConfirmModal`, `ProgressBar`, `Skeleton`, `AvatarStack`, `VerificationCodeModal`, `SocialAuthButton`, `OnboardingFooter`'s button, `AuthSubmitButton`, `WelcomeWidget`'s CTA, `Card` and the 7 Home widgets built on it) has been reverted to its pre-Reacticx state** (restored from commit `9af414c`, the last commit before any Reacticx component was used in-app). The only part of that work kept is the design-system motion tokens (`src/theme/motion.ts`'s `spring.*` presets) re-applied to the same onboarding/build-crew screens — those never used a Reacticx component, only GymCrew's own Reanimated-based tokens, so they don't conflict with the new rule.
->
-> **What below is still accurate and still applies**: Phase 0's discovery (screens/features/assets/components as they existed in the real app), Phase 1's Reacticx setup (`reacticx init`, `expo-blur`, `component.config.json` — Reacticx is still a real dependency of this project, just scoped to the marketing site now), and Phase 2's design system (colors/spacing/radius/shadows/motion — GymCrew's own tokens, not Reacticx-specific). **What below is no longer the plan**: Phases 3 onward describe migrating app screens onto Reacticx — that no longer happens. The actual next phase is building `app/(marketing)/` per `AGENTS.md`'s marketing-site rules, tracked fresh in `GYMCREW_REACTICX_PROGRESS.md`.
+This is the master planning document for migrating GymCrew's UI onto the Reacticx component system while preserving all existing functionality, business logic, and brand identity (AGENTS.md, this repo's migration brief). It records what Phase 0 discovery found and lays out the phased plan going forward. See also: `GYMCREW_SCREEN_INVENTORY.md`, `GYMCREW_FEATURE_INVENTORY.md`, `GYMCREW_ASSET_INVENTORY.md`, `GYMCREW_REACTICX_COMPONENT_MAP.md`, `GYMCREW_REACTICX_PROGRESS.md`.
 
----
-
-This document was the master planning document for migrating GymCrew's UI onto the Reacticx component system (original scope, now superseded above). See also: `GYMCREW_SCREEN_INVENTORY.md`, `GYMCREW_FEATURE_INVENTORY.md`, `GYMCREW_ASSET_INVENTORY.md`, `GYMCREW_REACTICX_COMPONENT_MAP.md`, `GYMCREW_REACTICX_PROGRESS.md`.
-
-**Status: Phase 0 (Discovery) complete; Phases 3-5's in-app component work has been reverted per the correction above.** Per AGENTS.md §37/41, this document makes no claim that any screen, component, or platform works beyond what is explicitly stated below.
+**Status: Phase 0 (Discovery) complete. No UI code has been changed yet.** Per AGENTS.md §37/41, this document makes no claim that any screen, component, or platform works beyond what is explicitly stated below.
 
 ---
 

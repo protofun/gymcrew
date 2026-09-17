@@ -1,5 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, Text, View } from "react-native";
+import { View } from "react-native";
+
+import { Button } from "@/components/ui/base/button";
+import { colors, radius } from "@/theme";
 
 type SocialProvider = "google" | "facebook" | "apple";
 
@@ -28,15 +31,27 @@ function ProviderIcon({ provider }: { provider: SocialProvider }) {
   return <Ionicons name="logo-google" size={20} color="#FFFFFF" />;
 }
 
+/** Built on Reacticx's `Button` primitive — gains a press-scale pop (0.95, matches `spring.press`'s
+ * feel) that a plain `Pressable` didn't have before. `fullWidth` is a small addition to the
+ * vendored primitive (see its `types.ts`): upstream defaults to intrinsic sizing, GymCrew's
+ * buttons are always full-width. */
 export function SocialAuthButton({ provider, onPress }: SocialAuthButtonProps) {
   return (
-    <Pressable
+    <Button.Root
       onPress={onPress}
-      className="flex-row items-center gap-3 rounded-xl border border-divider bg-surface px-4 py-4"
-      style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+      fullWidth
+      height={56}
+      backgroundColor={colors.neutral.surface}
+      borderRadius={radius.small}
+      style={{ width: "100%", borderWidth: 1, borderColor: colors.neutral.divider }}
+      accessibilityLabel={PROVIDER_LABEL[provider]}
     >
-      <ProviderIcon provider={provider} />
-      <Text className="body-lg flex-1 text-center text-text-primary">{PROVIDER_LABEL[provider]}</Text>
-    </Pressable>
+      <Button.Content style={{ flexDirection: "row", gap: 12 }}>
+        <ProviderIcon provider={provider} />
+        <Button.Label color={colors.neutral.textPrimary} size={16}>
+          {PROVIDER_LABEL[provider]}
+        </Button.Label>
+      </Button.Content>
+    </Button.Root>
   );
 }

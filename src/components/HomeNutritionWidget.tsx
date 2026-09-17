@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 
+import { Card } from "@/components/Card";
 import { GoalRing } from "@/components/GoalRing";
 import { SkewedStat } from "@/components/SkewedStat";
 import { toDateKey } from "@/lib/date";
@@ -38,7 +39,7 @@ export function HomeNutritionWidget() {
   const remaining = Math.max(0, Math.round(calories - todayTotals.calories));
 
   return (
-    <Pressable onPress={() => router.push("/nutrition")} className="mx-4 mt-8 overflow-hidden rounded-3xl border border-divider bg-surface">
+    <Card onPress={() => router.push("/nutrition")} className="mx-4 mt-8">
       <View className="flex-row items-center gap-4 p-4">
         <GoalRing ratio={calorieRatio} color={NUTRITION_COLORS.calories} size={RING_SIZE} strokeWidth={7}>
           <Ionicons name="flame" size={22} color={NUTRITION_COLORS.calories} />
@@ -66,6 +67,6 @@ export function HomeNutritionWidget() {
           <Ionicons name="chevron-forward" size={14} color={colors.neutral.textSecondary} />
         </Pressable>
       </View>
-    </Pressable>
+    </Card>
   );
 }

@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Text, View } from "react-native";
 
+import { Button } from "@/components/ui/base/button";
 import { EditableText } from "@/components/EditableText";
 import { images } from "@/constants/images";
-import { colors } from "@/theme";
+import { colors, radius } from "@/theme";
 
 type WelcomeWidgetProps = {
   name: string;
@@ -38,18 +39,25 @@ export function WelcomeWidget({ name, onPressStartWorkout }: WelcomeWidgetProps)
       </View>
 
       <View className="mt-4 flex-row items-center gap-3">
-        <Pressable
+        <Button.Root
           onPress={onPressStartWorkout}
-          className="flex-1 flex-row items-center justify-between rounded-full bg-brand-yellow px-5 py-4"
+          containerStyle={{ flex: 1 }}
+          height={56}
+          backgroundColor={colors.brand.yellow}
+          borderRadius={radius.pill}
+          style={{ width: "100%", paddingHorizontal: 20 }}
+          accessibilityLabel="Start workout"
         >
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="flash" size={18} color={colors.brand.iron} />
-            <Text className="body-lg text-brand-iron" style={{ fontFamily: "Poppins-Bold" }}>
-              START WORKOUT
-            </Text>
-          </View>
-          <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
-        </Pressable>
+          <Button.Content style={{ flexDirection: "row", justifyContent: "space-between", width: "100%" }}>
+            <View className="flex-row items-center gap-2">
+              <Ionicons name="flash" size={18} color={colors.brand.iron} />
+              <Text className="body-lg text-brand-iron" style={{ fontFamily: "Poppins-Bold" }}>
+                START WORKOUT
+              </Text>
+            </View>
+            <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
+          </Button.Content>
+        </Button.Root>
 
         <Ionicons name="chevron-forward" size={20} color={colors.neutral.textSecondary} />
       </View>
