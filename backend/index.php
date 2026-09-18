@@ -214,7 +214,7 @@ switch ($resource) {
         handleCrewLiveSessions($pdo, $userId, $method, $body, $segments);
         break;
     case 'crew-activity-events':
-        handleCrewActivityEvents($pdo, $userId, $method, $body);
+        handleCrewActivityEvents($pdo, $userId, $method, $body, $segments);
         break;
     case 'crew-duels':
         handleCrewDuels($pdo, $userId, $method, $body, $segments);

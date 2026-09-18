@@ -5,11 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CrewEventReactionBar } from "@/components/CrewEventReactionBar";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { FilterPickerSheet, type FilterOption } from "@/components/FilterPickerSheet";
 import { RankBadge } from "@/components/RankBadge";
-import { api, waitForAuthToken, type ApiCrewActivityEvent, type CrewActivityEventType } from "@/lib/api";
-import { describeEvent, divisionFromEvent, EVENT_ICON, EVENT_TINT, EVENT_TYPE_LABEL, tierForPrEvent } from "@/lib/crew-feed";
+import { api, waitForAuthToken, type ApiCrewActivityEvent, type CrewActivityEventType, type CrewActivityReactionEmoji } from "@/lib/api";
+import { describeEvent, divisionFromEvent, EVENT_ICON, EVENT_TINT, EVENT_TYPE_LABEL, tierForPrEvent, toggleReactionOptimistic } from "@/lib/crew-feed";
 import { useBlockedUsersStore } from "@/store/blocked-users-store";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCustomExercisesStore } from "@/store/custom-exercises-store";
@@ -74,6 +75,26 @@ export default function CrewActivityScreen() {
       cancelled = true;
     };
   }, []);
+
+  function handleReact(eventId: number, emoji: CrewActivityReactionEmoji) {
+    const target = events?.find((event) => event.id === eventId);
+    if (!target) return;
+    const previousReactions = target.reactions;
+
+    setEvents((prev) =>
+      prev?.map((event) => (event.id === eventId ? { ...event, reactions: toggleReactionOptimistic(event.reactions, emoji) } : event)) ?? prev,
+    );
+
+    api
+      .reactToCrewActivityEvent(eventId, emoji)
+      .then(({ reactions }) => {
+        setEvents((prev) => prev?.map((event) => (event.id === eventId ? { ...event, reactions } : event)) ?? prev);
+      })
+      .catch((error) => {
+        console.warn("Failed to react to crew activity event", error);
+        setEvents((prev) => prev?.map((event) => (event.id === eventId ? { ...event, reactions: previousReactions } : event)) ?? prev);
+      });
+  }
 
   function handleBack() {
     if (router.canGoBack()) router.back();
@@ -145,22 +166,27 @@ export default function CrewActivityScreen() {
               customExercises,
             );
             return (
-              <View key={event.id} className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3.5">
-                {division ? (
-                  <DivisionBadge division={division} size={40} />
-                ) : prTier ? (
-                  <RankBadge tier={prTier} size={40} />
-                ) : (
-                  <View
-                    className="h-10 w-10 items-center justify-center rounded-full"
-                    style={{ backgroundColor: `${EVENT_TINT[event.eventType]}26` }}
-                  >
-                    <Ionicons name={EVENT_ICON[event.eventType]} size={18} color={EVENT_TINT[event.eventType]} />
+              <View key={event.id} className="gap-3 rounded-2xl border border-divider bg-surface p-3.5">
+                <View className="flex-row items-center gap-3">
+                  {division ? (
+                    <DivisionBadge division={division} size={40} />
+                  ) : prTier ? (
+                    <RankBadge tier={prTier} size={40} />
+                  ) : (
+                    <View
+                      className="h-10 w-10 items-center justify-center rounded-full"
+                      style={{ backgroundColor: `${EVENT_TINT[event.eventType]}26` }}
+                    >
+                      <Ionicons name={EVENT_ICON[event.eventType]} size={18} color={EVENT_TINT[event.eventType]} />
+                    </View>
+                  )}
+                  <View className="flex-1 gap-0.5">
+                    <Text className="body-sm text-text-primary">{describeEvent(event, isMe)}</Text>
+                    <Text className="caption text-text-secondary">{formatFullDate(event.createdAt)}</Text>
                   </View>
-                )}
-                <View className="flex-1 gap-0.5">
-                  <Text className="body-sm text-text-primary">{describeEvent(event, isMe)}</Text>
-                  <Text className="caption text-text-secondary">{formatFullDate(event.createdAt)}</Text>
+                </View>
+                <View className="pl-[52px]">
+                  <CrewEventReactionBar reactions={event.reactions} onReact={(emoji) => handleReact(event.id, emoji)} />
                 </View>
               </View>
             );

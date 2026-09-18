@@ -242,6 +242,12 @@ export type ApiCrewLiveSession = {
 
 export type CrewActivityEventType = "pr" | "streak" | "long_session" | "division_up";
 
+/** Fixed, deliberately small tap-react set — mirrors backend/routes/crew-activity-events.php's
+ * CREW_ACTIVITY_REACTION_EMOJIS. Keep both in sync. */
+export const CREW_ACTIVITY_REACTION_EMOJIS = ["🔥", "👏"] as const;
+export type CrewActivityReactionEmoji = (typeof CREW_ACTIVITY_REACTION_EMOJIS)[number];
+export type CrewActivityReactions = Record<CrewActivityReactionEmoji, { count: number; reacted: boolean }>;
+
 export type ApiCrewActivityEvent = {
   id: number;
   userId: string;
@@ -249,6 +255,7 @@ export type ApiCrewActivityEvent = {
   eventType: CrewActivityEventType;
   payload: Record<string, unknown>;
   createdAt: number;
+  reactions: CrewActivityReactions;
 };
 
 export type ApiCrewDuel = {
@@ -470,6 +477,14 @@ export const api = {
     request<{ ok: true; recorded: boolean }>("/crew-activity-events", { method: "POST", body: { eventType, payload } }),
   getCrewActivityEvents: (sinceMs?: number) =>
     request<ApiCrewActivityEvent[]>(sinceMs ? `/crew-activity-events?since=${sinceMs}` : "/crew-activity-events"),
+  /** Toggle the caller's reaction to one feed event — a second tap with the same emoji removes it.
+   * Returns that one event's full updated reaction summary (not just the emoji that changed), so the
+   * caller can just overwrite its local copy rather than patch a single count. */
+  reactToCrewActivityEvent: (eventId: number, emoji: CrewActivityReactionEmoji) =>
+    request<{ eventId: number; reactions: CrewActivityReactions }>(`/crew-activity-events/${eventId}/react`, {
+      method: "POST",
+      body: { emoji },
+    }),
 
   /** 1-on-1 "who does more today" crewmate challenges (see backend/routes/crew-duels.php). */
   getCrewDuels: () => request<ApiCrewDuel[]>("/crew-duels"),

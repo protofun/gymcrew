@@ -1,7 +1,13 @@
 import type { Ionicons } from "@expo/vector-icons";
 
 import { EXERCISE_BY_NAME, exerciseByIdWithCustom, type Exercise } from "@/data/exercises";
-import type { ApiCrewActivityEvent, ApiCrewMemberActivity, CrewActivityEventType } from "@/lib/api";
+import type {
+  ApiCrewActivityEvent,
+  ApiCrewMemberActivity,
+  CrewActivityEventType,
+  CrewActivityReactionEmoji,
+  CrewActivityReactions,
+} from "@/lib/api";
 import { DIVISIONS, type Division } from "@/lib/division";
 import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
 import type { RankTier } from "@/lib/rank";
@@ -97,4 +103,14 @@ export function tierForPrEvent(
   if (!gender || !bodyWeightKg) return null;
 
   return genericExerciseRankDetail(exercise, weightKg, reps, { gender, bodyWeightKg }).tier;
+}
+
+/** Flips one emoji's `reacted`/`count` locally, for an instant tap response while the real toggle
+ * request is in flight — both CrewFeedList (via the crew-feed store) and the full crew/activity
+ * screen (its own local state) use this so a tap never waits on a round trip to feel like it landed.
+ * Callers reconcile with the server's real summary when the request resolves, and revert to the
+ * pre-tap value if it fails. */
+export function toggleReactionOptimistic(reactions: CrewActivityReactions, emoji: CrewActivityReactionEmoji): CrewActivityReactions {
+  const prev = reactions[emoji];
+  return { ...reactions, [emoji]: { count: prev.count + (prev.reacted ? -1 : 1), reacted: !prev.reacted } };
 }

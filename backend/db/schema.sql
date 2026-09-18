@@ -439,6 +439,20 @@ CREATE TABLE IF NOT EXISTS crew_activity_events (
   INDEX idx_crewevents_crew_date (crew_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- One row per (event, user, emoji) tap-react — see routes/crew-activity-events.php. Slack-style: a
+-- user can react to the same event with more than one emoji, but reacting again with the same emoji
+-- removes it (the unique key below is what makes that a toggle instead of a duplicate insert).
+CREATE TABLE IF NOT EXISTS crew_activity_reactions (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  event_id BIGINT NOT NULL,
+  user_id VARCHAR(64) NOT NULL,
+  emoji VARCHAR(8) NOT NULL,
+  created_at BIGINT NOT NULL,
+  CONSTRAINT fk_crewreactions_event FOREIGN KEY (event_id) REFERENCES crew_activity_events(id) ON DELETE CASCADE,
+  UNIQUE KEY uniq_crewreactions_event_user_emoji (event_id, user_id, emoji),
+  INDEX idx_crewreactions_event (event_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- A lightweight 1-on-1 "who does more today" challenge between two crewmates. Resolved lazily
 -- (same pattern as crew_wars) by comparing each side's real workouts for target_date_key once
 -- that date has passed.

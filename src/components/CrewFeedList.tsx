@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
+import { CrewEventReactionBar } from "@/components/CrewEventReactionBar";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { RankBadge } from "@/components/RankBadge";
 import { describeEvent, divisionFromEvent, EVENT_ICON, EVENT_TINT, tierForPrEvent } from "@/lib/crew-feed";
@@ -26,6 +27,7 @@ export function CrewFeedList() {
   const { user } = useUser();
   const events = useCrewFeedStore((state) => state.events);
   const fetchEvents = useCrewFeedStore((state) => state.fetch);
+  const react = useCrewFeedStore((state) => state.react);
   const membersActivity = useCrewActivityStore((state) => state.membersActivity);
   const gender = useOnboardingStore((state) => state.onboarding.gender);
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg);
@@ -67,23 +69,28 @@ export function CrewFeedList() {
             customExercises,
           );
           return (
-            <View key={event.id} className="flex-row items-center gap-3">
-              {division ? (
-                <DivisionBadge division={division} size={36} />
-              ) : prTier ? (
-                <RankBadge tier={prTier} size={36} />
-              ) : (
-                <View
-                  className="h-9 w-9 items-center justify-center rounded-full"
-                  style={{ backgroundColor: `${EVENT_TINT[event.eventType]}26` }}
-                >
-                  <Ionicons name={EVENT_ICON[event.eventType]} size={16} color={EVENT_TINT[event.eventType]} />
-                </View>
-              )}
-              <Text className="body-sm flex-1 text-text-secondary" numberOfLines={2}>
-                {describeEvent(event, isMe)}
-              </Text>
-              <Text className="caption text-text-secondary">{formatShortAgo(event.createdAt)}</Text>
+            <View key={event.id} className="gap-2">
+              <View className="flex-row items-center gap-3">
+                {division ? (
+                  <DivisionBadge division={division} size={36} />
+                ) : prTier ? (
+                  <RankBadge tier={prTier} size={36} />
+                ) : (
+                  <View
+                    className="h-9 w-9 items-center justify-center rounded-full"
+                    style={{ backgroundColor: `${EVENT_TINT[event.eventType]}26` }}
+                  >
+                    <Ionicons name={EVENT_ICON[event.eventType]} size={16} color={EVENT_TINT[event.eventType]} />
+                  </View>
+                )}
+                <Text className="body-sm flex-1 text-text-secondary" numberOfLines={2}>
+                  {describeEvent(event, isMe)}
+                </Text>
+                <Text className="caption text-text-secondary">{formatShortAgo(event.createdAt)}</Text>
+              </View>
+              <View className="pl-12">
+                <CrewEventReactionBar reactions={event.reactions} onReact={(emoji) => react(event.id, emoji)} />
+              </View>
             </View>
           );
         })}
