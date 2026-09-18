@@ -28,7 +28,7 @@ import { exerciseImages, images, rankTierImages } from "@/constants/images";
 import { WORKOUT_NAME_HERO_IMAGE } from "@/data/workout-templates";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
 import { useWeightUnit } from "@/hooks/use-weight-unit";
-import { waitForAuthToken } from "@/lib/api";
+import { waitForAuthToken, type ApiCrewLiveSession } from "@/lib/api";
 import { mostRecentCrewAchievement } from "@/lib/crew-achievements";
 import { crewMuscleBalance } from "@/lib/crew-muscle-balance";
 import { nextDivision, xpRequiredFor } from "@/lib/division";
@@ -238,6 +238,35 @@ function LiveDot() {
       />
       <View className="h-2 w-2 rounded-full" style={{ backgroundColor: colors.semantic.streak }} />
     </View>
+  );
+}
+
+/** A real, joinable live session (see led-workout-store.ts) was previously only discoverable by
+ * tapping into TodayPlanCard's bottom sheet — this surfaces it right at the top of Overview instead,
+ * since a live crewmate session is the single most convertible moment the crew tab has (join now vs.
+ * scroll past and never see it). Only rendered when there's a session neither leading nor already
+ * joined — see the `canJoin` condition CrewActivitySheet uses for the same state. */
+function LiveSessionBanner({ session, onPress }: { session: ApiCrewLiveSession; onPress: () => void }) {
+  return (
+    <Animated.View entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)} className="mx-4 mt-4">
+      <Pressable
+        onPress={onPress}
+        style={PRESSED_STYLE}
+        className="flex-row items-center gap-3 rounded-2xl border border-brand-yellow/40 bg-brand-yellow/10 p-3.5"
+      >
+        <View className="h-10 w-10 items-center justify-center rounded-full bg-brand-yellow/20">
+          <Ionicons name="flash" size={18} color={colors.brand.yellow} />
+        </View>
+        <View className="flex-1 gap-0.5">
+          <View className="flex-row items-center gap-1.5">
+            <LiveDot />
+            <Text className="body-sm font-body-semibold text-text-primary">{session.leaderName} is training now</Text>
+          </View>
+          <Text className="caption text-text-secondary">{session.workoutName} · tap to join</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.brand.yellow} />
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -591,6 +620,9 @@ export default function CrewScreen() {
       {activeTab === "Overview" ? (
         <>
           <OverviewHeader />
+          {session && !iAmLeader && !iHaveJoined && (
+            <LiveSessionBanner session={session} onPress={() => router.push("/crew/join-workout")} />
+          )}
           <DivisionRankCard />
           <View className="mx-4 mt-3 flex-row items-stretch gap-3">
             <CrewPowerCard />
