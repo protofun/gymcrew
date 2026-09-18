@@ -8,7 +8,6 @@ import { usePostHog } from "posthog-react-native";
 
 import { AuthDivider } from "@/components/AuthDivider";
 import { AuthHeader } from "@/components/AuthHeader";
-import { AuthSubmitButton } from "@/components/AuthSubmitButton";
 import { FormField } from "@/components/FormField";
 import { SocialAuthButton } from "@/components/SocialAuthButton";
 import { VerificationCodeModal } from "@/components/VerificationCodeModal";
@@ -158,7 +157,15 @@ export default function SignUpScreen() {
             {formError && <Text className="body-sm text-error">{formError}</Text>}
           </View>
 
-          <AuthSubmitButton label="Sign Up" loading={submitting} onPress={handleSignUp} />
+          <Pressable
+            onPress={handleSignUp}
+            disabled={submitting}
+            className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4"
+            style={({ pressed }) => ({ opacity: pressed || submitting ? 0.85 : 1 })}
+          >
+            <Text className="heading-4 text-brand-iron">{submitting ? "Signing Up..." : "Sign Up"}</Text>
+            <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
+          </Pressable>
 
           <Text className="body-sm text-center text-text-secondary">
             By signing up, you agree to our{" "}

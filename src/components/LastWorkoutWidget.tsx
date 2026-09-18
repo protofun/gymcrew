@@ -1,8 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
-import { Card } from "@/components/Card";
 import { EditableText } from "@/components/EditableText";
 import { RankBadge } from "@/components/RankBadge";
 import { WorkoutSummaryModal } from "@/components/WorkoutSummaryModal";
@@ -65,7 +64,10 @@ export function LastWorkoutWidget({ sessions }: LastWorkoutWidgetProps) {
 
   return (
     <>
-      <Card onPress={() => setModalVisible(true)} className="mx-4 mt-8 flex-row items-center gap-3 p-4">
+      <Pressable
+        onPress={() => setModalVisible(true)}
+        className="mx-4 mt-8 flex-row items-center gap-3 rounded-3xl border border-divider bg-surface p-4"
+      >
         <View className="flex-1 gap-1.5">
           <Text className="body-md font-body-bold text-text-primary">LAST WORKOUT</Text>
           <EditableText id="home.lastWorkout.dateAndName" className="caption text-text-secondary">
@@ -104,7 +106,7 @@ export function LastWorkoutWidget({ sessions }: LastWorkoutWidgetProps) {
         )}
 
         <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
-      </Card>
+      </Pressable>
 
       <WorkoutSummaryModal visible={modalVisible} onClose={() => setModalVisible(false)} date={date} session={session} />
     </>

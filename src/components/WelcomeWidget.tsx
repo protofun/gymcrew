@@ -1,20 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 
-import { Button } from "@/components/ui/base/button";
-import { StaggeredText } from "@/components/ui/organisms/animated-text";
 import { EditableText } from "@/components/EditableText";
 import { images } from "@/constants/images";
-import { colors, fontFamily, radius } from "@/theme";
-
-const HEADLINE_STYLE = {
-  fontFamily: fontFamily.heading,
-  fontSize: 40,
-  lineHeight: 40 * 1.2,
-  fontWeight: "700" as const,
-  fontStyle: "italic" as const,
-  color: colors.brand.white,
-};
+import { colors } from "@/theme";
 
 type WelcomeWidgetProps = {
   name: string;
@@ -42,33 +31,25 @@ export function WelcomeWidget({ name, onPressStartWorkout }: WelcomeWidgetProps)
               {`Welcome back, ${name}! 👋`}
             </EditableText>
           </View>
-          <View className="mt-1">
-            <StaggeredText text="READY TO" style={HEADLINE_STYLE} animationConfig={{ maxBlurIntensity: 0 }} />
-            <StaggeredText text="BE UNSTOPPABLE?" style={HEADLINE_STYLE} animationConfig={{ maxBlurIntensity: 0 }} />
-          </View>
+          <EditableText id="home.welcome.headline" className="heading-2 mt-1 text-brand-white" style={{ fontStyle: "italic" }}>
+            {"READY TO\nBE UNSTOPPABLE?"}
+          </EditableText>
         </View>
       </View>
 
       <View className="mt-4 flex-row items-center gap-3">
-        <Button.Root
+        <Pressable
           onPress={onPressStartWorkout}
-          containerStyle={{ flex: 1 }}
-          height={56}
-          backgroundColor={colors.brand.yellow}
-          borderRadius={radius.pill}
-          style={{ width: "100%", paddingHorizontal: 20 }}
-          accessibilityLabel="Start workout"
+          className="flex-1 flex-row items-center justify-between rounded-full bg-brand-yellow px-5 py-4"
         >
-          <Button.Content style={{ flexDirection: "row", justifyContent: "space-between", width: "100%" }}>
-            <View className="flex-row items-center gap-2">
-              <Ionicons name="flash" size={18} color={colors.brand.iron} />
-              <Text className="body-lg text-brand-iron" style={{ fontFamily: "Poppins-Bold" }}>
-                START WORKOUT
-              </Text>
-            </View>
-            <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
-          </Button.Content>
-        </Button.Root>
+          <View className="flex-row items-center gap-2">
+            <Ionicons name="flash" size={18} color={colors.brand.iron} />
+            <Text className="body-lg text-brand-iron" style={{ fontFamily: "Poppins-Bold" }}>
+              START WORKOUT
+            </Text>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
+        </Pressable>
 
         <Ionicons name="chevron-forward" size={20} color={colors.neutral.textSecondary} />
       </View>

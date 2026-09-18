@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMemo } from "react";
 import { View } from "react-native";
 
-import { Card } from "@/components/Card";
 import { EditableText } from "@/components/EditableText";
 import { formatMuscleLabel, MuscleHeatmap } from "@/components/MuscleHeatmap";
 import type { MuscleGroup, WorkoutSession } from "@/data/workout-log";
@@ -42,7 +41,7 @@ export function MuscleSuggestions({ sessions }: MuscleSuggestionsProps) {
 
   return (
     <View className="mx-4 mt-8 gap-4">
-      <Card className="gap-4 p-4">
+      <View className="gap-4 rounded-3xl border border-divider bg-surface p-4">
         <View>
           <EditableText id="home.muscleSuggestions.headline" className="heading-4 text-text-primary">
             Muscle Suggestions
@@ -85,7 +84,7 @@ export function MuscleSuggestions({ sessions }: MuscleSuggestionsProps) {
               safely cedes width to this instead of the heatmap ever running through the text. */}
           <MuscleHeatmap muscleIntensity={heatmapIntensity} height={130} gap={6} showLegend={false} gender={gender} />
         </View>
-      </Card>
+      </View>
     </View>
   );
 }

@@ -1,5 +1,6 @@
-import { AnimatedProgressBar } from "@/components/ui/organisms/progress";
-import { colors, duration, radius } from "@/theme";
+import { useEffect, useState } from "react";
+import { View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 const DEFAULT_HEIGHT = 7;
 
@@ -9,23 +10,23 @@ type ProgressBarProps = {
   height?: number;
 };
 
-/**
- * Thin GymCrew-shaped wrapper around Reacticx's `AnimatedProgressBar` — kept as its own component
- * (rather than inlining the primitive at all 14 call sites) so every existing screen's
- * `<ProgressBar ratio={...} color={...} />` call keeps working unchanged. The primitive's own
- * `progress`/`animationDuration`/`borderRadius`/`trackColor` props map directly onto values GymCrew
- * already used (700ms duration, full pill radius, the app's divider color for the track) — nothing
- * about the visual result changes from the previous hand-rolled implementation.
- */
 export function ProgressBar({ ratio, color, height = DEFAULT_HEIGHT }: ProgressBarProps) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const fillWidth = useSharedValue(0);
+
+  useEffect(() => {
+    fillWidth.value = withTiming(trackWidth * Math.min(1, Math.max(0, ratio)), { duration: 700 });
+  }, [ratio, trackWidth, fillWidth]);
+
+  const fillStyle = useAnimatedStyle(() => ({ width: fillWidth.value }));
+
   return (
-    <AnimatedProgressBar
-      progress={Math.min(1, Math.max(0, ratio))}
-      progressColor={color}
-      trackColor={colors.neutral.divider}
-      height={height}
-      borderRadius={radius.pill}
-      animationDuration={duration.standard}
-    />
+    <View
+      className="w-full rounded-full bg-divider"
+      style={{ height }}
+      onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
+    >
+      <Animated.View style={[{ height, borderRadius: 999, backgroundColor: color }, fillStyle]} />
+    </View>
   );
 }

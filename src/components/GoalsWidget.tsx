@@ -6,27 +6,14 @@ import { AddGoalModal } from "@/components/AddGoalModal";
 import { EditableText } from "@/components/EditableText";
 import { GoalDetailModal } from "@/components/GoalDetailModal";
 import { GoalRing } from "@/components/GoalRing";
-import { StaggeredText } from "@/components/ui/organisms/animated-text";
 import { images } from "@/constants/images";
 import type { WorkoutSession } from "@/data/workout-log";
 import { getGoalProgress } from "@/lib/goal-progress";
 import { useGoalsStore, type Goal } from "@/store/goals-store";
-import { colors, fontFamily } from "@/theme";
+import { colors } from "@/theme";
 
 const RING_SIZE = 44;
 const BADGE_SIZE = 34;
-
-const HEADLINE_STYLE = {
-  fontFamily: fontFamily.heading,
-  fontSize: 40,
-  lineHeight: 40 * 1.2,
-  fontWeight: "700" as const,
-  color: colors.brand.white,
-};
-
-// StaggeredText's default blur-reveal doesn't render correctly on web (expo-blur's animated
-// intensity misbehaves there) — disabled, keeping only the fade/slide/scale reveal.
-const NO_BLUR = { maxBlurIntensity: 0 };
 
 function GoalRow({ goal, sessions, onPress }: { goal: Goal; sessions: Record<string, WorkoutSession>; onPress: () => void }) {
   const { ratio } = getGoalProgress(goal, sessions);
@@ -77,9 +64,9 @@ export function GoalsWidget({ sessions }: GoalsWidgetProps) {
           <EditableText id="home.goals.tagline" className="body-lg text-text-secondary">
             Track your progress
           </EditableText>
-          <View className="mt-1">
-            <StaggeredText text="YOUR GOALS" style={HEADLINE_STYLE} animationConfig={NO_BLUR} />
-          </View>
+          <EditableText id="home.goals.headline" className="heading-2 mt-1 text-brand-white">
+            YOUR GOALS
+          </EditableText>
         </View>
       </View>
 

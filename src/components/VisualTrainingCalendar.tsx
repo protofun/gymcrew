@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { toDateKey } from "@/lib/date";
-import { Card } from "@/components/Card";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { BODY_ASPECT_RATIO } from "@/data/body-muscle-paths";
 import type { MuscleGroup } from "@/data/workout-log";
@@ -149,7 +148,7 @@ export function VisualTrainingCalendar({
     : `${periodStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${periodEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   return (
-    <Card className="gap-3 p-4">
+    <View className="gap-3 rounded-3xl border border-divider bg-surface p-4">
       <View className="flex-row items-center justify-between">
         <Text className="heading-4 text-text-primary" numberOfLines={1}>
           Training Calendar
@@ -192,6 +191,6 @@ export function VisualTrainingCalendar({
       </View>
 
       <Text className="caption text-center text-text-secondary">{footerNote}</Text>
-    </Card>
+    </View>
   );
 }

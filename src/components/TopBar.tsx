@@ -5,17 +5,12 @@ import { Image, Pressable, Text, View, type ImageSourcePropType } from "react-na
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NotificationsDropdown } from "@/components/NotificationsDropdown";
-import { StaggeredText } from "@/components/ui/organisms/animated-text";
 import type { AppNotification } from "@/data/notifications";
 import { useNotificationsStore } from "@/store/notifications-store";
 import { colors, fontFamily } from "@/theme";
 
 const AVATAR_SIZE = 36;
 const BELL_SIZE = 18;
-
-// StaggeredText's default blur-reveal doesn't render correctly on web (expo-blur's animated
-// intensity misbehaves there) — disabled, keeping only the fade/slide/scale reveal.
-const NO_BLUR = { maxBlurIntensity: 0 };
 
 // Inline-only: NativeWind doesn't reliably compile `transform`/`font-style`
 // onto native when combined with a sibling className (see typography.ts).
@@ -75,9 +70,11 @@ export function TopBar({ avatarSource, streakDays, notifications }: TopBarProps)
         </View>
 
         {/* Absolutely centered on the full row so it stays put regardless of how wide the side content is. */}
-        <View pointerEvents="none" className="absolute inset-0 flex-row items-center justify-center">
-          <StaggeredText text="GYM" style={[wordmarkStyle, { color: colors.neutral.textPrimary }]} animationConfig={NO_BLUR} />
-          <StaggeredText text="CREW" style={[wordmarkStyle, { color: colors.brand.yellow }]} animationConfig={{ ...NO_BLUR, characterDelay: 40 }} />
+        <View pointerEvents="none" className="absolute inset-0 items-center justify-center">
+          <Text style={wordmarkStyle}>
+            <Text className="text-text-primary">GYM</Text>
+            <Text className="text-brand-yellow">CREW</Text>
+          </Text>
         </View>
       </View>
 

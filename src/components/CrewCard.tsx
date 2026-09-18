@@ -1,7 +1,6 @@
 import { router } from "expo-router";
-import { Image, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 
-import { Card } from "@/components/Card";
 import { images } from "@/constants/images";
 import { EditableText } from "@/components/EditableText";
 import { useCrewStore } from "@/store/crew-store";
@@ -12,7 +11,10 @@ export function CrewCard() {
   const maxMembers = useCrewStore((state) => state.maxMembers);
 
   return (
-    <Card onPress={() => router.push("/crew")} className="mx-4 mt-8 flex-row items-center gap-3 p-4">
+    <Pressable
+      onPress={() => router.push("/crew")}
+      className="mx-4 mt-8 flex-row items-center gap-3 overflow-hidden rounded-3xl border border-divider bg-surface p-4"
+    >
       <Image
         source={images.mascotsCrew}
         resizeMode="contain"
@@ -42,6 +44,6 @@ export function CrewCard() {
           </>
         )}
       </View>
-    </Card>
+    </Pressable>
   );
 }

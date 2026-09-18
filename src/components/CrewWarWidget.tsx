@@ -1,9 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
-import { Card } from "@/components/Card";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { useCountdown } from "@/hooks/use-countdown";
 import { useCrewStore } from "@/store/crew-store";
@@ -42,10 +41,10 @@ export function CrewWarWidget() {
   const leading = war.myScore >= war.opponentScore;
 
   return (
-    <Card
+    <Pressable
       onPress={() => router.push("/crew")}
-      cornerRadius="medium"
-      className="mx-4 mt-6 flex-row items-center gap-3 px-4 py-3.5"
+      className="mx-4 mt-6 flex-row items-center gap-3 rounded-2xl border border-divider bg-surface px-4 py-3.5"
+      style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
     >
       <View className="flex-row items-center" style={{ width: 52 }}>
         <CrewIconBadge iconKey={crewIcon} size={32} />
@@ -70,6 +69,6 @@ export function CrewWarWidget() {
         </Text>
         <Text className="caption text-text-secondary">{formatCountdown(remainingSeconds)}</Text>
       </View>
-    </Card>
+    </Pressable>
   );
 }

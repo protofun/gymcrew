@@ -2,85 +2,32 @@
 
 Updated as of 2026-09-17.
 
-## Direct override (2026-09-17) — the scope correction below was itself reversed
+## ⚠️ Scope correction (2026-09-17) — read before anything below
 
-The user explicitly overrode the `AGENTS.md`-based correction above: login, onboarding, and Home must run on Reacticx after all, with GymCrew's own hand-rolled UI-chrome components removed in favor of it. Restored every reverted commit (`git revert` of the revert), then went further than before — components previously kept custom after a first "doesn't fit" pass were re-evaluated more aggressively:
+`AGENTS.md` was updated to restrict Reacticx to a new marketing site (`app/(marketing)/`) only, explicitly **not** inside the app itself — contradicting `REACTICX_AGENT_BRIEF.md`, the original brief this whole checklist was built against. **Reverted** all in-app Reacticx component usage from Phases 3-5 (`ConfirmModal`, `ProgressBar`, `Skeleton`, `AvatarStack`, `VerificationCodeModal`, `SocialAuthButton`, `OnboardingFooter`'s button, `AuthSubmitButton` — deleted, `WelcomeWidget`'s CTA, `Card` and 7 Home widgets built on it — all restored to their pre-Reacticx state from commit `9af414c`; `src/components/ui/` and `src/shared/` — the vendored Reacticx primitives — deleted entirely since nothing in the app references them anymore). Kept: the motion-token substitutions (`spring.entranceBouncy`/`spring.press` from `src/theme/motion.ts`) on the 21 onboarding/build-crew screens and `OnboardingFooter`'s wrapper animation — those never used a Reacticx component, only GymCrew's own Reanimated tokens, so they don't conflict with the new rule and were re-applied after the revert. Verified clean: `tsc`, `lint` (0 errors, 0 warnings — the vendor-code warnings are gone along with the vendor code), `expo export --platform web`.
 
-- **`FormField` → `base/animated-input-bar`** (single-entry `placeholders` array so its reveal animation never rotates). Trade-off: the old persistent label-above-value is gone, placeholder-only now. Visually confirmed on `sign-in`.
-- **`OnboardingDots` → `molecules/Pagination`**. Real upgrade (animated sliding pill vs. grow-in-place dot); accepted trade-off is an unused drag-to-jump gesture the primitive ships with.
-- **`SliderField` → `micro-interactions/elastic-slider`** (Root/Track/Fill), replacing the `@react-native-community/slider`-backed version. Visually confirmed on `your-stats` (Age, Height) — real elastic-overshoot feel.
-- **Gender picker in `your-stats.tsx` → `organisms/segmented-control`** (was a hand-rolled two-`Pressable` pair) — a good fit this time since it's already full-width, unlike `UnitToggle`'s tight inline slot. Visually confirmed, looks and animates correctly.
-- **`Stepper` → attempted via a new `RulerStepper` on `base/ruler` (a Skia-rendered drag-to-scroll scale), then reverted.** `Ruler` had a real, separate bug fixed along the way (no controlled initial-position — always opened scrolled to `minValue`, ignoring an existing default; fixed by adding an `initialValue` prop to the vendored component). But verification caught something more serious: **`Ruler`'s Skia `Canvas` renders as a completely blank box on web** — `CanvasKit is not defined` / `Cannot read properties of undefined (reading 'PictureRecorder')` in the console, exactly the "Skia/Expo Go incompatibility" class of problem `AGENTS.md`'s own Reacticx section warns about. Since the user is testing live via a browser, shipping this would mean an invisible weight/lift input — reverted `your-stats.tsx`/`your-metrics.tsx` back to the original `Stepper`, deleted `RulerStepper.tsx` and the vendored `ui/base/ruler` (unused, and broken on the platform being tested). **Not ruled out for native** (Skia doesn't need CanvasKit/WASM on iOS/Android) — worth revisiting specifically for a native build/simulator test, not web.
-- **Not yet touched**: `UnitToggle` (previously investigated and kept custom — that reasoning still holds, tight inline slot), the single-select pill patterns in `your-goal.tsx`/`training-experience.tsx` (not yet reconsidered against `segmented-control`/`check-box`), and `Card`/`AuthSubmitButton` (already Reacticx-based internally via `Button`/`atoms/pressable` — read as satisfying "runs on Reacticx" rather than needing to be inlined everywhere, since they're thin compositions over the primitive, not competing hand-rolled UI).
+**Cleanup pass before committing:** the working-tree revert had only deleted each vendored component's main `index.tsx`/primary file, leaving side-car files (`types.ts`, `const.ts`, `context.tsx`, `utils.ts`) orphaned across every `src/components/ui/` subfolder, plus a stray, previously-abandoned `ui/base/ruler` (the Skia-based stepper prototype, already known broken on web, never fully deleted) and an orphaned `ui/organisms/animated-text` (the animated-headline work from the since-reversed "visible-flair" pass, also no longer referenced anywhere). Confirmed via grep that nothing in `src/` imports from `src/components/ui/` or `src/shared/` any more, then removed both trees in full, along with the now-unused `expo-blur` dependency (only consumer was `animated-text`) and `component.config.json` (the Reacticx CLI's `outDir` config, meaningless with no app-side Reacticx usage left). Re-verified clean after: `tsc --noEmit`, `lint` (0 errors/0 warnings), `expo export --platform web`.
 
-Verified after every step: `tsc --noEmit` (clean throughout), `lint` (0 errors — 30 warnings, all the same pre-existing vendor `exhaustive-deps` pattern scaled up with more vendored components), `expo export --platform web` (clean), and Playwright screenshots of the actual changed screens (not synthetic preview routes) — `sign-in`, `your-stats`, `your-metrics` — with a full before/after pass specifically to catch the `Ruler` regression, which is exactly what caught it.
-
----
-
-## Visible-flair pass (animated text) — 2026-09-17 — IN PROGRESS
-
-The user rejected the previous batch as insufficient: internally-Reacticx-but-pixel-identical isn't what was asked for — they want dramatic, *visible* change (their words: "kom aan met nieuwe dingen zoals de animated tekst... maak het ziek"). This pass targets that directly by rolling out `organisms/animated-text` (exported as `StaggeredText`, a per-character entrance/exit reveal built on pure Reanimated) to the highest-visibility headline text in the three screens already in scope (auth, onboarding, Home):
-
-- **`AuthHeader.tsx`** — the "GYMCREW" wordmark (split into two `StaggeredText` runs, "GYM" in white / "CREW" in yellow, staggered relative to each other via a later `characterDelay`) and the screen title (e.g. "Welcome back") both now animate in character-by-character instead of appearing as static `Text`.
-- **`OnboardingHeader.tsx`** — the big italic yellow title (e.g. "Your Stats") now uses `StaggeredText` instead of static `Text`, styled inline to match the original look (`fontFamily.bodyBold`, 48px, italic, brand yellow).
-- **`WelcomeWidget.tsx`** (Home) — the "READY TO / BE UNSTOPPABLE?" headline is now two `StaggeredText` lines instead of a static `Animated.Text`.
-
-**Reacticx components used:** `organisms/animated-text` (new addition this batch).
-
-**Issues discovered:**
-- `StaggeredText`'s default look includes a per-character blur reveal via `expo-blur`'s animated `intensity` prop. **This is broken on web** — the animated intensity doesn't interpolate correctly and the text renders as a permanent unreadable smudge instead of resolving to sharp. Since the user tests live in a browser, this had to be disabled everywhere it's used: `animationConfig={{ maxBlurIntensity: 0 }}`. The fade/slide/scale/rotate portion of the reveal (the rest of the animation) works correctly on web and is what actually ships. Documented as a reusable `NO_BLUR` constant in each consuming file.
-- Two other flashy Reacticx components were evaluated and rejected before landing on `animated-text`, both for the same underlying reason — **Skia-based rendering breaks on web in this project** (CanvasKit/WASM doesn't load correctly in the Metro web bundle):
-  - `base/ruler` — see the entry above; already reverted.
-  - `molecules/gradient-wave-text` — a Skia-`Canvas`-based gradient text-reveal, which would otherwise have been a strong fit for the wordmark/headlines. Confirmed broken the same way (blank canvas), and it also doesn't support multi-line text (`numberOfLines={1}` hardcoded). Added, verified broken, then deleted along with the `@react-native-masked-view/masked-view` dependency it required (uninstalled via `npm uninstall` after confirming no other file references it).
-  - Also added-then-deleted as unused/not-a-fit after the same Skia-safety sweep: `organisms/staggered-text` (Skia, name-confusingly similar to the kept `animated-text`'s `StaggeredText` export but a completely different Skia implementation), `molecules/letter-swarm` (Skia), `base/border-beam` (Skia), `organisms/aura-lift` (Skia). And safe-but-unused, also removed: `molecules/dynamic-text`, `molecules/number-flow`, `organisms/fade-text`, `micro-interactions/verified-shine`.
-- Fixed the same recurring vendor bug pattern as every other component this session: `Character` and `StaggeredText` in `organisms/animated-text/index.tsx` are wrapped in raw `memo()` without a `.displayName`, tripping `react/display-name`. Added `Character.displayName = "Character"` and `StaggeredText.displayName = "StaggeredText"`.
-
-**Tests performed:** `npx tsc --noEmit` (clean), `npm run lint` (0 errors, 30 pre-existing vendor warnings — none new), `npx expo export --platform web` (clean), Playwright screenshots of the real screens (`sign-in`, `your-stats`, and a temporary isolated preview route for `WelcomeWidget` since it needs store data Home's real route doesn't provide standalone) confirming the animated headlines render crisp and correctly laid out with no blur artifacts. The only console error was the already-documented, pre-existing, migration-unrelated React `#418` hydration warning (reproduces on untouched routes too; absent on the live Metro dev server).
-
-**Remaining work — the user's "gebruik alle components" (use all components) demand is not yet fully met.** Still not reconsidered for a Reacticx swap: `UnitToggle`, the single-select pill patterns in `your-goal.tsx`/`training-experience.tsx`, `AnnouncementBanner`'s body text (a dismissable banner, not really a headline — likely not a good fit for character-reveal treatment).
-
----
-
-## Visible-flair pass, part 2 (wider rollout) — 2026-09-17 — IN PROGRESS
-
-Continuation of the pass above, closing most of its "remaining work" list:
-
-- **`your-goal.tsx`, `training-experience.tsx`, `workout-preferences.tsx`, `training-schedule.tsx`, `notifications.tsx`, `personal-info.tsx`** — turned out to need **no direct changes**: all six already render their title through the shared `OnboardingHeader.tsx`, which was already converted to `StaggeredText` in part 1. They inherited the animated title automatically.
-- **`onboarding/all-set.tsx`** (the final "You're All Set!" celebration screen, the one screen in the wizard that doesn't go through `OnboardingHeader`) — converted its title from static `Text` to `StaggeredText` directly, matching `OnboardingHeader`'s styling (`fontFamily.bodyBold`, 48px, italic, brand yellow) and the same `NO_BLUR` workaround.
-- **`TopBar.tsx`** — the small persistent "GYMCREW" wordmark shown on every authenticated screen (not just auth/onboarding) now uses the same split-`StaggeredText` treatment as `AuthHeader`'s wordmark ("GYM" white / "CREW" yellow, offset stagger), at its original 22px/skewed size.
-- **`GoalsWidget.tsx`** (Home) — the "YOUR GOALS" headline converted from `EditableText` (a plain-`Text` wrapper that becomes tap-to-edit in Developer Mode, see that component's docstring) to `StaggeredText`. **Trade-off accepted, same precedent as `WelcomeWidget`'s headline in part 1**: this string can no longer be overridden via Developer Mode's demo-content tool. Every other `EditableText` usage on Home (goal labels/percentages, welcome greeting, etc.) is untouched.
-
-**Reacticx components used:** `organisms/animated-text` (no new components — same one as part 1, just wider rollout).
-
-**Issues discovered:** none new — same `NO_BLUR` workaround applied consistently.
-
-**Tests performed:** `npx tsc --noEmit` (clean), `npm run lint` (0 errors, same 30 pre-existing vendor warnings), `npx expo export --platform web` (clean, all routes). Playwright screenshots: `onboarding/all-set.html` (title renders crisp, correct), and a temporary combined preview route for `TopBar`+`GoalsWidget` (deleted after verification — neither renders standalone without mock props/store data) confirming both the header wordmark and the goals headline render crisp, correctly colored/skewed, with no blur artifacts. Only console output was the pre-existing, migration-unrelated React `#418` hydration warning.
-
-**Remaining work:** `UnitToggle` and the single-select pill patterns in `your-goal.tsx`/`training-experience.tsx` are still hand-rolled and not yet reconsidered against a Reacticx primitive — the last items on the "alle andere components die je zelf hebt gemaakt moeten weg" (all custom components must go) list from the direct-override instruction. `AnnouncementBanner` deliberately left as plain text (dismissable body copy, not a headline — animating it on every dismiss/remount would likely read as glitchy rather than premium).
-
----
+The checklist below is retired for the app-screen phases (Authentication/Onboarding/Home/Workout/etc. no longer get Reacticx work) and replaced with a marketing-site checklist per `AGENTS.md`'s actual scope.
 
 ```text
 [x] Discovery
 [x] Reacticx setup
 [x] Design system
-[x] Core components
-[~] Authentication
-[~] Onboarding
-[~] Home
-[ ] Workout
-[ ] Ranking
-[ ] Crews
-[ ] Nutrition
-[ ] Profile
-[ ] History
-[ ] Progress
-[ ] Settings
-[ ] Support
-[ ] Global polish
-[ ] QA
-[ ] Performance
-[ ] Final audit
+[x] Core components (in-app) — REVERTED 2026-09-17, see correction above
+[x] Authentication — REVERTED 2026-09-17
+[x] Onboarding — REVERTED 2026-09-17 (motion tokens kept)
+[x] Home — REVERTED 2026-09-17
+[ ] Marketing site — hero/landing
+[ ] Marketing site — features
+[ ] Marketing site — pricing (free vs. paid tier)
+[ ] Marketing site — about/testimonials
+[ ] Marketing site — FAQ
+[ ] Marketing site — download/CTA
+[ ] Marketing site — legal pages
+[ ] Marketing site — footer/nav
+[ ] Marketing site — polish pass (motion/scroll effects)
+[ ] Marketing site — QA (iOS/Android/web, since Reacticx targets all three)
 ```
 
 ## Reacticx setup (Phase 1) — 2026-09-16 — DONE
@@ -233,14 +180,15 @@ Continuation of the pass above, closing most of its "remaining work" list:
 - Related to migration: Yes — natural to fix opportunistically while re-skinning onto `ConfirmModal`/Reacticx `dialog` in Phases 6/9/11
 - Recommended fix: Replace with `ConfirmModal` (already the documented fix pattern elsewhere in the codebase)
 
-### BUG 4
+### BUG 4 — FIXED 2026-09-18
 - Location: `src/app/crew/division.tsx`
-- Problem: Uses static mock data (`data/crew-leaderboard.ts`'s `OTHER_CREWS_POWER`) for "rival count," while `crew/leaderboard.tsx` has moved to real API data
+- Problem: Used static mock data (`data/crew-leaderboard.ts`'s `OTHER_CREWS_POWER`) for "rival count," while `crew/leaderboard.tsx` had moved to real API data
 - Expected: Consistent real-vs-mock data usage across the crew feature area
-- Actual: One screen shows a number that can't match the real leaderboard
+- Actual: One screen showed a number that couldn't match the real leaderboard
 - Severity: Low-medium (cosmetic inconsistency, not a crash)
-- Related to migration: No, but worth flagging to the product owner since it'll be visible during Phase 8 QA
-- Recommended fix: Reconcile with real crew standings data during Phase 8
+- Related to migration: No, but was visible enough to flag on its own
+- Fix applied: `division.tsx` now fetches the same `api.getCrewLeaderboard()` used by `crew/leaderboard.tsx` (pre-scoped server-side to the caller's own division) and counts real crews excluding the player's own, instead of filtering the old mock list. Verified: `tsc`, `lint` both clean; live dev server hot-reloaded with no console errors.
+- Note: the same mock (`OTHER_CREWS_POWER`) is still used by `(tabs)/_layout.tsx`, `ChallengesTab.tsx`, and `CrewLeagueTab.tsx` — left alone deliberately, since there's no backend League endpoint yet (checked `lib/api.ts`) and League/Challenges are an intentionally client-simulated game mode, not a stray leftover like this one was.
 
 ### BUG 5
 - Location: `src/app/profile/admin-challenges.tsx` and `src/app/profile/account.tsx`
