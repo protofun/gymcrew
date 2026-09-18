@@ -21,11 +21,18 @@
  * generateDueBotAttacks). This is what powers the attack feed, not just a running total.
  *
  * Routes (all require auth, see index.php):
- *   GET  /crew-wars/active  -> this crew's current War, or `{ war: null }` if it has none and
- *                              auto-match is off — never silently starts one in that case
- *   POST /crew-wars/start   -> leader/co-leader only: start (or match into) a War right now,
- *                              regardless of the auto-match setting
- *   POST /crew-wars/attack  -> record one attack from the caller's just-finished workout
+ *   GET  /crew-wars/active         -> this crew's current War, or `{ war: null }` if it has none and
+ *                                     auto-match is off — never silently starts one in that case
+ *   POST /crew-wars/start          -> leader/co-leader only: start (or match into) a War right now,
+ *                                     regardless of the auto-match setting
+ *   POST /crew-wars/attack         -> record one attack from the caller's just-finished workout
+ *   GET  /crew-wars/last-completed -> this crew's most recently finished War (win/loss/draw), or
+ *                                     `{ war: null }` if it has never had one. Separate from `active`
+ *                                     because `getOrStartWar` below always replaces a just-ended War
+ *                                     with a fresh one in the same call (when auto-match is on) — a
+ *                                     completed War is otherwise never actually visible through
+ *                                     `active`, which is what left the client's own "War Won!" UI and
+ *                                     win-bonus grant unreachable before this endpoint existed.
  */
 function handleCrewWars(PDO $pdo, string $userId, string $method, ?array $body, array $segments): void
 {
@@ -43,6 +50,11 @@ function handleCrewWars(PDO $pdo, string $userId, string $method, ?array $body, 
 
     if ($sub === 'attack' && $method === 'POST') {
         recordAttack($pdo, $userId, $body ?? []);
+        return;
+    }
+
+    if ($sub === 'last-completed' && $method === 'GET') {
+        respondWithLastCompletedWar($pdo, $userId);
         return;
     }
 
@@ -184,6 +196,19 @@ function activeWarForCrew(PDO $pdo, string $crewId): ?array
 {
     $stmt = $pdo->prepare(
         "SELECT * FROM crew_wars WHERE (crew_a_id = ? OR crew_b_id = ?) ORDER BY created_at DESC LIMIT 1"
+    );
+    $stmt->execute([$crewId, $crewId]);
+    $war = $stmt->fetch();
+    return $war ?: null;
+}
+
+/** This crew's single most recent finished War, independent of whatever War (if any) is active now
+ * — a genuinely different row once a new War has started, unlike `activeWarForCrew`. */
+function lastCompletedWarForCrew(PDO $pdo, string $crewId): ?array
+{
+    $stmt = $pdo->prepare(
+        "SELECT * FROM crew_wars WHERE (crew_a_id = ? OR crew_b_id = ?) AND status = 'completed'
+         ORDER BY created_at DESC LIMIT 1"
     );
     $stmt->execute([$crewId, $crewId]);
     $war = $stmt->fetch();
@@ -415,6 +440,30 @@ function respondWithActiveWar(PDO $pdo, string $userId): void
     $war = $stmt->fetch();
 
     jsonResponse(['war' => warJson($pdo, $war, $crewId)]);
+}
+
+/**
+ * The crew's most recently finished War — for the shareable end-of-War recap (final score, MVP
+ * contributor, win/loss/draw), so it's not just something that quietly disappears the moment a new
+ * War auto-starts. Resolves any War that's simply timed out first (nobody may have hit `/active`
+ * since it ended), the same way `getOrStartWar` would, so this is correct even if it's the very
+ * first crew-war request this session.
+ */
+function respondWithLastCompletedWar(PDO $pdo, string $userId): void
+{
+    $crewId = findMyCrewId($pdo, $userId);
+    if ($crewId === null) {
+        jsonResponse(['war' => null]);
+        return;
+    }
+
+    $existing = activeWarForCrew($pdo, $crewId);
+    if ($existing !== null) {
+        resolveWarIfEnded($pdo, $existing);
+    }
+
+    $war = lastCompletedWarForCrew($pdo, $crewId);
+    jsonResponse(['war' => $war === null ? null : warJson($pdo, $war, $crewId)]);
 }
 
 /** A member explicitly asking for a War right now — see `getOrStartWar`'s `$force = true` path.

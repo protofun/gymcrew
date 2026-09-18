@@ -13,8 +13,10 @@ import { ChallengesTab } from "@/components/ChallengesTab";
 import { CrewActivitySheet } from "@/components/CrewActivitySheet";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { CrewFeedList } from "@/components/CrewFeedList";
+import { CrewLeagueRecapCard } from "@/components/CrewLeagueRecapCard";
 import { CrewLeagueTab } from "@/components/CrewLeagueTab";
 import { CrewRivalsTab } from "@/components/CrewRivalsTab";
+import { CrewWarRecapCard } from "@/components/CrewWarRecapCard";
 import { CrewWarTab } from "@/components/CrewWarTab";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { EditableText } from "@/components/EditableText";
@@ -22,6 +24,7 @@ import { GoalRing } from "@/components/GoalRing";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { PeerDuelsCard } from "@/components/PeerDuelsCard";
 import { ProgressBar } from "@/components/ProgressBar";
+import { ShareCardModal } from "@/components/ShareCardModal";
 import { StatsTab } from "@/components/StatsTab";
 import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
 import { exerciseImages, images, rankTierImages } from "@/constants/images";
@@ -38,8 +41,11 @@ import { formatShortAgo } from "@/lib/time-since";
 import { formatWeight } from "@/lib/units";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
+import { useCrewLeagueStore } from "@/store/crew-league-store";
 import { CURRENT_MEMBER_ID, useCrewStore } from "@/store/crew-store";
+import { useCrewWarStore } from "@/store/crew-war-store";
 import { useCustomExercisesStore } from "@/store/custom-exercises-store";
+import { TOKENS_PER_BATTLE_WIN, useCurrencyStore } from "@/store/currency-store";
 import { useLedWorkoutStore } from "@/store/led-workout-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
@@ -47,6 +53,9 @@ import { useSyncStatusStore } from "@/store/sync-status-store";
 import { useTodayTrainingStore } from "@/store/today-training-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
+
+/** Bonus crew XP for actually winning a War — same shape/value as ChallengesTab's BATTLE_WIN_XP_BONUS. */
+const WAR_WIN_XP_BONUS = 200;
 
 const TABS = ["Overview", "War", "League", "Challenges", "Rivals", "Stats", "Settings"] as const;
 type CrewTab = (typeof TABS)[number];
@@ -556,8 +565,32 @@ export default function CrewScreen() {
   const today = useTodayWorkout();
   const hasCrew = useCrewStore((state) => state.members.length > 0);
   const crewId = useCrewStore((state) => state.id);
+  const crewName = useCrewStore((state) => state.name);
+  const crewIcon = useCrewStore((state) => state.icon);
+  const addCrewXp = useCrewStore((state) => state.addXp);
   const fetchCrewActivity = useCrewActivityStore((state) => state.fetchForCrew);
   const hasSyncedOnce = useSyncStatusStore((state) => state.hasSyncedOnce);
+  const weightUnit = useWeightUnit();
+
+  // End-of-War recap (see CrewWarRecapCard) — `lastCompletedWar` is a separate fetch from `war`
+  // above because the backend always replaces a just-ended War with a fresh one the instant
+  // there's no active one (see getActiveWar's doc comment), so a completed War is otherwise never
+  // actually visible to the client at all.
+  const lastCompletedWar = useCrewWarStore((state) => state.lastCompletedWar);
+  const fetchLastCompletedWar = useCrewWarStore((state) => state.fetchLastCompleted);
+  const rewardedWarIds = useCrewWarStore((state) => state.rewardedWarIds);
+  const markWarRewarded = useCrewWarStore((state) => state.markRewarded);
+  const seenWarRecapIds = useCrewWarStore((state) => state.seenRecapWarIds);
+  const markWarRecapSeen = useCrewWarStore((state) => state.markRecapSeen);
+  const grantTokens = useCurrencyStore((state) => state.grantTokens);
+
+  // End-of-League-week recap (see CrewLeagueRecapCard) — `history[0]` is always the most recently
+  // finalized week the moment syncWeek (called from (tabs)/_layout.tsx) computes it, so there's no
+  // separate fetch needed the way the War recap needs one.
+  const leagueHistory = useCrewLeagueStore((state) => state.history);
+  const seenLeagueRecapWeekKeys = useCrewLeagueStore((state) => state.seenRecapWeekKeys);
+  const markLeagueRecapSeen = useCrewLeagueStore((state) => state.markRecapSeen);
+  const latestLeagueWeek = leagueHistory[0] ?? null;
 
   // `session.leaderId`/`participantIds` are real Clerk ids from the backend, not the local
   // CURRENT_MEMBER_ID alias crew-store.ts remaps "me" to within `members` — see its doc comment.
@@ -593,6 +626,29 @@ export default function CrewScreen() {
     };
   }, [crewId, refreshLiveSession]);
 
+  useEffect(() => {
+    if (!crewId) return;
+    let cancelled = false;
+    waitForAuthToken().then(() => {
+      if (!cancelled) fetchLastCompletedWar();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [crewId, fetchLastCompletedWar]);
+
+  // Grants the War win bonus exactly once per War, the first time any device notices it was
+  // actually won — moved here from CrewWarTab so it fires the moment `lastCompletedWar` loads,
+  // regardless of which crew sub-tab happens to be open, not only when a member visits War specifically.
+  useEffect(() => {
+    if (lastCompletedWar && lastCompletedWar.won === true && !rewardedWarIds.includes(lastCompletedWar.id)) {
+      addCrewXp(WAR_WIN_XP_BONUS, `war:${lastCompletedWar.id}`);
+      grantTokens(TOKENS_PER_BATTLE_WIN);
+      markWarRewarded(lastCompletedWar.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastCompletedWar?.id, lastCompletedWar?.won]);
+
   // Same "wait for the real database pull before showing anything" gate as (tabs)/home.tsx — see
   // sync-status-store.ts. Blocks on the same sign-in sync, so a stale/local crew state (or none at
   // all yet) never flashes before the real one arrives.
@@ -611,6 +667,12 @@ export default function CrewScreen() {
       </ScrollView>
     );
   }
+
+  const warRecapVisible = !!lastCompletedWar && !seenWarRecapIds.includes(lastCompletedWar.id);
+  // Only one recap modal on screen at a time — a War and a League week finishing in the same visit
+  // is rare, but stacking two full-screen "share this" modals would be worse than just showing the
+  // War one first and letting the League one surface the next time this screen mounts.
+  const leagueRecapVisible = !warRecapVisible && !!latestLeagueWeek && !seenLeagueRecapWeekKeys.includes(latestLeagueWeek.weekKey);
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
@@ -687,6 +749,28 @@ export default function CrewScreen() {
         }}
         onClearOverride={clearTodayOverride}
       />
+
+      {lastCompletedWar && (
+        <ShareCardModal
+          visible={warRecapVisible}
+          onClose={() => markWarRecapSeen(lastCompletedWar.id)}
+          fallbackMessage={`${crewName} ${
+            lastCompletedWar.won === true ? "won" : lastCompletedWar.won === false ? "lost" : "drew"
+          } their Crew War vs ${lastCompletedWar.opponent.name} — ${formatWeight(lastCompletedWar.myScore, weightUnit)} vs ${formatWeight(lastCompletedWar.opponentScore, weightUnit)}. 💪`}
+        >
+          <CrewWarRecapCard war={lastCompletedWar} crewName={crewName} crewIcon={crewIcon} />
+        </ShareCardModal>
+      )}
+
+      {latestLeagueWeek && (
+        <ShareCardModal
+          visible={leagueRecapVisible}
+          onClose={() => markLeagueRecapSeen(latestLeagueWeek.weekKey)}
+          fallbackMessage={`${crewName} finished #${latestLeagueWeek.myRank} of ${latestLeagueWeek.totalCrews} in the ${latestLeagueWeek.division} League this week!`}
+        >
+          <CrewLeagueRecapCard result={latestLeagueWeek} crewName={crewName} crewIcon={crewIcon} />
+        </ShareCardModal>
+      )}
     </ScrollView>
   );
 }

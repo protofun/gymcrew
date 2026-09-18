@@ -459,6 +459,11 @@ export const api = {
       method: "POST",
       body: { volumeKg, prCount, workoutName },
     }),
+  /** This crew's most recently finished War (for the shareable end-of-War recap) — independent of
+   * `getActiveWar`, which replaces a just-ended War with a fresh one in the same call whenever
+   * auto-match is on, so a completed War is otherwise never actually visible to the client. `null`
+   * if this crew has never finished one. */
+  getLastCompletedWar: () => request<ApiActiveWarResponse>("/crew-wars/last-completed"),
 
   /** Real, crew-shared "someone's currently training" state (see backend/routes/crew-live-sessions.php)
    * — replaces the old hardcoded `led-workout` mock. No pre-planning: `startLiveSession` is called the

@@ -34,6 +34,9 @@ type CrewLeagueState = {
   weekKey: string;
   /** Finalized past weeks, newest first. */
   history: LeagueWeekResult[];
+  /** Week keys whose shareable end-of-week recap card has already been shown and dismissed —
+   * persisted so it doesn't pop up again on every later visit, only once per finalized week. */
+  seenRecapWeekKeys: string[];
 };
 
 type SyncWeekInput = {
@@ -50,6 +53,7 @@ type CrewLeagueActions = {
    * to the crew's division, and refreshes `crewPower`/`divisionTopPercentile` on crew-store. */
   syncWeek: (input: SyncWeekInput) => void;
   syncFromServer: () => Promise<void>;
+  markRecapSeen: (weekKey: string) => void;
 };
 
 export const useCrewLeagueStore = create<CrewLeagueState & CrewLeagueActions>()(
@@ -57,6 +61,7 @@ export const useCrewLeagueStore = create<CrewLeagueState & CrewLeagueActions>()(
     (set, get) => ({
       weekKey: currentWeekKey(),
       history: [],
+      seenRecapWeekKeys: [],
       syncWeek: ({ myCrewName, myCrewPower, rivalCrews, computeWeeklyPower }) => {
         const state = get();
         const nowWeekKey = currentWeekKey();
@@ -107,6 +112,7 @@ export const useCrewLeagueStore = create<CrewLeagueState & CrewLeagueActions>()(
         pushState("crew-league", next);
       },
       syncFromServer: () => pullState<CrewLeagueState>("crew-league", (data) => set(data)),
+      markRecapSeen: (weekKey) => set((state) => ({ seenRecapWeekKeys: [...state.seenRecapWeekKeys, weekKey] })),
     }),
     {
       name: "gymcrew-crew-league",

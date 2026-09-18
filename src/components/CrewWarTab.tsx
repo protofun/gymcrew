@@ -10,12 +10,9 @@ import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { formatShortAgo } from "@/lib/time-since";
 import { formatWeight } from "@/lib/units";
 import { CURRENT_MEMBER_ID, useCrewStore } from "@/store/crew-store";
-import { TOKENS_PER_BATTLE_WIN, useCurrencyStore } from "@/store/currency-store";
 import { useCrewWarStore } from "@/store/crew-war-store";
 import { colors, fontFamily } from "@/theme";
 
-/** Bonus crew XP for actually winning a War — same shape/value as ChallengesTab's BATTLE_WIN_XP_BONUS. */
-const WAR_WIN_XP_BONUS = 200;
 /** Below this much time left, the subtitle switches from flavor text to concrete urgency framing. */
 const URGENCY_THRESHOLD_MS = 12 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -43,19 +40,14 @@ function formatCountdown(remainingSeconds: number): string {
 export function CrewWarTab() {
   const war = useCrewWarStore((state) => state.war);
   const loading = useCrewWarStore((state) => state.loading);
-  const rewardedWarIds = useCrewWarStore((state) => state.rewardedWarIds);
   const refresh = useCrewWarStore((state) => state.refresh);
   const startWar = useCrewWarStore((state) => state.startWar);
-  const markRewarded = useCrewWarStore((state) => state.markRewarded);
 
   const crewName = useCrewStore((state) => state.name);
   const crewIcon = useCrewStore((state) => state.icon);
   const crewDivision = useCrewStore((state) => state.division);
-  const warAutoMatchEnabled = useCrewStore((state) => state.warAutoMatchEnabled);
-  const addCrewXp = useCrewStore((state) => state.addXp);
   const myRole = useCrewStore((state) => state.members.find((member) => member.id === CURRENT_MEMBER_ID)?.role);
   const canStartWar = myRole === "leader" || myRole === "co-leader";
-  const grantTokens = useCurrencyStore((state) => state.grantTokens);
   const weightUnit = useWeightUnit();
 
   const [startingWar, setStartingWar] = useState(false);
@@ -75,16 +67,6 @@ export function CrewWarTab() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Grants the win bonus exactly once per War, the first time any device notices it was actually won.
-  useEffect(() => {
-    if (war && war.status === "completed" && war.won === true && !rewardedWarIds.includes(war.id)) {
-      addCrewXp(WAR_WIN_XP_BONUS, `war:${war.id}`);
-      grantTokens(TOKENS_PER_BATTLE_WIN);
-      markRewarded(war.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [war?.id, war?.status, war?.won]);
 
   const maxScore = war ? Math.max(war.myScore, war.opponentScore, 1) : 1;
   const remainingMs = remainingSeconds * 1000;
@@ -210,25 +192,7 @@ export function CrewWarTab() {
             </View>
           )}
         </Animated.View>
-      ) : (
-        <Animated.View
-          entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)}
-          className={`items-center gap-2 rounded-2xl border p-5 ${war.won === true ? "border-success bg-success/10" : "border-divider bg-surface"}`}
-        >
-          <Ionicons
-            name={war.won === true ? "trophy" : war.won === false ? "sad-outline" : "remove-circle-outline"}
-            size={28}
-            color={war.won === true ? colors.semantic.success : colors.neutral.textSecondary}
-          />
-          <Text className="heading-4 text-text-primary">{war.won === true ? "War Won!" : war.won === false ? "War Lost" : "It's a Draw"}</Text>
-          <Text className="body-sm text-center text-text-secondary">
-            {crewName} · {formatWeight(war.myScore, weightUnit)} vs {war.opponent.name} · {formatWeight(war.opponentScore, weightUnit)}
-          </Text>
-          <Text className="caption text-center text-text-secondary">
-            {warAutoMatchEnabled ? "A new War starts automatically." : "Auto-match is off — come back to this tab to start the next one when ready."}
-          </Text>
-        </Animated.View>
-      )}
+      ) : null}
 
       {war && war.recentAttacks.length > 0 && (
         <Animated.View entering={FadeInUp.delay(160).springify().damping(16).mass(0.6)} className="gap-2.5 rounded-2xl border border-divider bg-surface p-4">

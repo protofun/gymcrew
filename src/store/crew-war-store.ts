@@ -10,6 +10,13 @@ type CrewWarState = {
   /** War ids whose win reward has already been granted — persisted so reopening the app after a
    * War resolves (or refreshing the tab again) never double-grants the bonus. */
   rewardedWarIds: string[];
+  /** This crew's most recently finished War, for the shareable end-of-War recap card — see
+   * `fetchLastCompleted`. Independent of `war` above, which never actually holds a completed War
+   * (see getActiveWar's doc comment on why). */
+  lastCompletedWar: ApiCrewWar | null;
+  /** War ids whose recap card has already been shown and dismissed — persisted so it doesn't pop
+   * up again on every later visit to the Crew tab, only once per War. */
+  seenRecapWarIds: string[];
 };
 
 type CrewWarActions = {
@@ -25,6 +32,11 @@ type CrewWarActions = {
    * workout/active.tsx). No-op below zero volume. */
   attack: (volumeKg: number, prCount: number, workoutName: string) => Promise<{ score: number } | null>;
   markRewarded: (warId: string) => void;
+  /** Pulls this crew's most recently finished War, if any — call whenever the Crew tab mounts, same
+   * as `refresh`, so the recap card (and the reward grant it's paired with) can show up the moment
+   * there's a fresh one to show, not only when the War tab specifically happens to be open. */
+  fetchLastCompleted: () => Promise<void>;
+  markRecapSeen: (warId: string) => void;
 };
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -35,6 +47,8 @@ export const useCrewWarStore = create<CrewWarState & CrewWarActions>()(
       war: null,
       loading: false,
       rewardedWarIds: [],
+      lastCompletedWar: null,
+      seenRecapWarIds: [],
 
       refresh: async () => {
         if (!isApiConfigured) return;
@@ -47,6 +61,18 @@ export const useCrewWarStore = create<CrewWarState & CrewWarActions>()(
           set({ loading: false });
         }
       },
+
+      fetchLastCompleted: async () => {
+        if (!isApiConfigured) return;
+        try {
+          const { war } = await api.getLastCompletedWar();
+          set({ lastCompletedWar: war });
+        } catch (error) {
+          console.warn("Failed to fetch last completed crew War", error);
+        }
+      },
+
+      markRecapSeen: (warId) => set((state) => ({ seenRecapWarIds: [...state.seenRecapWarIds, warId] })),
 
       startWar: async () => {
         if (!isApiConfigured) return { ok: false, error: "Not connected to the server." };
