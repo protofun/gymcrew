@@ -12,6 +12,14 @@ export type ChangelogEntry = {
 /** Newest first — top of the list renders first. Add new entries to the top when shipping. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "division-rival-count-fix",
+    publishedAtMs: Date.UTC(2026, 8, 18),
+    type: "bug",
+    title: "Fixed rival count on the Division Info screen",
+    description:
+      "The \"Battles vs N Rival Crews\" line on your Division Info screen could show a different number than the real Leaderboard. It now always matches — both pull from the same live crew standings.",
+  },
+  {
     id: "onboarding-rank-reveal",
     publishedAtMs: Date.UTC(2026, 8, 15),
     type: "feature",

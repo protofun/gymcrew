@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -7,8 +8,7 @@ import { goBack } from "@/lib/navigation";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { EditableText } from "@/components/EditableText";
 import { ProgressBar } from "@/components/ProgressBar";
-import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
-import { sameDivisionRivals } from "@/lib/crew-league";
+import { api, isApiConfigured, type ApiCrewLeaderboardEntry } from "@/lib/api";
 import { DIVISION_COLOR, nextDivision, xpRequiredFor } from "@/lib/division";
 import { useCrewStore } from "@/store/crew-store";
 import { colors } from "@/theme";
@@ -18,10 +18,20 @@ export default function DivisionInfoScreen() {
   const division = useCrewStore((state) => state.division);
   const divisionTopPercentile = useCrewStore((state) => state.divisionTopPercentile);
   const xp = useCrewStore((state) => state.xp);
+  const myCrewId = useCrewStore((state) => state.id);
   const xpNeeded = xpRequiredFor(division);
   const next = nextDivision(division);
 
-  const rivalCount = sameDivisionRivals(OTHER_CREWS_POWER, division).length;
+  // Real data — see crew/leaderboard.tsx's respondWithCrewLeaderboard fetch, which already
+  // replaced the old static `OTHER_CREWS_POWER` mock. Pre-scoped to my crew's own division
+  // server-side, so no local division filtering needed here.
+  const [crews, setCrews] = useState<ApiCrewLeaderboardEntry[]>([]);
+  useEffect(() => {
+    if (!isApiConfigured) return;
+    api.getCrewLeaderboard().then((result) => setCrews(result.crews)).catch((error) => console.warn("Failed to load crew leaderboard", error));
+  }, []);
+
+  const rivalCount = crews.filter((crew) => crew.id !== myCrewId).length;
   const rewards = [
     { key: "league", label: "Weekly League Standings", unlocked: true },
     { key: "badge", label: "Division Badge", unlocked: true },
