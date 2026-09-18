@@ -21,7 +21,7 @@ type ToggleKey = "workoutReminders" | "crewChallengeAlerts" | "progressUpdates" 
 
 const TOGGLES: { key: ToggleKey; label: string; description: string }[] = [
   { key: "workoutReminders", label: "Workout Reminders", description: "Nudges to keep your streak going" },
-  { key: "crewChallengeAlerts", label: "Crew & Challenge Alerts", description: "PRs from teammates and new challenges" },
+  { key: "crewChallengeAlerts", label: "Crew & Challenge Alerts", description: "PRs from teammates, new challenges, and weekly crew training tips" },
   { key: "progressUpdates", label: "Progress Updates", description: "Weekly recaps and \"You're X% stronger\" updates" },
   { key: "creatineReminders", label: "Creatine Reminder", description: "A daily nudge to take your creatine" },
   { key: "marketingTips", label: "Tips & Product News", description: "Occasional training tips and app updates" },

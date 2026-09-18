@@ -109,10 +109,15 @@ export default function TabsLayout() {
   // Real crewmate workouts/PRs for the league power calculation above (and for the Crew tab's
   // Overview/Stats cards) — fetched here too, not just when the Crew tab happens to be open, so the
   // weekly league advances correctly from real data even if the user never visits that tab.
+  // Re-reconciling notification schedules once this resolves matters specifically for the crew
+  // muscle-balance nudge (see push-notifications.ts) — the sign-in sync's own reconcile call can
+  // land before this fetch does, computing that nudge from an empty `membersActivity` (i.e. only
+  // this device's own workouts). Every other reminder only reads already-loaded local stores, so
+  // this is the one that needs a second pass once real crewmate data actually arrives.
   const crewId = useCrewStore((state) => state.id);
   const fetchCrewActivity = useCrewActivityStore((state) => state.fetchForCrew);
   useEffect(() => {
-    if (crewId) fetchCrewActivity(crewId);
+    if (crewId) fetchCrewActivity(crewId).then(() => reconcileNotificationSchedules());
   }, [crewId, fetchCrewActivity]);
 
   // The crew-internal motivation feed (see crew-feed-store.ts) — fetched here too, not just when

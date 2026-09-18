@@ -3,12 +3,16 @@ import { Platform } from "react-native";
 
 import { api, isApiConfigured } from "@/lib/api";
 import { toDateKey } from "@/lib/date";
+import { mostNeglectedCrewMuscleGroup } from "@/lib/crew-muscle-balance";
+import { formatMuscleLabel } from "@/lib/muscle-groups";
 import { STREAK_NOTIFY_MIN_DAYS } from "@/lib/notifications";
 import { computeCurrentStreak } from "@/lib/streak";
 import { computeStrongestMonthlyGain } from "@/lib/strength-trend";
 import { showToast } from "@/lib/toast";
 import { formatWeight } from "@/lib/units";
 import { computeWeeklyRecap } from "@/lib/weekly-recap";
+import { useCrewActivityStore } from "@/store/crew-activity-store";
+import { useCrewStore } from "@/store/crew-store";
 import { useCurrencyStore } from "@/store/currency-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
@@ -217,6 +221,34 @@ async function scheduleStrongerProgressReminder(unit: "kg" | "lbs"): Promise<voi
   });
 }
 
+const CREW_MUSCLE_BALANCE_ID = "gymcrew-reminder-crew-muscle-balance";
+
+/**
+ * "Crew's skipping X this week" nudge, every Wednesday 6pm — mid-week rather than alongside the
+ * Monday recap, since this one's meant to be acted on (there's still time left in the week to train
+ * the group), not just read. Content is the crew's single most-neglected muscle group per
+ * `mostNeglectedCrewMuscleGroup` — only scheduled when that resolves to a real group; cancelled
+ * otherwise so a solo account or a genuinely balanced week never gets a hollow nudge.
+ */
+async function scheduleCrewMuscleBalanceReminder(neglectedGroup: ReturnType<typeof mostNeglectedCrewMuscleGroup>): Promise<void> {
+  if (Platform.OS === "web") return;
+  await Notifications.cancelScheduledNotificationAsync(CREW_MUSCLE_BALANCE_ID).catch(() => {});
+
+  if (!neglectedGroup) return;
+
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== "granted") return;
+
+  await Notifications.scheduleNotificationAsync({
+    identifier: CREW_MUSCLE_BALANCE_ID,
+    content: {
+      title: "Crew training tip",
+      body: `Your crew's been skipping ${formatMuscleLabel(neglectedGroup).toLowerCase()} this week — anyone up for it?`,
+    },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: 4, hour: 18, minute: 0 },
+  });
+}
+
 /**
  * Re-applies both reminder toggles' current effective state (`?? true`, same fallback the settings
  * screens use) to this device's actual OS-level schedule. Needed because a scheduled local
@@ -272,5 +304,19 @@ export async function reconcileNotificationSchedules(): Promise<void> {
   } else {
     await Notifications.cancelScheduledNotificationAsync(WEEKLY_RECAP_ID).catch(() => {});
     await Notifications.cancelScheduledNotificationAsync(STRONGER_PROGRESS_ID).catch(() => {});
+  }
+
+  // Piggybacks on "Crew & Challenge Alerts" — a crew-wide signal (which muscle group the whole
+  // crew is neglecting), not a personal one, so it belongs with the other crew-activity pushes
+  // rather than "Progress Updates". Only meaningful with a real crew to aggregate across.
+  const crewAlertsEnabled = onboarding.crewChallengeAlerts ?? true;
+  const crewMembers = useCrewStore.getState().members;
+  if (crewAlertsEnabled && crewMembers.length > 0) {
+    const workouts = useWorkoutHistoryStore.getState().workouts;
+    const membersActivity = useCrewActivityStore.getState().membersActivity;
+    const neglectedGroup = mostNeglectedCrewMuscleGroup(crewMembers, workouts, membersActivity);
+    await scheduleCrewMuscleBalanceReminder(neglectedGroup);
+  } else {
+    await Notifications.cancelScheduledNotificationAsync(CREW_MUSCLE_BALANCE_ID).catch(() => {});
   }
 }
