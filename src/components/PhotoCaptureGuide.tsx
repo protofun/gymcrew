@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Ellipse, Path } from "react-native-svg";
@@ -13,6 +13,12 @@ const GUIDE_WIDTH = 200;
 const GUIDE_HEIGHT = 420;
 
 const POSE_LABEL: Record<ProgressPhotoPose, string> = { front: "Front", side: "Side", back: "Back" };
+
+/** 0 means "off" (capture immediately). Cycled with one tap, same idea as the pose picker below —
+ * a fixed small set rather than a free-form time input, since this is a "step back and pose"
+ * convenience, not something worth a full picker UI for. */
+const TIMER_OPTIONS = [0, 3, 5, 10] as const;
+type TimerSeconds = (typeof TIMER_OPTIONS)[number];
 
 /** A single generic body-outline guide, not pose-specific art — good enough to line up distance and
  * framing consistently between shoots (the actual goal), without needing three illustrated poses. */
@@ -45,10 +51,11 @@ export function PhotoCaptureGuide({ pose, onCapture, onCancel }: Props) {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [capturing, setCapturing] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState<TimerSeconds>(0);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const cameraRef = useRef<CameraView>(null);
 
-  async function handleCapture() {
-    if (capturing) return;
+  async function takePicture() {
     setCapturing(true);
     try {
       const photo = await cameraRef.current?.takePictureAsync({ base64: true, quality: 0.7 });
@@ -58,6 +65,39 @@ export function PhotoCaptureGuide({ pose, onCapture, onCancel }: Props) {
     } finally {
       setCapturing(false);
     }
+  }
+
+  // Ticks the on-screen countdown down to 1, then fires the real capture — a plain setInterval
+  // rather than scheduling N separate timeouts, so there's one single place that owns "what's left"
+  // and cancelling mid-countdown (see handleCancelCountdown) can't leave a stray later tick pending.
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      setCountdown(null);
+      takePicture();
+      return;
+    }
+    const id = setTimeout(() => setCountdown(countdown - 1), 1000);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown]);
+
+  function handleCapture() {
+    if (capturing || countdown !== null) return;
+    if (timerSeconds > 0) {
+      setCountdown(timerSeconds);
+    } else {
+      takePicture();
+    }
+  }
+
+  function handleCancelCountdown() {
+    setCountdown(null);
+  }
+
+  function cycleTimer() {
+    const currentIndex = TIMER_OPTIONS.indexOf(timerSeconds);
+    setTimerSeconds(TIMER_OPTIONS[(currentIndex + 1) % TIMER_OPTIONS.length]);
   }
 
   if (!permission) return <View style={{ flex: 1 }} className="bg-background" />;
@@ -87,17 +127,40 @@ export function PhotoCaptureGuide({ pose, onCapture, onCancel }: Props) {
           <Ionicons name="close" size={22} color={colors.brand.white} />
         </Pressable>
         <Text className="body-sm font-body-semibold rounded-full bg-black/50 px-3 py-1.5 text-brand-white">{POSE_LABEL[pose]} Pose</Text>
-        <View className="h-10 w-10" />
+        <Pressable
+          onPress={cycleTimer}
+          disabled={countdown !== null}
+          hitSlop={8}
+          className="h-10 flex-row items-center gap-1 rounded-full bg-black/50 px-3"
+        >
+          <Ionicons name="timer-outline" size={18} color={timerSeconds > 0 ? colors.brand.yellow : colors.brand.white} />
+          {timerSeconds > 0 && (
+            <Text className="body-sm font-body-semibold text-brand-yellow">{timerSeconds}s</Text>
+          )}
+        </Pressable>
       </View>
 
       <View pointerEvents="none" style={{ position: "absolute", top: "50%", left: "50%", marginTop: -GUIDE_HEIGHT / 2, marginLeft: -GUIDE_WIDTH / 2 }}>
         <BodyOutline />
       </View>
 
+      {countdown !== null && (
+        <Pressable
+          onPress={handleCancelCountdown}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+          className="items-center justify-center bg-black/30"
+        >
+          <Text style={{ fontSize: 96, lineHeight: 100 }} className="font-body-bold text-brand-white">
+            {countdown}
+          </Text>
+          <Text className="body-sm text-brand-white">Tap to cancel</Text>
+        </Pressable>
+      )}
+
       <View style={{ position: "absolute", bottom: insets.bottom + 24, left: 0, right: 0 }} className="items-center">
         <Pressable
           onPress={handleCapture}
-          disabled={capturing}
+          disabled={capturing || countdown !== null}
           className="h-20 w-20 items-center justify-center rounded-full border-4 border-brand-white bg-black/30"
         >
           {capturing ? <ActivityIndicator color={colors.brand.white} /> : <View className="h-16 w-16 rounded-full bg-brand-white" />}

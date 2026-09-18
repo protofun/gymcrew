@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PhotoCaptureGuide } from "@/components/PhotoCaptureGuide";
@@ -31,6 +32,21 @@ export default function CapturePhotoScreen() {
 
   function handleBack() {
     goBack("/progress-photos/compare");
+  }
+
+  async function handlePickFromLibrary() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission needed", "Allow photo library access to choose a progress photo.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, quality: 0.8, base64: true });
+    const asset = result.assets?.[0];
+    if (result.canceled || !asset?.base64) return;
+
+    setCaptured({ base64: asset.base64, uri: asset.uri });
+    setStep("preview");
   }
 
   async function handleUsePhoto() {
@@ -109,9 +125,15 @@ export default function CapturePhotoScreen() {
         {!isApiConfigured ? (
           <Text className="body-sm text-text-secondary">Progress photos need the app&apos;s backend configured — not available in this build yet.</Text>
         ) : (
-          <Pressable onPress={() => setStep("camera")} className="mt-2 items-center rounded-full bg-brand-yellow py-3.5">
-            <Text className="body-md font-body-semibold text-brand-iron">Open Camera</Text>
-          </Pressable>
+          <View className="mt-2 gap-2.5">
+            <Pressable onPress={() => setStep("camera")} className="items-center rounded-full bg-brand-yellow py-3.5">
+              <Text className="body-md font-body-semibold text-brand-iron">Open Camera</Text>
+            </Pressable>
+            <Pressable onPress={handlePickFromLibrary} className="flex-row items-center justify-center gap-2 rounded-full border border-divider py-3.5">
+              <Ionicons name="images-outline" size={18} color={colors.neutral.textPrimary} />
+              <Text className="body-md font-body-semibold text-text-primary">Choose from Library</Text>
+            </Pressable>
+          </View>
         )}
       </View>
     </View>

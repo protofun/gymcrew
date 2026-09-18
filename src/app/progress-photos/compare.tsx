@@ -5,6 +5,7 @@ import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "rea
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProgressPhotoOverlay } from "@/components/ProgressPhotoOverlay";
+import { ProgressPhotoOverlayBlend } from "@/components/ProgressPhotoOverlayBlend";
 import { goBack } from "@/lib/navigation";
 import { api, isApiConfigured, type ProgressPhoto, type ProgressPhotoPose } from "@/lib/api";
 import { colors } from "@/theme";
@@ -14,6 +15,12 @@ const POSES: { key: ProgressPhotoPose; label: string }[] = [
   { key: "side", label: "Side" },
   { key: "back", label: "Back" },
 ];
+
+const COMPARE_MODES = [
+  { key: "slide", label: "Slide" },
+  { key: "overlay", label: "Overlay" },
+] as const;
+type CompareMode = (typeof COMPARE_MODES)[number]["key"];
 
 const THUMB_SIZE = 108;
 
@@ -25,6 +32,7 @@ export default function ComparePhotosScreen() {
   const [photos, setPhotos] = useState<ProgressPhoto[]>([]);
   const [loading, setLoading] = useState(isApiConfigured);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [compareMode, setCompareMode] = useState<CompareMode>("slide");
 
   useEffect(() => {
     if (!isApiConfigured) return;
@@ -101,7 +109,27 @@ export default function ComparePhotosScreen() {
         ) : (
           <>
             {selectedPhotos.length === 2 ? (
-              <ProgressPhotoOverlay before={selectedPhotos[0]} after={selectedPhotos[1]} />
+              <View className="gap-3">
+                <View className="flex-row gap-2 self-start rounded-full border border-divider bg-surface p-1">
+                  {COMPARE_MODES.map((option) => (
+                    <Pressable
+                      key={option.key}
+                      onPress={() => setCompareMode(option.key)}
+                      className={`rounded-full px-4 py-1.5 ${compareMode === option.key ? "bg-brand-yellow" : ""}`}
+                    >
+                      <Text className={`body-sm font-body-semibold ${compareMode === option.key ? "text-brand-iron" : "text-text-secondary"}`}>
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                {compareMode === "slide" ? (
+                  <ProgressPhotoOverlay before={selectedPhotos[0]} after={selectedPhotos[1]} />
+                ) : (
+                  <ProgressPhotoOverlayBlend before={selectedPhotos[0]} after={selectedPhotos[1]} />
+                )}
+              </View>
             ) : (
               <Text className="body-sm text-text-secondary">
                 {selectedIds.length === 0 ? "Pick two photos to compare." : "Pick one more photo to compare."}
