@@ -211,6 +211,64 @@ function deleteRecord(PDO $pdo, array $data): void
     jsonResponse(['ok' => true]);
 }
 
+// ---- Social verification (see routes/user-socials.php for the app-facing side) ----
+
+/** Every submitted Instagram/TikTok handle, newest submission first, joined with the user's name so
+ * the Social Verification page doesn't need a second lookup per row. */
+function respondWithSocialSubmissions(PDO $pdo): void
+{
+    $stmt = $pdo->query(
+        'SELECT s.user_id, s.instagram_handle, s.tiktok_handle, s.submitted_at, s.reviewed_at, s.reviewed_by,
+                s.is_promoting, s.admin_notes, u.full_name, u.email
+         FROM user_socials s JOIN users u ON u.id = s.user_id
+         ORDER BY s.submitted_at DESC'
+    );
+
+    jsonResponse(array_map(function (array $row): array {
+        return [
+            'userId' => $row['user_id'],
+            'userName' => $row['full_name'] ?: $row['email'] ?: 'Unknown',
+            'instagramHandle' => $row['instagram_handle'],
+            'tiktokHandle' => $row['tiktok_handle'],
+            'submittedAt' => (int) $row['submitted_at'],
+            'reviewedAt' => $row['reviewed_at'] !== null ? (int) $row['reviewed_at'] : null,
+            'reviewedBy' => $row['reviewed_by'],
+            'isPromoting' => $row['is_promoting'] === null ? null : (bool) $row['is_promoting'],
+            'adminNotes' => $row['admin_notes'],
+        ];
+    }, $stmt->fetchAll()));
+}
+
+/** An admin's manual verdict after actually opening the linked profiles and checking for GymCrew
+ * posts — `isPromoting: null` explicitly clears a previous verdict back to "not reviewed" rather
+ * than being rejected, so a wrong call can be undone. */
+function reviewSocialSubmission(PDO $pdo, string $adminId, string $adminEmail, string $targetUserId, array $data): void
+{
+    if (!array_key_exists('isPromoting', $data)) {
+        errorResponse('isPromoting is required');
+        return;
+    }
+    $isPromoting = $data['isPromoting'];
+    if ($isPromoting !== null && !is_bool($isPromoting)) {
+        errorResponse('isPromoting must be true, false, or null');
+        return;
+    }
+    $notes = trim((string) ($data['notes'] ?? ''));
+
+    $stmt = $pdo->prepare(
+        'UPDATE user_socials SET is_promoting = ?, admin_notes = ?, reviewed_at = ?, reviewed_by = ? WHERE user_id = ?'
+    );
+    $stmt->execute([$isPromoting, $notes, (int) round(microtime(true) * 1000), $adminEmail, $targetUserId]);
+    if ($stmt->rowCount() === 0) {
+        errorResponse('Not found', 404);
+        return;
+    }
+
+    $verdict = $isPromoting === null ? 'cleared' : ($isPromoting ? 'promoting' : 'not promoting');
+    logAdminAction($pdo, $adminId, $adminEmail, 'review_socials', 'user', $targetUserId, $verdict);
+    jsonResponse(['ok' => true]);
+}
+
 // ---- Crew Wars moderation ----
 
 function respondWithActiveCrewWars(PDO $pdo): void

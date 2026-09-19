@@ -31,6 +31,7 @@ const navItems: NavItem[] = [
       { name: "Reports", path: "/reports" },
       { name: "Support", path: "/support" },
       { name: "Rank Moderation", path: "/rank-moderation" },
+      { name: "Social Verification", path: "/social-verification" },
       { name: "Crew Wars", path: "/crew-wars" },
     ],
   },

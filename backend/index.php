@@ -40,6 +40,7 @@ require_once __DIR__ . '/routes/announcement.php';
 require_once __DIR__ . '/routes/roadmap.php';
 require_once __DIR__ . '/routes/content.php';
 require_once __DIR__ . '/routes/feedback.php';
+require_once __DIR__ . '/routes/user-socials.php';
 
 // Strips a configurable base path (e.g. "/api" when this lives at a domain root alongside other
 // things) so routes below only ever see "profile", "workouts", "workouts/123", etc. Computed before
@@ -275,6 +276,9 @@ switch ($resource) {
         break;
     case 'support':
         handleSupport($pdo, $userId, $method, $body, $segments);
+        break;
+    case 'user-socials':
+        handleUserSocials($pdo, $userId, $method, $body, $segments);
         break;
     // Named "activity", not "track" — ad blockers routinely block any URL path containing
     // "track" as a generic analytics heuristic, which would silently drop this app's own

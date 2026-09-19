@@ -480,6 +480,10 @@ export const api = {
   getTopRecords: (limit = 50) => request<TopRecord[]>(`/records/top?limit=${limit}`),
   deleteRecord: (userId: string, exerciseId: string) => request<{ ok: true }>("/records/delete", { method: "POST", body: { userId, exerciseId } }),
 
+  getSocialSubmissions: () => request<SocialSubmission[]>("/socials"),
+  reviewSocialSubmission: (userId: string, isPromoting: boolean | null, notes?: string) =>
+    request<{ ok: true }>(`/socials/${userId}/review`, { method: "POST", body: { isPromoting, notes } }),
+
   // ---- Crew Wars moderation ----
   getActiveCrewWars: () => request<ActiveCrewWar[]>("/crew-wars/active"),
   forceEndCrewWar: (id: string) => request<{ ok: true }>(`/crew-wars/${id}/end`, { method: "POST" }),
@@ -535,6 +539,18 @@ export type TopRecord = {
   weightKg: number;
   reps: number;
   achievedAt: number;
+};
+
+export type SocialSubmission = {
+  userId: string;
+  userName: string;
+  instagramHandle: string;
+  tiktokHandle: string;
+  submittedAt: number;
+  reviewedAt: number | null;
+  reviewedBy: string | null;
+  isPromoting: boolean | null;
+  adminNotes: string;
 };
 
 export type ActiveCrewWar = {

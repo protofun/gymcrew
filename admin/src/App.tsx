@@ -24,6 +24,7 @@ import Analytics from "./pages/Analytics";
 import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
 import RankModeration from "./pages/RankModeration";
+import SocialVerification from "./pages/SocialVerification";
 import CrewWars from "./pages/CrewWars";
 import PushComposer from "./pages/PushComposer";
 import ReportsCenter from "./pages/ReportsCenter";
@@ -59,6 +60,7 @@ export default function App() {
             <Route path="/support" element={<SupportList />} />
             <Route path="/support/:id" element={<SupportDetail />} />
             <Route path="/rank-moderation" element={<RankModeration />} />
+            <Route path="/social-verification" element={<SocialVerification />} />
             <Route path="/crew-wars" element={<CrewWars />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/roadmap" element={<Roadmap />} />

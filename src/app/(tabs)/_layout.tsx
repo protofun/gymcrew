@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { AppTourProvider } from "@/components/AppTourOverlay";
+import { SocialsPromptOverlay } from "@/components/SocialsPromptOverlay";
 import { TabBar } from "@/components/TabBar";
 import { TopBar } from "@/components/TopBar";
 import { XpProgressModal } from "@/components/XpProgressModal";
@@ -48,6 +49,7 @@ import { useThemeStore } from "@/store/theme-store";
 import { useTodayTrainingStore } from "@/store/today-training-store";
 import { useTrackedLiftsStore } from "@/store/tracked-lifts-store";
 import { useTutorialStore } from "@/store/tutorial-store";
+import { useUserSocialsStore } from "@/store/user-socials-store";
 import { useWaterLogStore } from "@/store/water-log-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { useWorkoutSplitStore } from "@/store/workout-split-store";
@@ -136,6 +138,21 @@ export default function TabsLayout() {
   useEffect(() => {
     if (isSignedIn) fetchAdminChallenges();
   }, [isSignedIn, fetchAdminChallenges]);
+
+  // Whether this account has submitted the "Connect Your Socials" prompt yet — checked on every
+  // signed-in mount (i.e. every app open), not just once, so SocialsPromptOverlay below keeps
+  // appearing on later opens for anyone who never submits, not only the first time they see it.
+  const checkSocialsStatus = useUserSocialsStore((state) => state.checkStatus);
+  useEffect(() => {
+    if (!isSignedIn) return;
+    let cancelled = false;
+    waitForAuthToken().then(() => {
+      if (!cancelled) checkSocialsStatus();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn, checkSocialsStatus]);
 
   // Once per sign-in: pull the real backend state for every backend-synced store — see lib/api.ts
   // and lib/backend-sync.ts. A no-op until EXPO_PUBLIC_API_BASE_URL is actually configured. Crew,
@@ -262,6 +279,7 @@ export default function TabsLayout() {
         </Tabs>
 
         <XpProgressModal visible={progressModalVisible} onClose={() => setProgressModalVisible(false)} streakDays={streakDays} xp={profileXp} xpToNextLevel={xpRequiredFor(profileDivision)} crewPoints={crewXp} crewPointsGoal={xpRequiredFor(crewDivision)} trainedDays={trainedDaysThisWeek} />
+        <SocialsPromptOverlay />
       </View>
     </AppTourProvider>
   );

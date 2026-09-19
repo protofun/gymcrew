@@ -16,6 +16,7 @@ const PAGES: { label: string; path: string; group: string }[] = [
   { label: "Reports", path: "/reports", group: "Manage" },
   { label: "Support", path: "/support", group: "Manage" },
   { label: "Rank Moderation", path: "/rank-moderation", group: "Manage" },
+  { label: "Social Verification", path: "/social-verification", group: "Manage" },
   { label: "Crew Wars", path: "/crew-wars", group: "Manage" },
   { label: "Tasks", path: "/tasks", group: "Team" },
   { label: "Roadmap", path: "/roadmap", group: "Team" },

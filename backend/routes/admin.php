@@ -221,6 +221,14 @@ function handleAdmin(PDO $pdo, string $method, ?array $body, array $segments): v
         if ($id === 'delete' && $method === 'POST') { deleteRecord($pdo, $data); return; }
     }
 
+    if ($sub === 'socials') {
+        if ($id === null && $method === 'GET') { respondWithSocialSubmissions($pdo); return; }
+        if ($id !== null && ($segments[3] ?? null) === 'review' && $method === 'POST') {
+            reviewSocialSubmission($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data);
+            return;
+        }
+    }
+
     if ($sub === 'crew-wars') {
         if ($id === 'active' && $method === 'GET') { respondWithActiveCrewWars($pdo); return; }
         if ($id !== null && ($segments[3] ?? null) === 'end' && $method === 'POST') { forceEndCrewWar($pdo, $id); return; }

@@ -861,3 +861,19 @@ CREATE TABLE IF NOT EXISTS analytics_events (
   INDEX idx_analytics_events_session (session_id),
   INDEX idx_analytics_events_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- One row per user's submitted Instagram/TikTok handles (see routes/user-socials.php) — collected
+-- via an in-app prompt so the admin panel's Social Verification page can check whether people are
+-- actually posting about GymCrew. `is_promoting` is an admin's manual verdict after eyeballing the
+-- linked profiles (NULL = not reviewed yet), not something computed automatically.
+CREATE TABLE IF NOT EXISTS user_socials (
+  user_id VARCHAR(64) NOT NULL PRIMARY KEY,
+  instagram_handle VARCHAR(64) NOT NULL,
+  tiktok_handle VARCHAR(64) NOT NULL,
+  submitted_at BIGINT NOT NULL,
+  reviewed_at BIGINT NULL,
+  reviewed_by VARCHAR(255) NULL,
+  is_promoting BOOLEAN NULL,
+  admin_notes VARCHAR(500) NOT NULL DEFAULT '',
+  CONSTRAINT fk_usersocials_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

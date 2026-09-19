@@ -185,6 +185,8 @@ export type ApiPlayerLeaderboardEntry = { id: string; name: string; avatarUrl: s
 export type RankStanding = { gymRank: number; gymPoolSize: number };
 
 export type ApiSupportTicket = { id: number; message: string; status: "open" | "resolved"; createdAt: number };
+
+export type ApiUserSocials = { instagramHandle: string; tiktokHandle: string };
 export type ApiSupportReply = { id: number; senderType: "admin" | "user"; body: string; createdAt: number };
 
 export type ApiRoadmapItem = { id: number; title: string; description: string | null; status: "planned" | "in_progress" | "shipped"; updatedAt: number };
@@ -554,6 +556,12 @@ export const api = {
   /** Registers this device's Expo push token so server-triggered pushes (crew PRs, division-ups)
    * can reach it — see lib/push-notifications.ts and backend/routes/push-token.php. */
   registerPushToken: (token: string) => request<{ ok: true }>("/push-token", { method: "PUT", body: { token } }),
+
+  /** The caller's own submitted Instagram/TikTok handles (see backend/routes/user-socials.php) —
+   * `null` if never submitted, which is what SocialsPromptOverlay checks to decide whether to show. */
+  getMySocials: () => request<ApiUserSocials | null>("/user-socials/mine"),
+  submitSocials: (instagramHandle: string, tiktokHandle: string) =>
+    request<{ ok: true }>("/user-socials", { method: "POST", body: { instagramHandle, tiktokHandle } }),
 
   /** A user-submitted bug report / feedback message — becomes a two-way ticket, see
    * backend/routes/support.php. Admins reply from the admin panel; this is what starts one. */
