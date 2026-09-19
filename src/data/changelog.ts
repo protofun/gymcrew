@@ -12,6 +12,14 @@ export type ChangelogEntry = {
 /** Newest first — top of the list renders first. Add new entries to the top when shipping. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "connect-your-socials",
+    publishedAtMs: Date.UTC(2026, 8, 19),
+    type: "feature",
+    title: "Connect Your Socials",
+    description:
+      "Add your Instagram and TikTok handle from a quick prompt — we check who's actually promoting GymCrew.",
+  },
+  {
     id: "progress-photo-upgrades",
     publishedAtMs: Date.UTC(2026, 8, 18),
     type: "feature",
