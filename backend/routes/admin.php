@@ -229,6 +229,11 @@ function handleAdmin(PDO $pdo, string $method, ?array $body, array $segments): v
         }
     }
 
+    if ($sub === 'messages' && $id === 'send' && $method === 'POST') {
+        sendAdminMessage($pdo, (string) $admin['sub'], (string) $admin['email'], $data);
+        return;
+    }
+
     if ($sub === 'crew-wars') {
         if ($id === 'active' && $method === 'GET') { respondWithActiveCrewWars($pdo); return; }
         if ($id !== null && ($segments[3] ?? null) === 'end' && $method === 'POST') { forceEndCrewWar($pdo, $id); return; }

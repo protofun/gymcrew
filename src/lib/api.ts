@@ -187,6 +187,8 @@ export type RankStanding = { gymRank: number; gymPoolSize: number };
 export type ApiSupportTicket = { id: number; message: string; status: "open" | "resolved"; createdAt: number };
 
 export type ApiUserSocials = { instagramHandle: string; tiktokHandle: string };
+
+export type ApiAdminMessage = { id: number; message: string; sentAt: number };
 export type ApiSupportReply = { id: number; senderType: "admin" | "user"; body: string; createdAt: number };
 
 export type ApiRoadmapItem = { id: number; title: string; description: string | null; status: "planned" | "in_progress" | "shipped"; updatedAt: number };
@@ -562,6 +564,11 @@ export const api = {
   getMySocials: () => request<ApiUserSocials | null>("/user-socials/mine"),
   submitSocials: (instagramHandle: string, tiktokHandle: string) =>
     request<{ ok: true }>("/user-socials", { method: "POST", body: { instagramHandle, tiktokHandle } }),
+
+  /** Admin-composed messages targeted at this account specifically (see
+   * backend/routes/admin-messages.php) — shown as a blocking-until-dismissed overlay, oldest first. */
+  getPendingAdminMessages: () => request<ApiAdminMessage[]>("/admin-messages/pending"),
+  dismissAdminMessage: (id: number) => request<{ ok: true }>(`/admin-messages/${id}/dismiss`, { method: "POST" }),
 
   /** A user-submitted bug report / feedback message — becomes a two-way ticket, see
    * backend/routes/support.php. Admins reply from the admin panel; this is what starts one. */

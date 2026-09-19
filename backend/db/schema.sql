@@ -877,3 +877,18 @@ CREATE TABLE IF NOT EXISTS user_socials (
   admin_notes VARCHAR(500) NOT NULL DEFAULT '',
   CONSTRAINT fk_usersocials_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- One row per admin-composed message sent to one recipient (see routes/admin-messages.php) — shown
+-- in the app as a blocking-until-dismissed overlay (unlike a push notification, which can be missed
+-- or ignored outside the app). Used from the admin panel's User Management "Send Message" bulk
+-- action, e.g. to warn specific unverified accounts before they lose access.
+CREATE TABLE IF NOT EXISTS admin_messages (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id VARCHAR(64) NOT NULL,
+  message VARCHAR(1000) NOT NULL,
+  sent_by VARCHAR(255) NOT NULL,
+  sent_at BIGINT NOT NULL,
+  dismissed_at BIGINT NULL,
+  CONSTRAINT fk_adminmessages_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_adminmessages_user_pending (user_id, dismissed_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -3,6 +3,7 @@ import { Redirect, Tabs } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 
+import { AdminMessageOverlay } from "@/components/AdminMessageOverlay";
 import { AppTourProvider } from "@/components/AppTourOverlay";
 import { SocialsPromptOverlay } from "@/components/SocialsPromptOverlay";
 import { TabBar } from "@/components/TabBar";
@@ -22,6 +23,7 @@ import { addForegroundNotificationToastListener, reconcileNotificationSchedules,
 import { computeCurrentStreak, computeTrainedDaysThisWeek } from "@/lib/streak";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { useAdminChallengeStore } from "@/store/admin-challenge-store";
+import { useAdminMessageStore } from "@/store/admin-message-store";
 import { useBlockedUsersStore } from "@/store/blocked-users-store";
 import { useBodyLogStore } from "@/store/body-log-store";
 import { useChallengeStore } from "@/store/challenge-store";
@@ -154,6 +156,20 @@ export default function TabsLayout() {
     };
   }, [isSignedIn, checkSocialsStatus]);
 
+  // Any admin-composed message targeted at this account (see AdminMessageOverlay) — checked on
+  // every signed-in mount too, same reasoning as the socials check above.
+  const checkPendingAdminMessages = useAdminMessageStore((state) => state.checkPending);
+  useEffect(() => {
+    if (!isSignedIn) return;
+    let cancelled = false;
+    waitForAuthToken().then(() => {
+      if (!cancelled) checkPendingAdminMessages();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn, checkPendingAdminMessages]);
+
   // Once per sign-in: pull the real backend state for every backend-synced store — see lib/api.ts
   // and lib/backend-sync.ts. A no-op until EXPO_PUBLIC_API_BASE_URL is actually configured. Crew,
   // challenges, and the crew league sync too now — but as "this account's own saved view," not yet
@@ -280,6 +296,7 @@ export default function TabsLayout() {
 
         <XpProgressModal visible={progressModalVisible} onClose={() => setProgressModalVisible(false)} streakDays={streakDays} xp={profileXp} xpToNextLevel={xpRequiredFor(profileDivision)} crewPoints={crewXp} crewPointsGoal={xpRequiredFor(crewDivision)} trainedDays={trainedDaysThisWeek} />
         <SocialsPromptOverlay />
+        <AdminMessageOverlay />
       </View>
     </AppTourProvider>
   );

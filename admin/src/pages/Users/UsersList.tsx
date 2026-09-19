@@ -17,11 +17,35 @@ import PageMeta from "../../components/common/PageMeta";
 import Badge from "../../components/ui/badge/Badge";
 import Button from "../../components/ui/button/Button";
 import Input from "../../components/form/input/InputField";
+import Label from "../../components/form/Label";
+import Select from "../../components/form/Select";
+import TextArea from "../../components/form/input/TextArea";
+import { Modal } from "../../components/ui/modal";
 import { api, ApiError, type AdminUserListItem, type UsersFilter } from "../../lib/api";
 import { formatTimeAgo } from "../../lib/format";
 
 const LIMIT = 25;
 const columnHelper = createColumnHelper<AdminUserListItem>();
+
+/** Pre-written starting points for the "Send Message" bulk action below — the admin can still edit
+ * the text after picking one, this just saves retyping the common cases. */
+const MESSAGE_TEMPLATES: { value: string; label: string; text: string }[] = [
+  {
+    value: "promote-reminder",
+    label: "Promote reminder",
+    text: "We haven't seen any GymCrew posts on your Instagram or TikTok yet. We want to see you actively promoting GymCrew — otherwise you risk losing your free access once the app launches.",
+  },
+  {
+    value: "final-warning",
+    label: "Final warning",
+    text: "This is a final reminder: we still haven't seen you promoting GymCrew on Instagram or TikTok. Please post about GymCrew this week to keep your free access at launch.",
+  },
+  {
+    value: "thanks",
+    label: "Thanks for promoting",
+    text: "Thanks for actively promoting GymCrew — we've seen your posts and it's appreciated!",
+  },
+];
 
 const FILTERS: { key: UsersFilter | null; label: string }[] = [
   { key: null, label: "All" },
@@ -51,6 +75,9 @@ export default function UsersList() {
   const [error, setError] = useState<string | null>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [messageModalOpen, setMessageModalOpen] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   const load = useCallback((searchValue: string, pageValue: number, filterValue: UsersFilter | null) => {
     setLoading(true);
@@ -200,6 +227,21 @@ export default function UsersList() {
     load(search, page, filter);
   }
 
+  async function handleSendMessage() {
+    if (!messageText.trim()) return;
+    setSendingMessage(true);
+    try {
+      const res = await api.sendAdminMessage(selectedIds, messageText.trim());
+      toast.success(`Sent to ${res.sent} user${res.sent === 1 ? "" : "s"}`);
+      setMessageModalOpen(false);
+      setMessageText("");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to send message");
+    } finally {
+      setSendingMessage(false);
+    }
+  }
+
   function exportSelected() {
     const rows = selectedUsers.map((u) => ({
       id: u.id,
@@ -266,6 +308,9 @@ export default function UsersList() {
       {selectedIds.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 dark:border-brand-800 dark:bg-brand-500/10">
           <span className="text-sm font-medium text-brand-700 dark:text-brand-300">{selectedIds.length} selected</span>
+          <Button size="sm" variant="outline" onClick={() => setMessageModalOpen(true)}>
+            Send Message
+          </Button>
           <Button size="sm" variant="outline" onClick={() => bulkBan(true)}>
             Ban Selected
           </Button>
@@ -344,6 +389,46 @@ export default function UsersList() {
           </div>
         </div>
       )}
+
+      <Modal isOpen={messageModalOpen} onClose={() => setMessageModalOpen(false)} className="max-w-[560px] p-6">
+        <div className="flex flex-col gap-5">
+          <div>
+            <h5 className="mb-1 text-lg font-semibold text-gray-800 dark:text-white/90">
+              Send Message to {selectedIds.length} User{selectedIds.length === 1 ? "" : "s"}
+            </h5>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Shows as a blocking overlay the next time each person opens the app — they have to read it to dismiss it, unlike
+              a push notification.
+            </p>
+          </div>
+
+          <div>
+            <Label>Template (optional)</Label>
+            <Select
+              options={MESSAGE_TEMPLATES.map((t) => ({ value: t.value, label: t.label }))}
+              placeholder="Start from a template…"
+              onChange={(value) => {
+                const template = MESSAGE_TEMPLATES.find((t) => t.value === value);
+                if (template) setMessageText(template.text);
+              }}
+            />
+          </div>
+
+          <div>
+            <Label>Message</Label>
+            <TextArea rows={5} value={messageText} onChange={setMessageText} placeholder="Write your own message, or pick a template above and edit it." />
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button size="sm" variant="outline" onClick={() => setMessageModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" disabled={sendingMessage || !messageText.trim()} onClick={handleSendMessage}>
+              {sendingMessage ? "Sending…" : "Send"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }

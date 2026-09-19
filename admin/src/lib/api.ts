@@ -484,6 +484,12 @@ export const api = {
   reviewSocialSubmission: (userId: string, isPromoting: boolean | null, notes?: string) =>
     request<{ ok: true }>(`/socials/${userId}/review`, { method: "POST", body: { isPromoting, notes } }),
 
+  /** Sends a blocking-until-dismissed in-app overlay message (not a push notification, see
+   * PushComposer for that) to one or more specific users — e.g. warning an unverified account
+   * before it loses access. */
+  sendAdminMessage: (userIds: string[], message: string) =>
+    request<{ ok: true; sent: number }>("/messages/send", { method: "POST", body: { userIds, message } }),
+
   // ---- Crew Wars moderation ----
   getActiveCrewWars: () => request<ActiveCrewWar[]>("/crew-wars/active"),
   forceEndCrewWar: (id: string) => request<{ ok: true }>(`/crew-wars/${id}/end`, { method: "POST" }),
@@ -551,6 +557,10 @@ export type SocialSubmission = {
   reviewedBy: string | null;
   isPromoting: boolean | null;
   adminNotes: string;
+  /** Never reviewed, or last reviewed more than a week ago — see admin-ops.php's
+   * SOCIAL_REVIEW_STALE_MS. Nothing runs this check automatically; it's just a flag so a weekly
+   * review habit has something concrete to work off. */
+  needsRecheck: boolean;
 };
 
 export type ActiveCrewWar = {

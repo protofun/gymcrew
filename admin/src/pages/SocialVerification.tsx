@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { toast } from "sonner";
 
 import PageBreadcrumb from "../components/common/PageBreadCrumb";
@@ -26,6 +27,14 @@ export default function SocialVerification() {
   }
   useEffect(load, []);
 
+  // Nothing checks these automatically (see the page description below) — surfacing the ones due
+  // for a manual look at the top is what stands in for "a weekly sync."
+  const sortedItems = useMemo(
+    () => [...items].sort((a, b) => Number(b.needsRecheck) - Number(a.needsRecheck) || b.submittedAt - a.submittedAt),
+    [items],
+  );
+  const staleCount = items.filter((i) => i.needsRecheck).length;
+
   async function handleReview(item: SocialSubmission, isPromoting: boolean | null) {
     const notes = isPromoting === null ? "" : (window.prompt("Notes (optional):", item.adminNotes) ?? item.adminNotes);
     await api.reviewSocialSubmission(item.userId, isPromoting, notes);
@@ -42,8 +51,16 @@ export default function SocialVerification() {
 
       <p className="mb-4 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
         Instagram/TikTok handles users submitted through the app&apos;s "Connect Your Socials" prompt. Open each profile and
-        check for GymCrew posts by hand, then mark it — this isn&apos;t automated.
+        check for GymCrew posts by hand, then mark it — this isn&apos;t automated (Instagram/TikTok don&apos;t allow that
+        without each person individually authorizing it). Rows flagged <Badge size="sm" color="warning">Needs Recheck</Badge>{" "}
+        have never been reviewed, or haven&apos;t been reviewed in over a week, and are sorted to the top.
       </p>
+
+      {staleCount > 0 && (
+        <p className="mb-4 text-sm font-medium text-warning-500">
+          {staleCount} submission{staleCount === 1 ? "" : "s"} due for a check this week.
+        </p>
+      )}
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
         <div className="max-w-full overflow-x-auto">
@@ -69,9 +86,13 @@ export default function SocialVerification() {
                   <TableCell className="px-5 py-6 text-sm text-gray-500 dark:text-gray-400">No submissions yet.</TableCell>
                 </TableRow>
               ) : (
-                items.map((item) => (
+                sortedItems.map((item) => (
                   <TableRow key={item.userId}>
-                    <TableCell className="px-5 py-4 text-start text-theme-sm text-gray-800 dark:text-white/90">{item.userName}</TableCell>
+                    <TableCell className="px-5 py-4 text-start text-theme-sm">
+                      <Link to={`/users/${item.userId}`} className="text-gray-800 hover:underline dark:text-white/90">
+                        {item.userName}
+                      </Link>
+                    </TableCell>
                     <TableCell className="px-5 py-4 text-start text-theme-sm">
                       <a
                         href={`https://instagram.com/${item.instagramHandle}`}
@@ -96,8 +117,13 @@ export default function SocialVerification() {
                       {new Date(item.submittedAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="px-5 py-4 text-start text-theme-sm">
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col items-start gap-1">
                         {statusBadge(item.isPromoting)}
+                        {item.needsRecheck && (
+                          <Badge size="sm" color="warning">
+                            Needs Recheck
+                          </Badge>
+                        )}
                         {item.reviewedBy && <span className="text-xs text-gray-400">by {item.reviewedBy}</span>}
                       </div>
                     </TableCell>

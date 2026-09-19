@@ -215,6 +215,12 @@ function deleteRecord(PDO $pdo, array $data): void
 
 /** Every submitted Instagram/TikTok handle, newest submission first, joined with the user's name so
  * the Social Verification page doesn't need a second lookup per row. */
+// A submission needs a (re-)check once it's never been reviewed, or its last review is old enough
+// that a week has genuinely passed since — the honest, no-scraping stand-in for "a weekly sync that
+// checks whether they're still promoting": nothing runs automatically, but the admin panel surfaces
+// exactly who's due for a manual look so a real weekly review habit doesn't quietly lapse.
+const SOCIAL_REVIEW_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+
 function respondWithSocialSubmissions(PDO $pdo): void
 {
     $stmt = $pdo->query(
@@ -224,17 +230,20 @@ function respondWithSocialSubmissions(PDO $pdo): void
          ORDER BY s.submitted_at DESC'
     );
 
-    jsonResponse(array_map(function (array $row): array {
+    $now = (int) round(microtime(true) * 1000);
+    jsonResponse(array_map(function (array $row) use ($now): array {
+        $reviewedAt = $row['reviewed_at'] !== null ? (int) $row['reviewed_at'] : null;
         return [
             'userId' => $row['user_id'],
             'userName' => $row['full_name'] ?: $row['email'] ?: 'Unknown',
             'instagramHandle' => $row['instagram_handle'],
             'tiktokHandle' => $row['tiktok_handle'],
             'submittedAt' => (int) $row['submitted_at'],
-            'reviewedAt' => $row['reviewed_at'] !== null ? (int) $row['reviewed_at'] : null,
+            'reviewedAt' => $reviewedAt,
             'reviewedBy' => $row['reviewed_by'],
             'isPromoting' => $row['is_promoting'] === null ? null : (bool) $row['is_promoting'],
             'adminNotes' => $row['admin_notes'],
+            'needsRecheck' => $reviewedAt === null || ($now - $reviewedAt) > SOCIAL_REVIEW_STALE_MS,
         ];
     }, $stmt->fetchAll()));
 }
@@ -267,6 +276,45 @@ function reviewSocialSubmission(PDO $pdo, string $adminId, string $adminEmail, s
     $verdict = $isPromoting === null ? 'cleared' : ($isPromoting ? 'promoting' : 'not promoting');
     logAdminAction($pdo, $adminId, $adminEmail, 'review_socials', 'user', $targetUserId, $verdict);
     jsonResponse(['ok' => true]);
+}
+
+// ---- Admin messages (see routes/admin-messages.php for the app-facing side) ----
+
+/** One row per recipient, all carrying the same message text — sent from User Management's
+ * "Send Message" bulk action, one or many recipients at once. Silently skips any id that isn't a
+ * real user rather than failing the whole batch over one bad id. */
+function sendAdminMessage(PDO $pdo, string $adminId, string $adminEmail, array $data): void
+{
+    $userIds = is_array($data['userIds'] ?? null) ? array_values(array_unique(array_map('strval', $data['userIds']))) : [];
+    $message = trim((string) ($data['message'] ?? ''));
+
+    if (empty($userIds)) {
+        errorResponse('userIds is required and must be a non-empty array');
+        return;
+    }
+    if ($message === '') {
+        errorResponse('message is required');
+        return;
+    }
+
+    $now = (int) round(microtime(true) * 1000);
+    $stmt = $pdo->prepare('INSERT INTO admin_messages (user_id, message, sent_by, sent_at) VALUES (?, ?, ?, ?)');
+    $sent = 0;
+    foreach ($userIds as $targetUserId) {
+        try {
+            $stmt->execute([$targetUserId, $message, $adminEmail, $now]);
+            $sent++;
+        } catch (PDOException $e) {
+            // Foreign key violation — $targetUserId doesn't exist. Skip it, keep going.
+        }
+    }
+
+    // target_id is VARCHAR(64) — too short for a joined list of user ids once more than a couple are
+    // selected, so the recipient count + message go in `details` (500 chars, hence the truncation)
+    // instead.
+    $detail = "$sent recipient(s): $message";
+    logAdminAction($pdo, $adminId, $adminEmail, 'send_admin_message', 'user', null, mb_substr($detail, 0, 500));
+    jsonResponse(['ok' => true, 'sent' => $sent]);
 }
 
 // ---- Crew Wars moderation ----
