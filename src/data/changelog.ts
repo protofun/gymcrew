@@ -12,6 +12,14 @@ export type ChangelogEntry = {
 /** Newest first — top of the list renders first. Add new entries to the top when shipping. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "admin-messages",
+    publishedAtMs: Date.UTC(2026, 8, 19),
+    type: "update",
+    title: "Direct Messages from the GymCrew Team",
+    description:
+      "The team can now send you a direct message that shows up right when you open the app — for example a reminder if we still need to see you promoting GymCrew.",
+  },
+  {
     id: "connect-your-socials",
     publishedAtMs: Date.UTC(2026, 8, 19),
     type: "feature",
