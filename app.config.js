@@ -13,15 +13,13 @@ export default {
       // TODO: confirm before the first real App Store submission — this becomes permanent once
       // published (Apple won't let it change later).
       bundleIdentifier: "com.gymcrew.app",
-      icon: "./assets/expo.icon",
     },
     android: {
       // TODO: confirm before the first real Play Store submission — same permanence as above.
       package: "com.gymcrew.app",
       adaptiveIcon: {
-        backgroundColor: "#E6F4FE",
+        backgroundColor: "#040404",
         foregroundImage: "./assets/images/android-icon-foreground.png",
-        backgroundImage: "./assets/images/android-icon-background.png",
         monochromeImage: "./assets/images/android-icon-monochrome.png",
       },
       predictiveBackGestureEnabled: false,
@@ -37,7 +35,7 @@ export default {
         {
           backgroundColor: "#0D1117",
           image: "./assets/images/splash-icon.png",
-          imageWidth: 76,
+          imageWidth: 200,
         },
       ],
       "@clerk/expo",
@@ -61,7 +59,8 @@ export default {
       [
         "expo-notifications",
         {
-          icon: "./assets/images/icon.png",
+          // Android notification icons must be a white silhouette on transparent, not the full-colour icon.
+          icon: "./assets/images/android-icon-monochrome.png",
           color: "#E3FF00",
         },
       ],

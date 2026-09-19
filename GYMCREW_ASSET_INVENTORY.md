@@ -65,9 +65,9 @@ Registered in `src/theme/fonts.ts` and mirrored as `--font-*` CSS variables in `
 
 | Asset | Purpose | Preserve? |
 |---|---|---|
-| `icon.png`, `assets/expo.icon` (referenced in `app.config.js`) | App icon | Yes — required for store listing, cannot regenerate arbitrarily |
-| `android-icon-{foreground,background,monochrome}.png` | Android adaptive icon | Yes |
-| `splash-icon.png` | Splash screen (76px wide per app.config.js) | Yes |
+| `icon.png` (referenced in `app.config.js`; also the iOS icon) | App icon | Yes — required for store listing, cannot regenerate arbitrarily |
+| `android-icon-{foreground,monochrome}.png` | Android adaptive icon (background is the solid `backgroundColor` in `app.config.js`); monochrome is also the notification icon | Yes |
+| `splash-icon.png` | Splash screen (200px wide per app.config.js) | Yes |
 | `favicon.png`, `favicon/app_favicon.png`, `favicon/gymcrew_favicon.png` | Web favicon (3 candidate files — verify which is actually wired in `app.config.js`'s `web.favicon`, currently `favicon/app_favicon.png`) | Yes, but consolidate to one |
 | `logo/Logo.jpeg`, `logo/banner/banner-big.png`, `logo/banner/banner-youtube.png`, `logo/banner/banner-youtube-all-devices.png` | Marketing/store banner art (YouTube-labeled — likely for a trailer or store listing) | Yes, out of in-app scope but keep |
 
