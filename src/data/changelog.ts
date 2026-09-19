@@ -12,6 +12,46 @@ export type ChangelogEntry = {
 /** Newest first — top of the list renders first. Add new entries to the top when shipping. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "progress-photo-upgrades",
+    publishedAtMs: Date.UTC(2026, 8, 18),
+    type: "feature",
+    title: "Progress Photo Upgrades",
+    description:
+      "Three additions to Progress Photos: a self-timer (3, 5, or 10 seconds) so you can step back and pose, the option to pick an existing photo from your library instead of only the camera, and a new Overlay comparison mode — drag one photo over the other and fade between them to see exactly what's changed.",
+  },
+  {
+    id: "war-league-recaps",
+    publishedAtMs: Date.UTC(2026, 8, 18),
+    type: "feature",
+    title: "Shareable War & League Recaps",
+    description:
+      "When a Crew War ends or a League week wraps up, you'll now get a shareable recap card — final score and your crew's MVP for a War, final rank for a League week — ready to post and show off.",
+  },
+  {
+    id: "crew-muscle-balance-nudge",
+    publishedAtMs: Date.UTC(2026, 8, 18),
+    type: "feature",
+    title: "Crew Training Tips",
+    description:
+      "Once a week, if your crew's been skipping a muscle group entirely, you'll get a nudge about it — a heads-up while there's still time in the week to close the gap. Covered by the \"Crew & Challenge Alerts\" toggle in Notification Settings.",
+  },
+  {
+    id: "live-session-banner",
+    publishedAtMs: Date.UTC(2026, 8, 18),
+    type: "feature",
+    title: "See When a Crewmate Is Training Live",
+    description:
+      "When someone in your crew starts a live workout, it now shows up right at the top of the Crew tab's Overview — tap it to jump in and train together instead of missing it entirely.",
+  },
+  {
+    id: "crew-feed-reactions",
+    publishedAtMs: Date.UTC(2026, 8, 18),
+    type: "feature",
+    title: "React to Crew Activity",
+    description:
+      "Tap 🔥 or 👏 on any PR, streak, or milestone in your Crew Activity feed to cheer a teammate on — tap again to remove your reaction.",
+  },
+  {
     id: "division-rival-count-fix",
     publishedAtMs: Date.UTC(2026, 8, 18),
     type: "bug",
