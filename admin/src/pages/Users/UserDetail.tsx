@@ -9,6 +9,7 @@ import Button from "../../components/ui/button/Button";
 import Input from "../../components/form/input/InputField";
 import { NotesPanel } from "../../components/admin/NotesPanel";
 import { SearchableSelect } from "../../components/admin/SearchableSelect";
+import { SendMessageModal } from "../../components/admin/SendMessageModal";
 import {
   api,
   ApiError,
@@ -113,6 +114,8 @@ export default function UserDetail() {
 }
 
 function OverviewTab({ user, onToggleBan, onDelete }: { user: AdminUserDetail; onToggleBan: () => void; onDelete: () => void }) {
+  const [messageModalOpen, setMessageModalOpen] = useState(false);
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/[0.03] lg:col-span-2">
@@ -149,6 +152,9 @@ function OverviewTab({ user, onToggleBan, onDelete }: { user: AdminUserDetail; o
         <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/[0.03]">
           <h3 className="mb-4 text-base font-medium text-gray-800 dark:text-white/90">Actions</h3>
           <div className="flex flex-col gap-3">
+            <Button variant="outline" onClick={() => setMessageModalOpen(true)}>
+              Send Message
+            </Button>
             <Button variant="outline" onClick={onToggleBan}>
               {user.banned ? "Unban User" : "Ban User"}
             </Button>
@@ -160,6 +166,8 @@ function OverviewTab({ user, onToggleBan, onDelete }: { user: AdminUserDetail; o
 
         <NotesPanel targetType="user" targetId={user.id} />
       </div>
+
+      <SendMessageModal isOpen={messageModalOpen} onClose={() => setMessageModalOpen(false)} userIds={[user.id]} />
     </div>
   );
 }
