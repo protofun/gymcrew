@@ -26,6 +26,9 @@ type PersonalRecordsStore = {
    * `retryPendingSync`. Without tracking this, a PR that only ever existed locally would silently
    * be overwritten the moment `syncFromServer` next pulls the server's (older) best for that lift. */
   pendingSyncIds: string[];
+  /** exerciseIds whose record was set locally by the Developer Tools (see lib/dev-tools.ts) — never
+   * sent to the server; `syncFromServer` keeps them instead of overwriting them with the server's. */
+  testRecordIds: string[];
   /** Compares a lift against the stored best and updates it if this one is heavier. Stays
    * synchronous (callers use the return value immediately) — a new record also fires a background
    * sync to the backend, not awaited. */
@@ -46,6 +49,7 @@ export const usePersonalRecordsStore = create<PersonalRecordsStore>()(
     (set, get) => ({
       records: {},
       pendingSyncIds: [],
+      testRecordIds: [],
       checkAndRecord: (exerciseId, exerciseName, weightKg, reps) => {
         const previous = get().records[exerciseId];
         const previousBestKg = previous?.bestWeightKg ?? null;
@@ -102,6 +106,9 @@ export const usePersonalRecordsStore = create<PersonalRecordsStore>()(
             const local = localRecords[exerciseId];
             const server = serverRecords[exerciseId];
             if (local && (!server || local.bestWeightKg > server.bestWeightKg)) merged[exerciseId] = local;
+          }
+          for (const exerciseId of get().testRecordIds) {
+            if (localRecords[exerciseId]) merged[exerciseId] = localRecords[exerciseId];
           }
           set({ records: merged });
         } catch (error) {

@@ -9,9 +9,8 @@ import { usePostHog } from "posthog-react-native";
 import { goBack } from "@/lib/navigation";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { api, isApiConfigured } from "@/lib/api";
-import { appTourRef } from "@/lib/app-tour";
 import { resetLocalStateForAccountSwitch } from "@/lib/reset-local-state";
-import { DEVELOPER_MODE_EMAILS, useDeveloperModeStore } from "@/store/developer-mode-store";
+import { DEVELOPER_MODE_EMAILS } from "@/store/developer-mode-store";
 import { colors } from "@/theme";
 
 /** The only accounts allowed to create/edit/delete app-wide challenges (see
@@ -54,16 +53,6 @@ export default function AccountScreen() {
   const email = user?.primaryEmailAddress?.emailAddress?.toLowerCase();
   const isDeveloper = !!email && DEVELOPER_MODE_EMAILS.includes(email);
   const isChallengeAdmin = !!email && ADMIN_CHALLENGE_EMAILS.includes(email);
-  const developerModeEnabled = useDeveloperModeStore((state) => state.enabled);
-  const toggleDeveloperMode = useDeveloperModeStore((state) => state.toggleEnabled);
-  const clearAllOverrides = useDeveloperModeStore((state) => state.clearAllOverrides);
-
-  function handleOpenTutorialWizard() {
-    router.replace("/home");
-    // The tour lives inside (tabs)/_layout.tsx's AppTourProvider — give it a beat to be the
-    // active screen before asking it to start (see lib/app-tour.ts).
-    setTimeout(() => appTourRef.current?.start(), 150);
-  }
 
   const hasPassword = user?.passwordEnabled ?? false;
 
@@ -195,38 +184,17 @@ export default function AccountScreen() {
         )}
 
         {isDeveloper && (
-          <View className="gap-2 rounded-2xl border border-brand-yellow/40 bg-surface p-4">
-            <Text className="body-sm font-body-semibold text-text-primary">Developer Mode</Text>
-            <Text className="body-sm text-text-secondary">
-              Tap-to-edit for text/numbers shown around the app — for setting up screenshots or videos. Overrides are
-              local to this device only and are never saved to the server.
-            </Text>
-            <Pressable
-              onPress={toggleDeveloperMode}
-              className={`mt-1 items-center rounded-full border py-3.5 ${
-                developerModeEnabled ? "border-brand-yellow bg-brand-yellow" : "border-brand-yellow"
-              }`}
-            >
-              <Text className={`body-sm font-body-bold ${developerModeEnabled ? "text-brand-iron" : "text-brand-yellow"}`}>
-                Developer Mode: {developerModeEnabled ? "On" : "Off"}
-              </Text>
-            </Pressable>
-            {developerModeEnabled && (
-              <Pressable onPress={clearAllOverrides} className="items-center rounded-full border border-divider py-3.5">
-                <Text className="body-sm text-text-secondary">Reset All Overrides</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-
-        {isDeveloper && (
-          <View className="gap-2 rounded-2xl border border-brand-yellow/40 bg-surface p-4">
-            <Text className="body-sm font-body-semibold text-text-primary">Onboarding Tour</Text>
-            <Text className="body-sm text-text-secondary">Replays the mascot-narrated first-run walkthrough over the app, for testing.</Text>
-            <Pressable onPress={handleOpenTutorialWizard} className="mt-1 items-center rounded-full border border-brand-yellow py-3.5">
-              <Text className="body-sm font-body-bold text-brand-yellow">Open Tutorial Wizard</Text>
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => router.push("/profile/developer-tools")}
+            className="flex-row items-center gap-3 rounded-2xl border border-brand-yellow/40 bg-surface p-4"
+          >
+            <Ionicons name="construct" size={18} color={colors.brand.yellow} />
+            <View className="flex-1">
+              <Text className="body-sm font-body-semibold text-text-primary">Developer Tools</Text>
+              <Text className="body-sm text-text-secondary">Test data, data editing, restore to database, tutorial wizard and more.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.neutral.textSecondary} />
+          </Pressable>
         )}
 
         <View className="gap-1 rounded-2xl border border-divider bg-surface p-1">

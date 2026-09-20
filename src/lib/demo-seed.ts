@@ -168,7 +168,7 @@ function generateYearOfTraining(referenceNow: number): CompletedWorkout[] {
   return workouts.reverse(); // store convention: newest first
 }
 
-function generateRecords(workouts: CompletedWorkout[]): Record<string, PersonalRecord> {
+export function generateRecords(workouts: CompletedWorkout[]): Record<string, PersonalRecord> {
   const records: Record<string, PersonalRecord> = {};
   for (const workout of workouts) {
     for (const exercise of workout.exercises) {

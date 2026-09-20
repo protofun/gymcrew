@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { isTestId } from "@/constants/test-data";
 import type { MuscleGroup } from "@/data/workout-log";
 import { api, isApiConfigured } from "@/lib/api";
 import type { WorkoutPr } from "@/lib/workout-finish";
@@ -95,7 +96,9 @@ export const useWorkoutHistoryStore = create<WorkoutHistoryStore>()(
           const stillPending = get().pendingSyncIds;
           const serverIds = new Set(serverWorkouts.map((w) => w.id));
           const notYetOnServer = get().workouts.filter((w) => stillPending.includes(w.id) && !serverIds.has(w.id));
-          const merged = [...notYetOnServer, ...serverWorkouts].sort((a, b) => b.completedAt - a.completedAt);
+          // Developer Tools test workouts (see lib/dev-tools.ts) only ever exist locally — keep them.
+          const testWorkouts = get().workouts.filter((w) => isTestId(w.id));
+          const merged = [...testWorkouts, ...notYetOnServer, ...serverWorkouts].sort((a, b) => b.completedAt - a.completedAt);
           set({ workouts: merged });
         } catch (error) {
           console.warn("Failed to sync workout history from server, keeping local data", error);

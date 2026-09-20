@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { isTestId } from "@/constants/test-data";
 import { api, isApiConfigured } from "@/lib/api";
 
 export type BodyLogEntry = {
@@ -44,7 +45,8 @@ export const useBodyLogStore = create<BodyLogStore>()(
         if (!isApiConfigured) return;
         try {
           const entries = await api.getBodyLog();
-          set({ entries });
+          // Developer Tools test weigh-ins (see lib/dev-tools.ts) only ever exist locally — keep them.
+          set((state) => ({ entries: [...state.entries.filter((entry) => isTestId(entry.id)), ...entries].sort((a, b) => b.loggedAt - a.loggedAt) }));
         } catch (error) {
           console.warn("Failed to sync body log from server, keeping local data", error);
         }
