@@ -348,7 +348,19 @@ export type CreateFoodLogInput = Omit<ApiFoodLog, "loggedAt"> & { loggedAt?: num
 
 export type ApiWaterLog = { id: string; amountMl: number; dateKey: string; loggedAt: number };
 
-export type OffBarcodeLookupResponse = { found: false } | { found: true; food: Food };
+/** One food the AI meal-photo scan found — `grams` is the estimated portion and the macros are for
+ * that whole portion (see backend/routes/nutrition-photo-scan.php). */
+export type MealPhotoItem = { name: string; grams: number; calories: number; proteinG: number; carbsG: number; fatG: number };
+
+/** How many AI scans the user has left today — enforced server-side. `limit` and `remaining` are
+ * `null` for accounts with unlimited scans (developer accounts). */
+export type MealScanQuota = { limit: number | null; used: number; remaining: number | null };
+
+/** Sent with a re-scan when the user says the first result was wrong: what they typed, and what the
+ * first result listed (the photo itself is sent again, since the server never keeps it). */
+export type MealScanCorrection = { hint: string; previousItems: { name: string; grams: number }[] };
+
+export type OffBarcodeLookupResponse ={ found: false } | { found: true; food: Food };
 
 /** `hasMore` reflects Open Food Facts' own result count for the term, not just "did this page come
  * back full" — see backend/routes/nutrition-off.php's handleOffSearch. Lets the client offer a real
@@ -549,6 +561,15 @@ export const api = {
    * on that Food record's `photoUrl`. */
   uploadFoodPhoto: (imageBase64: string, contentType: string) =>
     request<{ url: string }>("/nutrition-food-photo", { method: "POST", body: { imageBase64, contentType } }),
+
+  /** AI meal-photo scan (see backend/routes/nutrition-photo-scan.php) — the photo is analysed by
+   * Gemini server-side and never stored. Counts against the user's daily scan allowance. */
+  getMealScanQuota: () => request<MealScanQuota>("/nutrition-photo-scan"),
+  scanMealPhoto: (imageBase64: string, contentType: string, correction?: MealScanCorrection) =>
+    request<{ items: MealPhotoItem[]; quota: MealScanQuota }>("/nutrition-photo-scan", {
+      method: "POST",
+      body: { imageBase64, contentType, ...correction },
+    }),
 
   /** Flags a Crew or a specific member as objectionable (see backend/routes/reports.php) — reviewed
    * manually for now, no admin UI yet. */

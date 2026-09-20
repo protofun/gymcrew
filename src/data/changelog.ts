@@ -12,6 +12,14 @@ export type ChangelogEntry = {
 /** Newest first — top of the list renders first. Add new entries to the top when shipping. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "ai-meal-scan",
+    publishedAtMs: Date.UTC(2026, 8, 20),
+    type: "feature",
+    title: "Scan Your Meal with AI",
+    description:
+      "Take a photo of your plate and GymCrew splits it into its separate foods, with an estimated portion and macros for each. Adjust the grams, add each item on its own or all at once, and if something's off, describe what it got wrong and we'll look at the photo again. You get 5 AI scans a day. Find it under Add Food → Scan Meal with AI.",
+  },
+  {
     id: "admin-messages",
     publishedAtMs: Date.UTC(2026, 8, 19),
     type: "update",

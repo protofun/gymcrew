@@ -16,7 +16,7 @@ export default function PrivacyScreen() {
         {"\n\n"}
         Activity data: workouts you log (exercises, sets, reps, weight), body-weight and body-fat
         entries, progress photos you choose to upload, nutrition entries (foods, meals, barcodes
-        scanned), and Crew activity (messages/events visible to your Crew).{"\n\n"}
+        scanned; meal photos you scan with the AI meal scan are analysed and not stored), and Crew activity (messages/events visible to your Crew).{"\n\n"}
         Social/Crew data: the Crew(s) you create or join, your role, and your activity within them —
         visible to your fellow Crew members, and to other users if a Crew is set to “Public”.{"\n\n"}
         Usage data: how you use the app, collected via our analytics provider PostHog (screens
@@ -41,7 +41,9 @@ export default function PrivacyScreen() {
         • PostHog — product analytics.{"\n"}
         • Sentry — crash and error reporting.{"\n"}
         • Open Food Facts — public nutrition database, queried when you scan a barcode (no personal
-        data is sent to them beyond the barcode itself).{"\n\n"}
+        data is sent to them beyond the barcode itself).{"\n"}
+        • Google (Gemini) — analyses the photo when you use the AI meal scan. Only the photo is
+        sent; we don&apos;t keep it, and we never send your name or account details with it.{"\n\n"}
         Your Crew name, activity, and (if you set your profile visible) fitness stats are shared with
         your fellow Crew members as a core part of how the Service works — that sharing is the
         product, not a third party.

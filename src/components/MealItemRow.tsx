@@ -13,27 +13,42 @@ type MealItemRowProps = {
   item: MealItem;
   onChangeQuantity: (quantity: number) => void;
   onRemove: () => void;
+  /** Adds a per-row "Add" button — used where each ingredient can be logged on its own (the AI meal
+   * scan). Once `added`, the row is dimmed and locked, with a checkmark instead of the buttons. */
+  onAdd?: () => void;
+  added?: boolean;
 };
 
 /** One ingredient row in the meal/shake builder — reuses the same Stepper every set/weight input in
  * the app already uses, so quantity editing feels identical everywhere, plus a live recalculated
  * macro line underneath (see NUTRITION.md section 14/18's "live nutrition summary"). */
-export function MealItemRow({ item, onChangeQuantity, onRemove }: MealItemRowProps) {
+export function MealItemRow({ item, onChangeQuantity, onRemove, onAdd, added = false }: MealItemRowProps) {
   const macros = scaleMacros(item, item.quantity);
   const isWhole = item.servingUnit === "piece";
   const step = isWhole ? 1 : 5;
 
   return (
-    <View className="gap-2.5 rounded-2xl bg-surface p-3.5">
+    <View className="gap-2.5 rounded-2xl bg-surface p-3.5" style={{ opacity: added ? 0.5 : 1 }} pointerEvents={added ? "none" : "auto"}>
       <View className="flex-row items-center gap-3">
         <FoodThumbnail photoUrl={item.photoUrl} icon="fast-food" color={colors.brand.yellow} size={40} />
         <Text className="body-md font-body-semibold flex-1 text-text-primary" numberOfLines={1}>
           {item.name}
         </Text>
         <SkewedStat size={18} color={colors.neutral.textPrimary}>{`${macros.calories} kcal`}</SkewedStat>
-        <Pressable onPress={onRemove} hitSlop={8}>
-          <Ionicons name="close-circle" size={20} color={colors.neutral.textSecondary} />
-        </Pressable>
+        {added ? (
+          <Ionicons name="checkmark-circle" size={22} color={colors.semantic.success} />
+        ) : (
+          <>
+            {onAdd && (
+              <Pressable onPress={onAdd} hitSlop={6} className="rounded-full bg-brand-yellow px-3 py-1.5">
+                <Text className="caption font-body-bold text-brand-iron">Add</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={onRemove} hitSlop={8}>
+              <Ionicons name="close-circle" size={20} color={colors.neutral.textSecondary} />
+            </Pressable>
+          </>
+        )}
       </View>
 
       <Stepper

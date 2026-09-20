@@ -43,8 +43,8 @@ export default {
       [
         "expo-camera",
         {
-          cameraPermission: "GymCrew needs camera access to scan a barcode and add food to your log.",
-          // GymCrew only ever scans barcodes — no video/photo capture needs audio, so skip
+          cameraPermission: "GymCrew needs camera access to scan a barcode or photograph a meal and add it to your log.",
+          // GymCrew only scans barcodes and takes photos — none of that needs audio, so skip
           // requesting the Android microphone permission entirely.
           recordAudioAndroid: false,
         },

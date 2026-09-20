@@ -23,6 +23,7 @@ require_once __DIR__ . '/routes/nutrition-meals.php';
 require_once __DIR__ . '/routes/nutrition-logs.php';
 require_once __DIR__ . '/routes/nutrition-off.php';
 require_once __DIR__ . '/routes/nutrition-food-photo.php';
+require_once __DIR__ . '/routes/nutrition-photo-scan.php';
 require_once __DIR__ . '/routes/nutrition-water.php';
 require_once __DIR__ . '/routes/state.php';
 require_once __DIR__ . '/routes/reports.php';
@@ -241,6 +242,9 @@ switch ($resource) {
         break;
     case 'nutrition-food-photo':
         handleNutritionFoodPhoto($pdo, $userId, $method, $body);
+        break;
+    case 'nutrition-photo-scan':
+        handleNutritionPhotoScan($pdo, $userId, $method, $body);
         break;
     case 'nutrition-water':
         handleNutritionWater($pdo, $userId, $method, $body, $resourceId);

@@ -229,6 +229,17 @@ export default function AddFoodScreen() {
             <Ionicons name="chevron-forward" size={16} color={colors.brand.iron} />
           </Pressable>
 
+          <Pressable
+            onPress={() => router.push({ pathname: "/nutrition/scan-meal", params: { date: targetDateKey } })}
+            className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface px-4 py-3.5"
+          >
+            <View className="h-9 w-9 items-center justify-center rounded-full bg-brand-yellow/15">
+              <Ionicons name="sparkles" size={18} color={colors.brand.yellow} />
+            </View>
+            <Text className="body-md flex-1 font-body-semibold text-text-primary">Scan Meal with AI</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
+          </Pressable>
+
           <View className="flex-row gap-3">
             <QuickTile
               icon="restaurant-outline"

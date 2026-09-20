@@ -234,6 +234,17 @@ CREATE TABLE IF NOT EXISTS water_logs (
   INDEX idx_waterlogs_user_date (user_id, date_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- One row per AI meal-photo scan (see routes/nutrition-photo-scan.php) — only there to enforce the
+-- per-user daily scan limit, since the free Gemini quota is shared by every user of the app. The
+-- photo itself is never stored, only the fact that a scan happened.
+CREATE TABLE IF NOT EXISTS meal_photo_scans (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id VARCHAR(64) NOT NULL,
+  scanned_at BIGINT NOT NULL,
+  CONSTRAINT fk_mealscans_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_mealscans_user_time (user_id, scanned_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Dedicated table for personal level/rank — pulled out of the generic user_state blob below
 -- specifically so it's directly visible/queryable in phpMyAdmin (not hidden inside a JSON blob).
 -- Written/read by backend/routes/profile_level.php via GET/PUT /profile-level.
