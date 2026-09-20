@@ -19,11 +19,13 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" href="/favicon.ico" />
 
-        {/* iOS Safari doesn't read manifest.json for "Add to Home Screen" — it needs these instead. */}
+        {/* iOS Safari doesn't read manifest.json for "Add to Home Screen" — it needs these instead.
+            The ?v= on the icon URLs busts caches: these files used to be the Expo placeholder and were
+            served with a 7-day max-age, so devices kept the old icon. Bump it whenever the icons change. */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="GymCrew" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
 
         <ScrollViewStyleReset />
       </head>
