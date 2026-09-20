@@ -195,7 +195,9 @@ layer(base);
     overflow-y: auto;
   }
   body {
-    @apply relative font-normal font-outfit z-1 bg-gray-50;
+    /* Default text colour for anything that doesn't set its own (e.g. plain table cells) — without
+       the dark: variant it inherits the browser's black and disappears on the dark background. */
+    @apply relative font-normal font-outfit z-1 bg-gray-50 dark:text-white/90;
   }
 }
 
