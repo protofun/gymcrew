@@ -39,6 +39,7 @@ require_once __DIR__ . '/routes/launch-analytics.php';
 require_once __DIR__ . '/routes/track.php';
 require_once __DIR__ . '/routes/announcement.php';
 require_once __DIR__ . '/routes/banners.php';
+require_once __DIR__ . '/routes/app-config.php';
 require_once __DIR__ . '/routes/admin-users.php';
 require_once __DIR__ . '/routes/roadmap.php';
 require_once __DIR__ . '/routes/content.php';
@@ -84,6 +85,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // from the JWT gate below (the onboarding wizard needs it before an account exists).
 if ($path === 'username-available' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     handleUsernameAvailability(getPdo(), $_GET['username'] ?? null);
+    exit;
+}
+
+// Public, no auth — maintenance mode and "please update" have to reach signed-out users too (see
+// routes/app-config.php).
+if ($path === 'app-config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    handleAppConfig(getPdo());
     exit;
 }
 

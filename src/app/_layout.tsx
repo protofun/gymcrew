@@ -12,6 +12,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { PostHogProvider, usePostHog } from "posthog-react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+import { AppGate } from "@/components/AppGate";
 import { AppToast } from "@/components/AppToast";
 import { DivisionCelebrationWatcher } from "@/components/DivisionCelebrationWatcher";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -145,6 +146,7 @@ export default function RootLayout() {
                 />
               </ThemeProvider>
               <DivisionCelebrationWatcher />
+              <AppGate />
               <AppToast />
             </PostHogProvider>
           </ClerkProvider>

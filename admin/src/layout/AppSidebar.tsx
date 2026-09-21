@@ -77,6 +77,7 @@ const othersItems: NavItem[] = [
     icon: <PlugInIcon />,
     name: "Admin",
     subItems: [
+      { name: "App Controls", path: "/app-controls" },
       { name: "Settings", path: "/settings" },
       { name: "Admin Management", path: "/admins" },
     ],

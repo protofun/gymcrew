@@ -28,6 +28,7 @@ const PAGES: { label: string; path: string; group: string }[] = [
   { label: "Push Notifications", path: "/push", group: "Communicate" },
   { label: "Banners & Promos", path: "/banners", group: "Communicate" },
   { label: "Reports Center", path: "/reports-center", group: "Data" },
+  { label: "App Controls", path: "/app-controls", group: "Admin" },
   { label: "Settings", path: "/settings", group: "Admin" },
   { label: "Admin Management", path: "/admins", group: "Admin" },
 ];

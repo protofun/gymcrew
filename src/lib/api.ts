@@ -208,6 +208,13 @@ export type ApiBanner = {
   endsAt: number | null;
   dismissible: boolean;
 };
+
+/** Remote switches from the admin panel's App Controls page — see backend/routes/app-config.php. */
+export type ApiAppConfig = {
+  maintenance: { enabled: boolean; message: string };
+  update: { minVersion: string; message: string; iosUrl: string; androidUrl: string };
+  features: { aiMealScan: boolean };
+};
 export type ApiSupportReply = { id: number; senderType: "admin" | "user"; body: string; createdAt: number };
 
 export type ApiRoadmapItem = { id: number; title: string; description: string | null; status: "planned" | "in_progress" | "shipped"; updatedAt: number };
@@ -394,6 +401,8 @@ export const api = {
   /** Counts for the admin panel's per-banner stats. Fire-and-forget: a failure never matters. */
   trackBannerView: (id: number) => request<{ ok: true }>(`/banners/${id}/view`, { method: "POST" }),
   trackBannerClick: (id: number) => request<{ ok: true }>(`/banners/${id}/click`, { method: "POST" }),
+  /** Public (no auth) — maintenance mode and forced updates must reach signed-out users too. */
+  getAppConfig: () => requestPublic<ApiAppConfig>("/app-config"),
   /** The public roadmap (planned / in progress / shipped) — see backend/routes/roadmap.php and
    * the admin panel's Roadmap page. */
   getRoadmap: () => request<ApiRoadmapItem[]>("/roadmap"),

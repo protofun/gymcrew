@@ -2,7 +2,9 @@
 
 A full admin dashboard for GymCrew — users, crews, content reports, a real two-way support chat,
 internal notes, an admin task board (Kanban + calendar), a public roadmap, admin-account
-management, app-wide announcements, and a drag-and-drop broadcast email builder. Built on
+management, in-app banners and popups (deals, notices), remote app controls (maintenance mode,
+forced updates, AI-scan switch), per-user account management (edit profile data, set a new
+password), and a drag-and-drop broadcast email builder. Built on
 [TailAdmin](https://tailadmin.com/react) (free, MIT-licensed React + Vite + Tailwind CSS admin
 template), talking to the same PHP/MySQL backend the app uses (see `../backend/`).
 

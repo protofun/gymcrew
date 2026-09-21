@@ -19,6 +19,7 @@ import Tasks from "./pages/Tasks";
 import Roadmap from "./pages/Roadmap";
 import Admins from "./pages/Admins";
 import Banners from "./pages/Banners";
+import AppControls from "./pages/AppControls";
 import Email from "./pages/Email";
 import Analytics from "./pages/Analytics";
 import AuditLog from "./pages/AuditLog";
@@ -70,6 +71,7 @@ export default function App() {
             <Route path="/status" element={<StatusPage />} />
             <Route path="/banners" element={<Banners />} />
             <Route path="/announcements" element={<Navigate to="/banners" replace />} />
+            <Route path="/app-controls" element={<AppControls />} />
             <Route path="/email" element={<Email />} />
             <Route path="/push" element={<PushComposer />} />
             <Route path="/reports-center" element={<ReportsCenter />} />

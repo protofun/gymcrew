@@ -210,7 +210,7 @@ function handleAdmin(PDO $pdo, string $method, ?array $body, array $segments): v
 
     if ($sub === 'settings') {
         if ($method === 'GET') { respondWithSettings($pdo); return; }
-        if ($method === 'PUT') { updateSetting($pdo, $data); return; }
+        if ($method === 'PUT') { updateSetting($pdo, (string) $admin['sub'], (string) $admin['email'], $data); return; }
     }
 
     if ($sub === '2fa') {

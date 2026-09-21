@@ -55,7 +55,7 @@ function respondWithSettings(PDO $pdo): void
     jsonResponse($settings);
 }
 
-function updateSetting(PDO $pdo, array $data): void
+function updateSetting(PDO $pdo, string $adminId, string $adminEmail, array $data): void
 {
     $key = trim((string) ($data['key'] ?? ''));
     $value = (string) ($data['value'] ?? '');
@@ -69,6 +69,8 @@ function updateSetting(PDO $pdo, array $data): void
          ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at)'
     )->execute([$key, mb_substr($value, 0, 500), (int) round(microtime(true) * 1000)]);
 
+    // Some of these switch the whole app (maintenance mode, forced updates) — worth an audit entry.
+    logAdminAction($pdo, $adminId, $adminEmail, 'update_setting', 'setting', $key, mb_substr($value, 0, 200));
     jsonResponse(['ok' => true]);
 }
 

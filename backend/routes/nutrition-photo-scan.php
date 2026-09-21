@@ -18,8 +18,9 @@
  *        body: { imageBase64, contentType, hint?, previousItems?: [{ name, grams }] }
  */
 
-// Everyone gets this many scans a day for now. Once subscriptions exist this drops to 1 for free
-// users, and subscribers become unlimited (see mealScanDailyLimit).
+// Everyone gets this many scans a day for now, unless the admin panel's App Controls page sets its own
+// number (app_settings `ai_scan_daily_limit`, see mealScanDailyLimit). Once subscriptions exist this drops
+// to 1 for free users, and subscribers become unlimited.
 const MEAL_SCAN_FREE_PER_DAY = 5;
 // Developer accounts (same people as DEVELOPER_MODE_EMAILS in src/store/developer-mode-store.ts —
 // keep the two in sync) are unlimited. Matched against `users.email`, which is only ever written from
@@ -51,7 +52,8 @@ function mealScanDailyLimit(PDO $pdo, string $userId): ?int
     if ($email !== '' && in_array($email, MEAL_SCAN_UNLIMITED_EMAILS, true)) {
         return null;
     }
-    return MEAL_SCAN_FREE_PER_DAY;
+    $configured = getAppSetting($pdo, 'ai_scan_daily_limit');
+    return ctype_digit($configured) ? (int) $configured : MEAL_SCAN_FREE_PER_DAY;
 }
 
 /** Scans this user has made since midnight (server time). Counted server-side so the client can't
@@ -81,7 +83,9 @@ function handleNutritionPhotoScan(PDO $pdo, string $userId, string $method, ?arr
         return;
     }
 
-    if ((string) env('GEMINI_API_KEY', '') === '') {
+    // The admin panel's App Controls kill switch — the free Gemini quota is shared by everyone, so this
+    // is the way to stop all scanning at once if it runs out or misbehaves.
+    if ((string) env('GEMINI_API_KEY', '') === '' || getAppSetting($pdo, 'ai_scan_enabled', '1') === '0') {
         errorResponse('Meal scanning is not available right now', 503);
         return;
     }
