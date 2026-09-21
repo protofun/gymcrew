@@ -91,12 +91,15 @@ function saveUploadedImage(string $subdir, string $filenamePrefix, string $image
  * never leaves this file). Used only by the Founding Athlete <-> real-app-account bridge (see
  * routes/athlete-signup.php's createClerkUserForFoundingAthlete / createClerkSignInTicket). Returns
  * null on any failure — including CLERK_SECRET_KEY simply not being configured, which callers treat
- * as "that feature is disabled here," never as a fatal error.
+ * as "that feature is disabled here," never as a fatal error. Callers that want to show *why* it
+ * failed (the admin panel's password/email changes) pass `$error`, which is filled with Clerk's own
+ * message (e.g. "Passwords must be 8 characters or more.") — everyone else can ignore it.
  */
-function clerkApiRequest(string $method, string $path, array $body = []): ?array
+function clerkApiRequest(string $method, string $path, array $body = [], ?string &$error = null): ?array
 {
     $secretKey = env('CLERK_SECRET_KEY', '');
     if ($secretKey === '') {
+        $error = 'CLERK_SECRET_KEY is not configured in .env';
         return null;
     }
 
@@ -105,7 +108,8 @@ function clerkApiRequest(string $method, string $path, array $body = []): ?array
         CURLOPT_CUSTOMREQUEST => $method,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $secretKey, 'Content-Type: application/json'],
-        CURLOPT_POSTFIELDS => $method === 'GET' ? null : json_encode($body),
+        // An empty body must go out as `{}` (json_encode([]) would send `[]`, which some Clerk endpoints reject).
+        CURLOPT_POSTFIELDS => $method === 'GET' ? null : json_encode($body === [] ? new stdClass() : $body),
         CURLOPT_TIMEOUT => 10,
     ]);
     $response = curl_exec($ch);
@@ -115,6 +119,8 @@ function clerkApiRequest(string $method, string $path, array $body = []): ?array
 
     if ($response === false || $curlError !== '' || $status >= 400) {
         error_log("Clerk API $method $path failed (status $status): " . ($curlError ?: $response));
+        $clerkError = json_decode((string) $response, true)['errors'][0] ?? [];
+        $error = $curlError !== '' ? $curlError : (string) ($clerkError['long_message'] ?? $clerkError['message'] ?? "Clerk request failed (status $status)");
         return null;
     }
 

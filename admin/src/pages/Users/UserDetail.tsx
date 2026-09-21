@@ -7,9 +7,11 @@ import PageMeta from "../../components/common/PageMeta";
 import Badge from "../../components/ui/badge/Badge";
 import Button from "../../components/ui/button/Button";
 import Input from "../../components/form/input/InputField";
+import { EditUserModal } from "../../components/admin/EditUserModal";
 import { NotesPanel } from "../../components/admin/NotesPanel";
 import { SearchableSelect } from "../../components/admin/SearchableSelect";
 import { SendMessageModal } from "../../components/admin/SendMessageModal";
+import { SetPasswordModal } from "../../components/admin/SetPasswordModal";
 import {
   api,
   ApiError,
@@ -104,7 +106,7 @@ export default function UserDetail() {
         ))}
       </div>
 
-      {tab === "Overview" && <OverviewTab user={user} onToggleBan={toggleBan} onDelete={handleDelete} />}
+      {tab === "Overview" && <OverviewTab user={user} onUserChange={setUser} onToggleBan={toggleBan} onDelete={handleDelete} />}
       {tab === "Behavior" && <BehaviorTab userId={user.id} />}
       {tab === "Ranks" && <RanksTab userId={user.id} />}
       {tab === "Workouts" && <WorkoutsTab userId={user.id} />}
@@ -113,8 +115,30 @@ export default function UserDetail() {
   );
 }
 
-function OverviewTab({ user, onToggleBan, onDelete }: { user: AdminUserDetail; onToggleBan: () => void; onDelete: () => void }) {
+function OverviewTab({
+  user,
+  onUserChange,
+  onToggleBan,
+  onDelete,
+}: {
+  user: AdminUserDetail;
+  onUserChange: (user: AdminUserDetail) => void;
+  onToggleBan: () => void;
+  onDelete: () => void;
+}) {
   const [messageModalOpen, setMessageModalOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+
+  async function handleSignOut() {
+    if (!window.confirm(`Sign ${user.email ?? user.id} out of all their devices? They can sign back in with their password.`)) return;
+    try {
+      const { revoked } = await api.signOutUser(user.id);
+      toast.success(revoked === 0 ? "No active sessions to sign out" : `Signed out of ${revoked} session${revoked === 1 ? "" : "s"}`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to sign the user out");
+    }
+  }
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -152,6 +176,15 @@ function OverviewTab({ user, onToggleBan, onDelete }: { user: AdminUserDetail; o
         <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/[0.03]">
           <h3 className="mb-4 text-base font-medium text-gray-800 dark:text-white/90">Actions</h3>
           <div className="flex flex-col gap-3">
+            <Button variant="outline" onClick={() => setEditOpen(true)}>
+              Edit Profile
+            </Button>
+            <Button variant="outline" onClick={() => setPasswordOpen(true)}>
+              Set New Password
+            </Button>
+            <Button variant="outline" onClick={handleSignOut}>
+              Sign Out Everywhere
+            </Button>
             <Button variant="outline" onClick={() => setMessageModalOpen(true)}>
               Send Message
             </Button>
@@ -168,6 +201,8 @@ function OverviewTab({ user, onToggleBan, onDelete }: { user: AdminUserDetail; o
       </div>
 
       <SendMessageModal isOpen={messageModalOpen} onClose={() => setMessageModalOpen(false)} userIds={[user.id]} />
+      <EditUserModal isOpen={editOpen} onClose={() => setEditOpen(false)} user={user} onSaved={onUserChange} />
+      <SetPasswordModal isOpen={passwordOpen} onClose={() => setPasswordOpen(false)} userId={user.id} userLabel={user.email ?? user.id} />
     </div>
   );
 }

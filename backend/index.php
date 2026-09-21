@@ -38,6 +38,7 @@ require_once __DIR__ . '/routes/analytics-events.php';
 require_once __DIR__ . '/routes/launch-analytics.php';
 require_once __DIR__ . '/routes/track.php';
 require_once __DIR__ . '/routes/announcement.php';
+require_once __DIR__ . '/routes/admin-users.php';
 require_once __DIR__ . '/routes/roadmap.php';
 require_once __DIR__ . '/routes/content.php';
 require_once __DIR__ . '/routes/feedback.php';

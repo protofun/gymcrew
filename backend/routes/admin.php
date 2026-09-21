@@ -16,6 +16,9 @@
  *   GET    /admin/users?search=&page=      -> paginated user list
  *   GET    /admin/users/:id                -> one user's detail
  *   PUT    /admin/users/:id                -> { banned: true|false }
+ *   PUT    /admin/users/:id/profile        -> edit personal data (see routes/admin-users.php)
+ *   POST   /admin/users/:id/password       -> { password } set a new password (write-only, via Clerk)
+ *   POST   /admin/users/:id/sign-out       -> sign the user out of every session
  *   DELETE /admin/users/:id                -> permanently deletes the account and all its data
  *   GET    /admin/crews?search=&page=      -> paginated crew list
  *   GET    /admin/crews/:id                -> one crew's detail + members
@@ -150,6 +153,9 @@ function handleAdmin(PDO $pdo, string $method, ?array $body, array $segments): v
         if ($id !== null && $userAction === 'workouts' && $method === 'GET') { respondWithUserWorkouts($pdo, $id); return; }
         if ($id !== null && $userAction === 'crew' && $method === 'PUT') { moveUserCrew($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data); return; }
         if ($id !== null && $userAction === 'activity' && $method === 'GET') { respondWithUserEventActivity($pdo, $id); return; }
+        if ($id !== null && $userAction === 'profile' && $method === 'PUT') { updateAdminUserProfile($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data); return; }
+        if ($id !== null && $userAction === 'password' && $method === 'POST') { setAdminUserPassword($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data); return; }
+        if ($id !== null && $userAction === 'sign-out' && $method === 'POST') { signOutAdminUserEverywhere($pdo, (string) $admin['sub'], (string) $admin['email'], $id); return; }
         if ($id !== null && $method === 'GET') { respondWithAdminUserDetail($pdo, $id); return; }
         if ($id !== null && $method === 'PUT') { updateAdminUser($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data); return; }
         if ($id !== null && $method === 'DELETE') { deleteAdminUser($pdo, (string) $admin['sub'], (string) $admin['email'], $id); return; }

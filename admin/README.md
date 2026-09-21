@@ -52,6 +52,11 @@ the `/admin/*` path — same backend, same deploy, no separate server. Before us
    never logs the plaintext password anywhere.
 4. Upload the backend changes (`routes/admin.php`, `routes/push-token.php` if not already live,
    `admin-auth.php`, the updated `index.php`) via FTP, same as always.
+5. Set `CLERK_SECRET_KEY` in `backend/.env` too. Passwords and login emails live in Clerk, so
+   **Set New Password**, **Sign Out Everywhere** and changing a user's email on their detail page all
+   go through Clerk's Backend API — without the key those three buttons show an error (everything
+   else, including editing the other profile fields, keeps working). Passwords are write-only: there
+   is no way to read one back, and they never touch our database or the audit log.
 
 ## 2. Configure and build this app
 

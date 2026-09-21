@@ -306,6 +306,20 @@ export type AdminSupportDetail = {
 
 export type AdminAnnouncement = { id: number; message: string; active: boolean; createdAt: number };
 
+/** The personal data an admin may change on a user (any subset). An empty string clears a field. */
+export type UserProfileUpdate = Partial<{
+  email: string;
+  fullName: string;
+  username: string;
+  gender: "male" | "female" | "";
+  heightCm: number | "";
+  weightKg: number | "";
+  age: number | "";
+  gymName: string;
+  goal: string;
+  experienceLevel: string;
+}>;
+
 export type AdminNote = { id: number; note: string; createdByEmail: string; createdAt: number };
 export type NoteTargetType = "user" | "crew" | "support";
 
@@ -401,6 +415,11 @@ export const api = {
   getUser: (id: string) => request<AdminUserDetail>(`/users/${id}`),
   setUserBanned: (id: string, banned: boolean) => request<{ ok: true }>(`/users/${id}`, { method: "PUT", body: { banned } }),
   deleteUser: (id: string) => request<{ ok: true }>(`/users/${id}`, { method: "DELETE" }),
+  updateUserProfile: (id: string, fields: UserProfileUpdate) => request<AdminUserDetail>(`/users/${id}/profile`, { method: "PUT", body: fields }),
+  /** Write-only: there is no way to read a password back, only to set a new one. */
+  setUserPassword: (id: string, password: string, signOutEverywhere: boolean) =>
+    request<{ ok: true }>(`/users/${id}/password`, { method: "POST", body: { password, signOutEverywhere } }),
+  signOutUser: (id: string) => request<{ ok: true; revoked: number }>(`/users/${id}/sign-out`, { method: "POST" }),
 
   // ---- User Detail: behavior / ranks / workouts / crew management ----
   getUserActivity: (id: string) => request<UserActivity>(`/users/${id}/activity`),
