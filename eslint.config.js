@@ -5,6 +5,8 @@ const expoConfig = require("eslint-config-expo/flat");
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ["dist/*"],
+    // src/components/ui + src/shared are Reacticx components copied in by its CLI (see component.config.json)
+    // — third-party source we only patch, not code written to this project's lint rules.
+    ignores: ["dist/*", "src/components/ui/**", "src/shared/**"],
   }
 ]);

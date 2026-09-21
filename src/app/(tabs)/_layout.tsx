@@ -40,6 +40,7 @@ import { useFavoriteExercisesStore } from "@/store/favorite-exercises-store";
 import { useFavoriteFoodsStore } from "@/store/favorite-foods-store";
 import { useGoalsStore } from "@/store/goals-store";
 import { useNotificationsStore } from "@/store/notifications-store";
+import { useAiMealsStore } from "@/store/ai-meals-store";
 import { useNutritionLogStore } from "@/store/nutrition-log-store";
 import { useNutritionMealsStore } from "@/store/nutrition-meals-store";
 import { useNutritionTargetsStore } from "@/store/nutrition-targets-store";
@@ -220,6 +221,7 @@ export default function TabsLayout() {
         useNutritionTargetsStore.getState().syncFromServer(),
         useNutritionMealsStore.getState().syncFromServer(),
         useNutritionLogStore.getState().syncFromServer(),
+        useAiMealsStore.getState().syncFromServer(),
         useWaterLogStore.getState().syncFromServer(),
         useBlockedUsersStore.getState().syncFromServer(),
       ]);

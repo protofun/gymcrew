@@ -17,7 +17,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     type: "feature",
     title: "Scan Your Meal with AI",
     description:
-      "Take a photo of your plate and GymCrew splits it into its separate foods, with an estimated portion and macros for each. Adjust the grams, add each item on its own or all at once, and if something's off, describe what it got wrong and we'll look at the photo again. You get 5 AI scans a day. Find it under Add Food → Scan Meal with AI.",
+      "Take a photo of your plate and GymCrew splits it into its separate foods, with an estimated portion and macros for each — and adds the whole meal to your log straight away. It shows up in your food diary as one meal with your photo; tap it to see the ingredients. Adjust the grams, take out anything the AI got wrong with the trash can, or describe what it missed and it will look at the photo again. You get 5 AI scans a day. Find it under Add Food → Scan Meal with AI.",
   },
   {
     id: "admin-messages",

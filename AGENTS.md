@@ -248,6 +248,25 @@ Be concise. Explain what changed and how to test it.
 
 ---
 
+## Reacticx (AI meal-scan flow only)
+
+The AI meal-scan flow (`app/nutrition/scan-meal.tsx`, its detail screen `app/nutrition/ai-meal/[id].tsx`, and the
+`AiScan*` / `AiPhotoGlow` / `AiBeamFrame` components) is built on Reacticx components, copied in by its CLI (`component.config.json`, output in
+`src/components/ui` and `src/shared`). Nothing else in the app uses Reacticx — every other screen stays
+on NativeWind and our own components.
+
+- Add components with `npx reacticx add <name> --no-install`, and check their imports first. `expo-blur`
+  and `@react-native-masked-view/masked-view` are NOT in the app's native build — patch them out of the
+  copied source (as done for `animated-text`, `animated-input-bar`, `fan-menu`, `accordion`) or pick another
+  component. Ask before installing any new native package.
+- Skia-based components (`apple-intelligence`, `border-beam`) are native only. Give each a `.web.tsx` twin
+  without Skia (see `AiPhotoGlow`, `AiBeamFrame`), because the app also ships as a web/PWA build.
+- The flow's screens use the app's own background and surface colors (`constants/ai-scan-theme.ts`), no
+  gradient backdrop.
+- `src/components/ui/**` and `src/shared/**` are excluded from lint: it is third-party source.
+
+---
+
 ## Final Reminder
 
 Before every feature:

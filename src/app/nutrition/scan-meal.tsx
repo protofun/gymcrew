@@ -1,30 +1,36 @@
-import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { View } from "react-native";
 import { usePostHog } from "posthog-react-native";
 
-import { MacroTotalsBar } from "@/components/MacroTotalsBar";
-import { MealItemRow } from "@/components/MealItemRow";
-import { images } from "@/constants/images";
+import { AiScanAnalyzing, type AnalysisStatus } from "@/components/AiScanAnalyzing";
+import { AiScanCamera } from "@/components/AiScanCamera";
+import { SLIDER_STEP } from "@/components/AiScanIngredientRow";
+import { AiScanNotice } from "@/components/AiScanNotice";
+import { PORTION_FACTORS, type PortionSize } from "@/components/AiScanPortionChips";
+import { AiScanResults } from "@/components/AiScanResults";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { api, isApiConfigured, type MealItem, type MealPhotoItem, type MealScanCorrection, type MealScanQuota } from "@/lib/api";
+import { newAiMealId, saveAiMealToLog } from "@/lib/ai-meals";
 import { toDateKey } from "@/lib/date";
-import { MEAL_SLOTS, mealSlotForTime, type MealSlot } from "@/lib/meal-slot";
+import { mealSlotForTime, type MealSlot } from "@/lib/meal-slot";
 import { goBack } from "@/lib/navigation";
 import { scaleMacros, sumMacros } from "@/lib/nutrition-macros";
+import { useAiMealsStore, type AiMealItem } from "@/store/ai-meals-store";
 import { useNutritionLogStore } from "@/store/nutrition-log-store";
-import { colors } from "@/theme";
+import { useNutritionTargetsStore } from "@/store/nutrition-targets-store";
 
 type Phase = "camera" | "analyzing" | "review";
 type Photo = { base64: string; uri: string };
 
 // Low JPEG quality keeps the upload small; it's still plenty of detail to recognise food.
 const PHOTO_QUALITY = 0.4;
+/** How long after the last change (a slider drag, a removed ingredient) the log entry is rewritten. */
+const COMMIT_DELAY_MS = 500;
 
-/** The AI's estimate as an editable ingredient row — `servingSize` is the estimated portion, so
+/** The AI's estimate as an editable ingredient — `servingSize` is the estimated portion, so
  * `scaleMacros` scales the macros as the user corrects the grams. */
 function toMealItem(item: MealPhotoItem, index: number): MealItem {
   return {
@@ -41,29 +47,57 @@ function toMealItem(item: MealPhotoItem, index: number): MealItem {
   };
 }
 
-/** Photo → AI estimate → editable list → log. The photo goes to the backend (see
- * backend/routes/nutrition-photo-scan.php), which asks Gemini what's on the plate and never stores
- * it — so the screen keeps the photo itself, to send it again with a correction. Nothing is logged
- * until the user taps "Add" on a single ingredient or "Add All to Log": portions from a photo are a
- * best guess, so every row can be corrected (grams, or a typed description) or removed first. */
+/** What gets stored for an ingredient: its grams and the macros of that whole portion. */
+function toAiMealItem(item: MealItem): AiMealItem {
+  return { id: item.id, name: item.name, grams: item.quantity, ...scaleMacros(item, item.quantity) };
+}
+
+/** Identifies the meal's current state, to tell whether the log entry is still up to date. */
+function signatureOf(items: MealItem[], slot: MealSlot): string {
+  return JSON.stringify([slot, items.map((item) => [item.id, item.quantity])]);
+}
+
+/** Photo → AI estimate → the meal is logged straight away. The photo goes to the backend (see
+ * backend/routes/nutrition-photo-scan.php), which asks Gemini what's on the plate. The whole meal is
+ * then written to the food log as ONE entry (see lib/ai-meals.ts) — and this screen only adjusts that
+ * entry: grams, a trash can per ingredient, the meal slot, or a typed correction that re-analyses the
+ * photo. The photo is also uploaded (in the background) so it can be shown with the meal in the log.
+ * This file holds the state and the API calls; every step is its own AiScan* component. */
 export default function ScanMealScreen() {
-  const insets = useSafeAreaInsets();
   const posthog = usePostHog();
   const { date } = useLocalSearchParams<{ date?: string }>();
   const targetDateKey = date ?? toDateKey(new Date());
   const cameraRef = useRef<CameraView>(null);
+  const applyOutcomeRef = useRef<(() => void) | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
-  const addEntry = useNutritionLogStore((state) => state.addEntry);
+  const entries = useNutritionLogStore((state) => state.entries);
+  const targetCalories = useNutritionTargetsStore((state) => state.calories);
 
   const [phase, setPhase] = useState<Phase>("camera");
+  const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>("working");
   const [quota, setQuota] = useState<MealScanQuota | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [items, setItems] = useState<MealItem[]>([]);
-  const [addedIds, setAddedIds] = useState<string[]>([]);
   const [hint, setHint] = useState("");
+  const [portion, setPortion] = useState<PortionSize>("regular");
   const [mealSlot, setMealSlot] = useState<MealSlot>(mealSlotForTime());
   const [error, setError] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  // The meal being logged. Refs, not state: they're read from timers and the unmount cleanup, and must
+  // never be stale — a stale copy is exactly how an item ends up logged twice.
+  const aiMealIdRef = useRef<string | null>(null);
+  const createdAtRef = useRef(Date.now());
+  const photoRef = useRef<Photo | null>(null);
+  const photoUrlRef = useRef<string | null>(null);
+  const photoUploadStartedRef = useRef(false);
+  const savedSignatureRef = useRef("");
+  const latestRef = useRef({ items, mealSlot });
+
+  useEffect(() => {
+    latestRef.current = { items, mealSlot };
+  });
 
   useEffect(() => {
     if (!isApiConfigured) return;
@@ -73,12 +107,92 @@ export default function ScanMealScreen() {
       .catch((err) => console.warn("Failed to load meal scan quota", err));
   }, []);
 
-  const pendingItems = useMemo(() => items.filter((item) => !addedIds.includes(item.id) && item.quantity > 0), [items, addedIds]);
-  const totals = useMemo(() => sumMacros(pendingItems.map((item) => scaleMacros(item, item.quantity))), [pendingItems]);
+  const dayCalories = useMemo(() => sumMacros(entries.filter((entry) => entry.dateKey === targetDateKey)).calories, [entries, targetDateKey]);
+
+  /** Writes the meal to the log — its single entry is replaced, never added to. */
+  const commitMeal = useCallback(
+    (list: MealItem[], slot: MealSlot) => {
+      if (!aiMealIdRef.current) aiMealIdRef.current = newAiMealId();
+      saveAiMealToLog({
+        id: aiMealIdRef.current,
+        photoUrl: photoUrlRef.current ?? photoRef.current?.uri ?? "",
+        items: list.map(toAiMealItem),
+        mealSlot: slot,
+        dateKey: targetDateKey,
+        createdAt: createdAtRef.current,
+      });
+      savedSignatureRef.current = signatureOf(list, slot);
+    },
+    [targetDateKey],
+  );
+
+  /** Uploads the photo once, in the background, and points the meal at the uploaded copy when it's there
+   * — until then (or if it fails) the meal keeps the phone's own file. */
+  function uploadPhotoOnce() {
+    const source = photoRef.current;
+    const mealId = aiMealIdRef.current;
+    if (!source || !mealId || photoUploadStartedRef.current || !isApiConfigured) return;
+    photoUploadStartedRef.current = true;
+    api
+      .uploadFoodPhoto(source.base64, "image/jpeg")
+      .then(({ url }) => {
+        photoUrlRef.current = url;
+        useAiMealsStore.getState().setPhotoUrl(mealId, url);
+      })
+      .catch((err) => console.warn("Failed to upload the meal photo", err));
+  }
+
+  // Changes made in the results screen reach the log a moment after you stop touching things.
+  useEffect(() => {
+    if (phase !== "review" || !aiMealIdRef.current) return;
+    if (signatureOf(items, mealSlot) === savedSignatureRef.current) return;
+    const timer = setTimeout(() => commitMeal(items, mealSlot), COMMIT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [items, mealSlot, phase, commitMeal]);
+
+  // Leaving before that moment has passed must not lose the last change.
+  useEffect(
+    () => () => {
+      const { items: latestItems, mealSlot: latestSlot } = latestRef.current;
+      if (aiMealIdRef.current && signatureOf(latestItems, latestSlot) !== savedSignatureRef.current) commitMeal(latestItems, latestSlot);
+    },
+    [commitMeal],
+  );
 
   function handleBack() {
     goBack("/nutrition/add");
   }
+
+  function handleFlush() {
+    if (aiMealIdRef.current && signatureOf(items, mealSlot) !== savedSignatureRef.current) commitMeal(items, mealSlot);
+  }
+
+  function handleDone() {
+    router.replace("/nutrition");
+  }
+
+  /** Takes the whole meal out of the log again. */
+  function handleRemoveMeal() {
+    setConfirmRemove(false);
+    if (aiMealIdRef.current) {
+      saveAiMealToLog({ id: aiMealIdRef.current, photoUrl: "", items: [], mealSlot, dateKey: targetDateKey });
+      aiMealIdRef.current = null;
+      posthog.capture("ai_meal_removed");
+    }
+    router.replace("/nutrition");
+  }
+
+  /** The result is in — but the analysing screen first winds its glow down. Whatever should happen
+   * next is parked here and runs when that animation calls back (`handleAnalysisExited`). */
+  function finishAnalysis(status: AnalysisStatus, applyOutcome: () => void) {
+    applyOutcomeRef.current = applyOutcome;
+    setAnalysisStatus(status);
+  }
+
+  const handleAnalysisExited = useCallback(() => {
+    applyOutcomeRef.current?.();
+    applyOutcomeRef.current = null;
+  }, []);
 
   async function analyze(next: Photo, correction?: MealScanCorrection) {
     if (!isApiConfigured) {
@@ -86,8 +200,10 @@ export default function ScanMealScreen() {
       return;
     }
 
+    photoRef.current = next;
     setPhoto(next);
     setError(null);
+    setAnalysisStatus("working");
     setPhase("analyzing");
     // A failed correction goes back to the list the user already had; a failed first scan to the camera.
     const fallbackPhase: Phase = correction ? "review" : "camera";
@@ -96,18 +212,33 @@ export default function ScanMealScreen() {
       setQuota(result.quota);
       posthog.capture("meal_photo_scanned", { item_count: result.items.length, is_correction: !!correction });
       if (result.items.length === 0) {
-        setError(correction ? "We couldn't find any food with that description. Try describing it differently." : "We couldn't spot any food in that photo. Try again with the whole plate in view.");
-        setPhase(fallbackPhase);
+        const message = correction
+          ? "We couldn't find any food with that description. Try describing it differently."
+          : "We couldn't spot any food in that photo. Try again with the whole plate in view.";
+        finishAnalysis("failed", () => {
+          setError(message);
+          setPhase(fallbackPhase);
+        });
         return;
       }
-      setItems(result.items.map(toMealItem));
-      setAddedIds([]);
-      setHint("");
-      setPhase("review");
+      const nextItems = result.items.map(toMealItem);
+      finishAnalysis("done", () => {
+        setItems(nextItems);
+        setHint("");
+        setPortion("regular");
+        setPhase("review");
+        // The meal goes into the log right away; a correction replaces the earlier version.
+        commitMeal(nextItems, mealSlot);
+        uploadPhotoOnce();
+        posthog.capture("food_logged", { source: "photo_scan", meal_slot: mealSlot, item_count: nextItems.length, calories: sumMacros(nextItems.map((item) => scaleMacros(item, item.quantity))).calories });
+      });
     } catch (err) {
       console.warn("Meal photo scan failed", err);
-      setError(err instanceof Error ? err.message : "Couldn't analyse that photo. Try again.");
-      setPhase(fallbackPhase);
+      const message = err instanceof Error ? err.message : "Couldn't analyse that photo. Try again.";
+      finishAnalysis("failed", () => {
+        setError(message);
+        setPhase(fallbackPhase);
+      });
       // A "used all your scans" error should flip to the limit screen, so re-read the real count.
       api.getMealScanQuota().then(setQuota).catch(() => {});
     }
@@ -148,227 +279,100 @@ export default function ScanMealScreen() {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, quantity } : item)));
   }
 
+  /** Scales every ingredient from the AI's original estimate (`servingSize`), rounded to slider steps. */
+  function handleChangePortion(next: PortionSize) {
+    setPortion(next);
+    const factor = PORTION_FACTORS[next];
+    setItems((current) => current.map((item) => ({ ...item, quantity: Math.max(SLIDER_STEP, Math.round((item.servingSize * factor) / SLIDER_STEP) * SLIDER_STEP) })));
+  }
+
   function handleRemoveItem(id: string) {
     setItems((current) => current.filter((item) => item.id !== id));
   }
 
-  function logItem(item: MealItem) {
-    addEntry({
-      foodId: null,
-      mealId: null,
-      name: item.name,
-      mealSlot,
-      quantity: item.quantity,
-      unit: "g",
-      dateKey: targetDateKey,
-      ...scaleMacros(item, item.quantity),
-    });
-  }
-
-  /** Logs just this ingredient and keeps the rest of the list, so a meal can be saved piece by piece. */
-  function handleAddOne(item: MealItem) {
-    if (item.quantity <= 0) return;
-    logItem(item);
-    setAddedIds((current) => [...current, item.id]);
-    posthog.capture("food_logged", { source: "photo_scan", meal_slot: mealSlot, item_count: 1, calories: scaleMacros(item, item.quantity).calories });
-  }
-
-  function handleAddAll() {
-    for (const item of pendingItems) logItem(item);
-    posthog.capture("food_logged", { source: "photo_scan", meal_slot: mealSlot, item_count: pendingItems.length, calories: totals.calories });
-    router.replace("/nutrition");
-  }
-
-  if (phase === "review") {
-    const nothingAddedYet = addedIds.length === 0;
-    const outOfScans = quota?.remaining === 0;
+  if (phase === "review" && photo) {
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
-        <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-          <Pressable onPress={handleBack} hitSlop={8} style={{ position: "absolute", left: 16 }}>
-            <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
-          </Pressable>
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="sparkles" size={16} color={colors.brand.yellow} />
-            <Text className="heading-4 text-text-primary">Your Meal</Text>
-          </View>
-        </View>
-
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View className="flex-row items-center gap-3">
-            {photo && <Image source={{ uri: photo.uri }} resizeMode="cover" style={{ width: 64, height: 64, borderRadius: 16 }} />}
-            <Text className="body-sm flex-1 text-text-secondary">
-              Estimated from your photo. Change the grams, add each item on its own, or add them all at once.
-            </Text>
-          </View>
-
-          <View className="gap-2.5">
-            <Text className="body-sm font-body-semibold text-text-secondary">WHAT WE FOUND</Text>
-            {items.length === 0 ? (
-              <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-10">
-                <Text className="body-sm text-text-secondary">Nothing left to add.</Text>
-              </View>
-            ) : (
-              items.map((item) => (
-                <MealItemRow
-                  key={item.id}
-                  item={item}
-                  onChangeQuantity={(quantity) => handleChangeQuantity(item.id, quantity)}
-                  onRemove={() => handleRemoveItem(item.id)}
-                  onAdd={() => handleAddOne(item)}
-                  added={addedIds.includes(item.id)}
-                />
-              ))
-            )}
-          </View>
-
-          {nothingAddedYet && (
-            <View className="gap-2.5 rounded-2xl border border-divider bg-surface p-3.5">
-              <Text className="body-md font-body-semibold text-text-primary">Something not right?</Text>
-              <Text className="body-sm text-text-secondary">Describe what it got wrong and we&apos;ll look at the photo again.</Text>
-              <TextInput
-                value={hint}
-                onChangeText={setHint}
-                placeholder="e.g. That's cauliflower rice, and there's no sauce"
-                placeholderTextColor={colors.neutral.textSecondary}
-                multiline
-                maxLength={300}
-                className="body-md rounded-xl border border-divider bg-background px-4 py-3 text-text-primary"
-                style={{ minHeight: 72, textAlignVertical: "top" }}
-              />
-              {error && <Text className="body-sm text-error">{error}</Text>}
-              <Pressable
-                onPress={handleReanalyse}
-                disabled={!hint.trim() || outOfScans}
-                className={`flex-row items-center justify-center gap-2 rounded-full py-3 ${hint.trim() && !outOfScans ? "bg-brand-yellow" : "bg-background"}`}
-              >
-                <Ionicons name="sparkles" size={16} color={hint.trim() && !outOfScans ? colors.brand.iron : colors.neutral.textSecondary} />
-                <Text className={`body-sm font-body-semibold ${hint.trim() && !outOfScans ? "text-brand-iron" : "text-text-secondary"}`}>Analyse Again</Text>
-              </Pressable>
-              <Text className="caption text-center text-text-secondary">
-                {outOfScans ? "No AI scans left today." : quota?.remaining != null ? `Uses 1 AI scan · ${quota.remaining} left today` : "Uses 1 AI scan"}
-              </Text>
-            </View>
-          )}
-
-          <View className="gap-2">
-            <Text className="body-sm text-text-secondary">Meal</Text>
-            <View className="flex-row gap-2">
-              {MEAL_SLOTS.map((option) => {
-                const selected = mealSlot === option.key;
-                return (
-                  <Pressable
-                    key={option.key}
-                    onPress={() => setMealSlot(option.key)}
-                    className={`flex-1 items-center rounded-xl border py-2.5 ${selected ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"}`}
-                  >
-                    <Text className={`caption font-body-semibold ${selected ? "text-brand-iron" : "text-text-secondary"}`}>{option.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        </ScrollView>
-
-        <View style={{ paddingBottom: insets.bottom + 12 }} className="gap-3 border-t border-divider bg-surface px-4 pt-3">
-          {pendingItems.length > 0 && <MacroTotalsBar totals={totals} />}
-          {pendingItems.length > 0 ? (
-            <Pressable onPress={handleAddAll} className="items-center rounded-full bg-brand-yellow py-4">
-              <Text className="body-md font-body-semibold text-brand-iron">{pendingItems.length === 1 ? "Add to Log" : "Add All to Log"}</Text>
-            </Pressable>
-          ) : addedIds.length > 0 ? (
-            <Pressable onPress={() => router.replace("/nutrition")} className="items-center rounded-full bg-brand-yellow py-4">
-              <Text className="body-md font-body-semibold text-brand-iron">Done</Text>
-            </Pressable>
-          ) : (
-            <View className="items-center rounded-full bg-background py-4">
-              <Text className="body-md font-body-semibold text-text-secondary">Add to Log</Text>
-            </View>
-          )}
-        </View>
-      </KeyboardAvoidingView>
+      <>
+        <AiScanResults
+          photoUri={photo.uri}
+          items={items}
+          mealSlot={mealSlot}
+          portion={portion}
+          hint={hint}
+          error={error}
+          scansRemaining={quota?.remaining ?? null}
+          dayCalories={dayCalories}
+          targetCalories={targetCalories}
+          onBack={() => {
+            handleFlush();
+            handleDone();
+          }}
+          onRemoveMeal={() => setConfirmRemove(true)}
+          onChangeMealSlot={setMealSlot}
+          onChangePortion={handleChangePortion}
+          onChangeHint={setHint}
+          onReanalyse={handleReanalyse}
+          onChangeQuantity={handleChangeQuantity}
+          onRemoveItem={handleRemoveItem}
+          onFlush={handleFlush}
+          onDone={handleDone}
+        />
+        <ConfirmModal
+          visible={confirmRemove}
+          title="Remove this meal?"
+          message="It will be taken out of your food log, with all its ingredients."
+          confirmLabel="Remove"
+          destructive
+          onConfirm={handleRemoveMeal}
+          onCancel={() => setConfirmRemove(false)}
+        />
+      </>
     );
   }
 
-  if (phase === "analyzing") {
-    return (
-      <View style={{ flex: 1 }} className="bg-background">
-        {photo && <Image source={{ uri: photo.uri }} resizeMode="cover" style={{ flex: 1, opacity: 0.4 }} />}
-        <View style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }} className="items-center justify-center gap-3">
-          <ActivityIndicator size="large" color={colors.brand.yellow} />
-          <Text className="body-md font-body-semibold text-brand-white">Analysing your meal…</Text>
-        </View>
-      </View>
-    );
+  if (phase === "analyzing" && photo) {
+    return <AiScanAnalyzing photoUri={photo.uri} status={analysisStatus} onExited={handleAnalysisExited} />;
   }
 
   if (quota?.remaining === 0) {
     return (
-      <View style={{ flex: 1, paddingTop: insets.top }} className="items-center justify-center gap-4 bg-background px-8">
-        <Image source={images.mascotFlexing} resizeMode="contain" style={{ width: 130, height: 130 * (205 / 250) }} />
-        <Text className="heading-4 text-center text-text-primary">You&apos;ve used all your AI scans for today</Text>
-        <Text className="body-sm text-center text-text-secondary">
-          Your scans reset tomorrow. You can still log this meal by searching for the food or with Quick Add.
-        </Text>
-        <Pressable onPress={() => router.replace({ pathname: "/nutrition/add", params: { date: targetDateKey } })} className="mt-2 items-center self-stretch rounded-full bg-brand-yellow py-3.5">
-          <Text className="body-md font-body-semibold text-brand-iron">Search Food</Text>
-        </Pressable>
-        <Pressable onPress={handleBack} className="items-center self-stretch rounded-full border border-divider py-3.5">
-          <Text className="body-md font-body-semibold text-text-primary">Cancel</Text>
-        </Pressable>
-      </View>
+      <AiScanNotice
+        title="SCANS USED UP"
+        body="Your AI scans reset tomorrow. You can still log this meal by searching for the food or with Quick Add."
+        primaryLabel="Search Food"
+        onPrimary={() => router.replace({ pathname: "/nutrition/add", params: { date: targetDateKey } })}
+        secondaryLabel="Cancel"
+        onSecondary={handleBack}
+      />
     );
   }
 
   if (!permission) {
-    return <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background" />;
+    return <View className="flex-1 bg-background" />;
   }
 
   if (!permission.granted) {
     return (
-      <View style={{ flex: 1, paddingTop: insets.top }} className="items-center justify-center gap-4 bg-background px-8">
-        <Image source={images.mascotFlexing} resizeMode="contain" style={{ width: 130, height: 130 * (205 / 250) }} />
-        <Text className="heading-4 text-center text-text-primary">Camera access needed</Text>
-        <Text className="body-sm text-center text-text-secondary">GymCrew needs camera access to photograph your meal and estimate its nutrition.</Text>
-        <Pressable onPress={requestPermission} className="mt-2 items-center self-stretch rounded-full bg-brand-yellow py-3.5">
-          <Text className="body-md font-body-semibold text-brand-iron">Allow Camera</Text>
-        </Pressable>
-        <Pressable onPress={handleBack} className="items-center self-stretch rounded-full border border-divider py-3.5">
-          <Text className="body-md font-body-semibold text-text-primary">Cancel</Text>
-        </Pressable>
-      </View>
+      <AiScanNotice
+        title="CAMERA NEEDED"
+        body="GymCrew needs camera access to photograph your meal and estimate its nutrition."
+        primaryLabel="Allow Camera"
+        onPrimary={requestPermission}
+        secondaryLabel="Cancel"
+        onSecondary={handleBack}
+      />
     );
   }
 
   return (
-    <View style={{ flex: 1 }} className="bg-background">
-      <CameraView ref={cameraRef} style={{ flex: 1 }} facing="back" />
-
-      <View style={{ position: "absolute", top: insets.top + 12, left: 16, right: 16 }} className="flex-row items-center justify-between">
-        <Pressable onPress={handleBack} hitSlop={8} className="h-10 w-10 items-center justify-center rounded-full bg-black/50">
-          <Ionicons name="close" size={22} color={colors.brand.white} />
-        </Pressable>
-        <Text className="body-sm font-body-semibold rounded-full bg-black/50 px-3 py-1.5 text-brand-white">Scan Meal</Text>
-        <View className="h-10 w-10" />
-      </View>
-
-      <View style={{ position: "absolute", bottom: insets.bottom + 24, left: 16, right: 16 }} className="items-center gap-4">
-        {error && <Text className="body-sm rounded-2xl bg-black/70 px-4 py-3 text-center text-brand-white">{error}</Text>}
-        {quota?.remaining != null && (
-          <Text className="caption font-body-semibold rounded-full bg-black/50 px-3 py-1.5 text-brand-white">
-            {`${quota.remaining} AI scan${quota.remaining === 1 ? "" : "s"} left today`}
-          </Text>
-        )}
-        <View className="flex-row items-center justify-between self-stretch px-4">
-          <Pressable onPress={handlePickFromLibrary} hitSlop={8} className="h-12 w-12 items-center justify-center rounded-full bg-black/50">
-            <Ionicons name="images-outline" size={22} color={colors.brand.white} />
-          </Pressable>
-          <Pressable onPress={handleCapture} disabled={capturing} className="h-20 w-20 items-center justify-center rounded-full border-4 border-brand-white">
-            {capturing ? <ActivityIndicator color={colors.brand.yellow} /> : <View className="h-14 w-14 rounded-full bg-brand-yellow" />}
-          </Pressable>
-          <View className="h-12 w-12" />
-        </View>
-      </View>
-    </View>
+    <AiScanCamera
+      cameraRef={cameraRef}
+      remaining={quota?.remaining ?? null}
+      error={error}
+      capturing={capturing}
+      onCapture={handleCapture}
+      onPickFromLibrary={handlePickFromLibrary}
+      onClose={handleBack}
+    />
   );
 }

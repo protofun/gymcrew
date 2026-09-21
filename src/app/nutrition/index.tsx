@@ -12,12 +12,14 @@ import { NutritionBanner } from "@/components/NutritionBanner";
 import { NutritionNavBar } from "@/components/NutritionNavBar";
 import { WaterTracker } from "@/components/WaterTracker";
 import { images, nutritionIcons } from "@/constants/images";
+import { aiMealFoodId, aiMealIdFromFoodId, removeEntryWithAiMeal } from "@/lib/ai-meals";
 import type { ApiFoodLog } from "@/lib/api";
 import { addDays, formatDiaryDate, toDateKey } from "@/lib/date";
 import { MEAL_SLOTS } from "@/lib/meal-slot";
 import { sumMacros } from "@/lib/nutrition-macros";
 import { NUTRITION_COLORS } from "@/lib/nutrition-colors";
 import { estimateCalories } from "@/lib/workout-sessions";
+import { useAiMealsStore } from "@/store/ai-meals-store";
 import { useCustomFoodsStore } from "@/store/custom-foods-store";
 import { useNutritionLogStore } from "@/store/nutrition-log-store";
 import { useNutritionMealsStore } from "@/store/nutrition-meals-store";
@@ -80,7 +82,6 @@ export default function NutritionScreen() {
   const previousDateKey = useMemo(() => toDateKey(addDays(viewedDate, -1)), [viewedDate]);
 
   const allEntries = useNutritionLogStore((state) => state.entries);
-  const removeEntry = useNutritionLogStore((state) => state.removeEntry);
   const copyDay = useNutritionLogStore((state) => state.copyDay);
 
   const calories = useNutritionTargetsStore((state) => state.calories);
@@ -95,12 +96,15 @@ export default function NutritionScreen() {
   const customFoods = useCustomFoodsStore((state) => state.foods);
   const offFoods = useOffFoodsCacheStore((state) => state.foods);
   const meals = useNutritionMealsStore((state) => state.meals);
+  const aiMeals = useAiMealsStore((state) => state.meals);
   const photoByFoodId = useMemo(() => {
     const map: Record<string, string | undefined> = {};
     for (const food of customFoods) map[food.id] = food.photoUrl;
     for (const food of Object.values(offFoods)) map[food.id] = food.photoUrl;
+    // A meal scanned from a photo shows that photo — one row for the whole meal.
+    for (const aiMeal of Object.values(aiMeals)) map[aiMealFoodId(aiMeal.id)] = aiMeal.photoUrl || undefined;
     return map;
-  }, [customFoods, offFoods]);
+  }, [customFoods, offFoods, aiMeals]);
   // A meal itself has no photo of its own — borrow the first ingredient's photo (if any) as its
   // representative thumbnail, same "food is visual" reasoning as everywhere else in the log.
   const photoByMealId = useMemo(() => {
@@ -129,6 +133,11 @@ export default function NutritionScreen() {
   const calorieRatio = adjustedCalorieTarget > 0 ? totals.calories / adjustedCalorieTarget : 0;
 
   function handleEntryPress(entry: ApiFoodLog) {
+    const aiMealId = aiMealIdFromFoodId(entry.foodId);
+    if (aiMealId) {
+      router.push({ pathname: "/nutrition/ai-meal/[id]", params: { id: aiMealId, logId: entry.id } });
+      return;
+    }
     if (entry.mealId) {
       router.push({ pathname: "/nutrition/meal/[id]", params: { id: entry.mealId } });
       return;
@@ -253,7 +262,7 @@ export default function NutritionScreen() {
                 photoByFoodId={photoByFoodId}
                 photoByMealId={photoByMealId}
                 onPressEntry={handleEntryPress}
-                onRemoveEntry={(entry) => removeEntry(entry.id)}
+                onRemoveEntry={(entry) => removeEntryWithAiMeal(entry.id)}
               />
             ))
           )}
