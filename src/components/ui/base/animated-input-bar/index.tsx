@@ -122,12 +122,13 @@ const StaggeredPlaceholder: React.FC<{
   exitDuration: number;
   delayIncrement: number;
   style?: StyleProp<TextStyle>;
-}> = ({ text, enterDuration, exitDuration, delayIncrement, style }) => {
+  left?: number;
+}> = ({ text, enterDuration, exitDuration, delayIncrement, style, left }) => {
   const characters = Array.from(text);
 
   return (
     <Animated.View
-      style={styles.placeholderWrapper}
+      style={[styles.placeholderWrapper, left !== undefined && { left }]}
       layout={LinearTransition.duration(300).easing(
         Easing.bezier(0.25, 0.1, 0.25, 1),
       )}
@@ -163,12 +164,18 @@ const AnimatedInput: React.FC<IAnimatedInput> &
     characterEnterDuration = 300,
     characterExitDuration = 200,
     characterDelayIncrement = 30,
+    placeholderLeft,
     ...props
   }: IAnimatedInput): React.ReactNode &
     React.JSX.Element &
     React.ReactElement => {
     const [isFocused, setIsFocused] = useState<boolean>(false);
     const [inputValue, setInputValue] = useState<string>(value || "");
+
+    // GymCrew patch: follow `value` when the parent changes it (e.g. a clear button) — it used to be read once.
+    useEffect(() => {
+      setInputValue(value ?? "");
+    }, [value]);
     const [currentIndex, setCurrentIndex] = useState<number>(0);
 
     useEffect(() => {
@@ -200,6 +207,7 @@ const AnimatedInput: React.FC<IAnimatedInput> &
               enterDuration={characterEnterDuration}
               exitDuration={characterExitDuration}
               delayIncrement={characterDelayIncrement}
+              left={placeholderLeft}
               // style={[styles.character as any, placeholderStyle as any]}
               style={[styles.character, placeholderStyle] as any}
             />

@@ -1,8 +1,9 @@
 import type { WithSpringConfig } from "react-native-reanimated";
 
-const CHIP_HEIGHT = 50;
-const CHIP_PADDING = 15;
-const ICON_SIZE = 24;
+// GymCrew patch: chips are 44px tall / 22px icons (was 50 / 24) so a row of five still fits a phone.
+const CHIP_HEIGHT = 44;
+const CHIP_PADDING = 12;
+const ICON_SIZE = 22;
 const ICON_LABEL_GAP = 8;
 const GROUP_GAP = 8;
 const LABEL_TRAVEL = 12;

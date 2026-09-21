@@ -8,6 +8,8 @@ import type {
 interface IAnimatedInput extends Omit<TextInputProps, "placeholder"> {
   placeholders: string[];
   readonly animationInterval?: number;
+  /** GymCrew: where the animated placeholder starts, from the left edge (default 18) — set it to match the padding you give the input. */
+  readonly placeholderLeft?: number;
   readonly containerStyle?: StyleProp<ViewStyle>;
   readonly inputWrapperStyle?: StyleProp<ViewStyle>;
   readonly inputStyle?: StyleProp<TextStyle>;
