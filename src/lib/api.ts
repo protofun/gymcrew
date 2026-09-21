@@ -374,9 +374,9 @@ export type CreateFoodLogInput = Omit<ApiFoodLog, "loggedAt"> & { loggedAt?: num
 
 export type ApiWaterLog = { id: string; amountMl: number; dateKey: string; loggedAt: number };
 
-/** One food the AI meal-photo scan found — `grams` is the estimated portion and the macros are for
- * that whole portion (see backend/routes/nutrition-photo-scan.php). */
-export type MealPhotoItem = { name: string; grams: number; calories: number; proteinG: number; carbsG: number; fatG: number };
+/** One food the AI meal-photo scan found — `grams` is the estimated portion, in `unit` ("ml" for drinks,
+ * "g" for the rest), and the macros are for that whole portion (see backend/routes/nutrition-photo-scan.php). */
+export type MealPhotoItem = { name: string; grams: number; unit: "g" | "ml"; calories: number; proteinG: number; carbsG: number; fatG: number };
 
 /** How many AI scans the user has left today — enforced server-side. `limit` and `remaining` are
  * `null` for accounts with unlimited scans (developer accounts). */
@@ -384,7 +384,7 @@ export type MealScanQuota = { limit: number | null; used: number; remaining: num
 
 /** Sent with a re-scan when the user says the first result was wrong: what they typed, and what the
  * first result listed (the photo itself is sent again, since the server never keeps it). */
-export type MealScanCorrection = { hint: string; previousItems: { name: string; grams: number }[] };
+export type MealScanCorrection = { hint: string; previousItems: { name: string; grams: number; unit: string }[] };
 
 export type OffBarcodeLookupResponse ={ found: false } | { found: true; food: Food };
 

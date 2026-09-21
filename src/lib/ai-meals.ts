@@ -26,6 +26,18 @@ export function aiMealTitle(items: AiMealItem[]): string {
   return names.join(", ") + (rest > 0 ? ` +${rest}` : "");
 }
 
+/** "250 ml", "150 g" — an amount with its unit. */
+export function formatAmount(amount: number, unit: string | undefined): string {
+  return `${Math.round(amount)} ${unit ?? "g"}`;
+}
+
+/** The total of a meal's amounts, per unit: "420 g · 250 ml" — grams and millilitres are never added together. */
+export function amountSummary(items: { amount: number; unit: string | undefined }[]): string {
+  const totals = new Map<string, number>();
+  for (const item of items) totals.set(item.unit ?? "g", (totals.get(item.unit ?? "g") ?? 0) + item.amount);
+  return Array.from(totals, ([unit, amount]) => formatAmount(amount, unit)).join(" · ");
+}
+
 export function aiMealTotals(items: AiMealItem[]): Macros {
   return sumMacros(items);
 }

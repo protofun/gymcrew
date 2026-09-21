@@ -4,11 +4,14 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { pullState, pushState } from "@/lib/backend-sync";
 
-/** One ingredient of a scanned meal, as logged — the grams and the macros of that whole portion. */
+/** One ingredient of a scanned meal, as logged — its amount and the macros of that whole portion. */
 export type AiMealItem = {
   id: string;
   name: string;
+  /** The amount, in `unit`. (Named for what it was first — grams.) */
   grams: number;
+  /** "ml" for drinks; "g" (or missing, on meals scanned before units existed) for the rest. */
+  unit?: "g" | "ml";
   calories: number;
   proteinG: number;
   carbsG: number;

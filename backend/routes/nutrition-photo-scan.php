@@ -14,8 +14,11 @@
  * as a scan of its own.
  *
  *   GET  /nutrition-photo-scan  ->  { limit, used, remaining }   (limit/remaining are null = unlimited)
- *   POST /nutrition-photo-scan  ->  { items: [{ name, grams, calories, proteinG, carbsG, fatG }], quota }
- *        body: { imageBase64, contentType, hint?, previousItems?: [{ name, grams }] }
+ *   POST /nutrition-photo-scan  ->  { items: [{ name, grams, unit, calories, proteinG, carbsG, fatG }], quota }
+ *        body: { imageBase64, contentType, hint?, previousItems?: [{ name, grams, unit }] }
+ *
+ * `grams` is the amount of the portion, in `unit` — "ml" for drinks and other liquids, "g" for everything
+ * else. (The key is still called `grams` so older app versions keep working.)
  */
 
 // Everyone gets this many scans a day for now, unless the admin panel's App Controls page sets its own
@@ -37,8 +40,9 @@ You are a nutrition assistant. Look at this photo of a meal and break it down in
 list every distinct food and drink you can see as its own item. A plate with chicken, rice and broccoli is three
 items, not one "chicken meal". Split mixed dishes into their main visible components (for example pasta, tomato
 sauce and minced meat) whenever you can tell them apart.
-For each item give a short generic English name, your best estimate of its portion in grams (use ml as grams for
-drinks), and the calories (kcal), protein, carbs and fat in grams for that whole portion, as it is prepared in the photo.
+For each item give a short generic English name, your best estimate of its portion as an amount plus its unit — use
+"ml" for drinks and other liquids (water, milk, juice, a shake, soup) and "g" for everything else — and the calories
+(kcal), protein, carbs and fat in grams for that whole portion, as it is prepared in the photo.
 Include visible sauces, dressings and oils as their own items. Do not invent items you cannot see.
 If the photo does not contain food or drink, return an empty list.
 PROMPT;
@@ -148,7 +152,7 @@ function mealScanPrompt(string $hint, array $previousItems): string
         return MEAL_SCAN_PROMPT;
     }
 
-    $previous = implode(', ', array_map(fn(array $item) => $item['name'] . ' (' . $item['grams'] . ' g)', $previousItems));
+    $previous = implode(', ', array_map(fn(array $item) => $item['name'] . ' (' . $item['grams'] . ' ' . $item['unit'] . ')', $previousItems));
     return MEAL_SCAN_PROMPT
         . "\n\nA first analysis of this same photo was reviewed by the user, who says it is not right."
         . ($previous !== '' ? " That analysis listed: $previous." : '')
@@ -162,7 +166,13 @@ function mealScanCleanText(string $text, int $maxLength): string
     return trim(mb_substr((string) preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $text), 0, $maxLength));
 }
 
-/** The names + grams of the earlier result, as sent back by the client for a correction. */
+/** Only "ml" (liquids) and "g" (everything else) are amounts we log — anything else, or nothing, is grams. */
+function mealScanCleanUnit($unit): string
+{
+    return $unit === 'ml' ? 'ml' : 'g';
+}
+
+/** The names + amounts of the earlier result, as sent back by the client for a correction. */
 function mealScanCleanPreviousItems($raw): array
 {
     $items = [];
@@ -170,7 +180,7 @@ function mealScanCleanPreviousItems($raw): array
     foreach ($rawItems as $item) {
         $name = is_array($item) ? mealScanCleanText((string) ($item['name'] ?? ''), 80) : '';
         if ($name !== '') {
-            $items[] = ['name' => $name, 'grams' => (int) round(max(0, min((float) ($item['grams'] ?? 0), 2000)))];
+            $items[] = ['name' => $name, 'grams' => (int) round(max(0, min((float) ($item['grams'] ?? 0), 2000))), 'unit' => mealScanCleanUnit($item['unit'] ?? null)];
         }
     }
     return $items;
@@ -202,12 +212,13 @@ function geminiAnalyzeMealPhoto(string $imageBase64, string $mimeType, string $h
                             'properties' => [
                                 'name' => ['type' => 'STRING'],
                                 'grams' => $number,
+                                'unit' => ['type' => 'STRING', 'enum' => ['g', 'ml']],
                                 'calories' => $number,
                                 'protein_g' => $number,
                                 'carbs_g' => $number,
                                 'fat_g' => $number,
                             ],
-                            'required' => ['name', 'grams', 'calories', 'protein_g', 'carbs_g', 'fat_g'],
+                            'required' => ['name', 'grams', 'unit', 'calories', 'protein_g', 'carbs_g', 'fat_g'],
                         ],
                     ],
                 ],
@@ -266,6 +277,7 @@ function mealScanCleanItems(array $rawItems): array
         $items[] = [
             'name' => $name,
             'grams' => round(min($grams, 2000)),
+            'unit' => mealScanCleanUnit($raw['unit'] ?? null),
             'calories' => round(max(0, min((float) ($raw['calories'] ?? 0), 5000))),
             'proteinG' => round(max(0, min((float) ($raw['protein_g'] ?? 0), 500)), 1),
             'carbsG' => round(max(0, min((float) ($raw['carbs_g'] ?? 0), 800)), 1),
