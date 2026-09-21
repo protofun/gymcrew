@@ -14,6 +14,7 @@ import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { EditableText } from "@/components/EditableText";
 import { ProgressBar } from "@/components/ProgressBar";
+import { PromoBanners } from "@/components/PromoBanners";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
 import { images, navIcons } from "@/constants/images";
@@ -219,6 +220,7 @@ export default function ProfileScreen() {
         <SnapshotBanner asOfMs={snapshotAsOfMs} weightKg={snapshotWeightKg} weightUnit={weightUnit} onExit={clearSnapshot} />
       )}
       <ScrollView className="flex-1" contentContainerClassName="pb-10" showsVerticalScrollIndicator={false}>
+        <PromoBanners placement="profile" />
         <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="mx-4 mt-4 overflow-hidden rounded-3xl border border-divider bg-surface">
             {/* Ties the whole card to the division color it's reporting on, the same way the old
             left-accent-bar sub-card did — just spanning the header this whole card shares now,

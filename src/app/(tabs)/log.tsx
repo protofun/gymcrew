@@ -4,6 +4,7 @@ import { Image, ScrollView, Text, View } from "react-native";
 import { usePostHog } from "posthog-react-native";
 
 import { DatePickerModal } from "@/components/DatePickerModal";
+import { PromoBanners } from "@/components/PromoBanners";
 import { WorkoutStartCard } from "@/components/WorkoutStartCard";
 import { WorkoutWeekStrip } from "@/components/WorkoutWeekStrip";
 import { images } from "@/constants/images";
@@ -85,6 +86,9 @@ export default function LogScreen() {
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="px-4 pb-6" showsVerticalScrollIndicator={false}>
+      <View className="-mx-4">
+        <PromoBanners placement="log" />
+      </View>
       <View className="items-center gap-8 pb-8 pt-6">
         <Image source={images.mascotArmsCrossed} resizeMode="contain" style={{ width: 220, height: 220 }} />
 

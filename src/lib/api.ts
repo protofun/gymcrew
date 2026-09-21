@@ -189,6 +189,25 @@ export type ApiSupportTicket = { id: number; message: string; status: "open" | "
 export type ApiUserSocials = { instagramHandle: string; tiktokHandle: string };
 
 export type ApiAdminMessage = { id: number; message: string; sentAt: number };
+
+export type BannerKind = "info" | "deal" | "important" | "success";
+/** An admin-managed banner (sits at the top of a tab) or popup (shown once, over the app) — see
+ * backend/routes/banners.php. Audience and schedule are already applied server-side. */
+export type ApiBanner = {
+  id: number;
+  kind: BannerKind;
+  display: "banner" | "popup";
+  placement: "home" | "log" | "crew" | "ranks" | "profile";
+  title: string | null;
+  message: string;
+  ctaLabel: string | null;
+  /** A screen inside the app ("/profile/subscription") or an https:// link. */
+  ctaUrl: string | null;
+  promoCode: string | null;
+  /** Epoch ms — a deal shows a countdown to this. */
+  endsAt: number | null;
+  dismissible: boolean;
+};
 export type ApiSupportReply = { id: number; senderType: "admin" | "user"; body: string; createdAt: number };
 
 export type ApiRoadmapItem = { id: number; title: string; description: string | null; status: "planned" | "in_progress" | "shipped"; updatedAt: number };
@@ -369,8 +388,12 @@ export type OffSearchResponse = { results: Food[]; hasMore: boolean; page: numbe
 
 export const api = {
   getProfile: () => request<ApiProfile>("/profile"),
-  /** The admin panel's active "Page Management" banner, if any — see backend/routes/announcement.php. */
-  getAnnouncement: () => request<{ message: string } | null>("/announcement"),
+  /** Every banner and popup this user should see right now (audience and schedule already applied) —
+   * see backend/routes/banners.php. */
+  getBanners: () => request<ApiBanner[]>("/banners"),
+  /** Counts for the admin panel's per-banner stats. Fire-and-forget: a failure never matters. */
+  trackBannerView: (id: number) => request<{ ok: true }>(`/banners/${id}/view`, { method: "POST" }),
+  trackBannerClick: (id: number) => request<{ ok: true }>(`/banners/${id}/click`, { method: "POST" }),
   /** The public roadmap (planned / in progress / shipped) — see backend/routes/roadmap.php and
    * the admin panel's Roadmap page. */
   getRoadmap: () => request<ApiRoadmapItem[]>("/roadmap"),

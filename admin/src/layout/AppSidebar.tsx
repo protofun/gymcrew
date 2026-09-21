@@ -53,7 +53,7 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Send Email", path: "/email" },
       { name: "Push Notifications", path: "/push" },
-      { name: "Page Management", path: "/announcements" },
+      { name: "Banners & Promos", path: "/banners" },
     ],
   },
 ];

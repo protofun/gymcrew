@@ -38,7 +38,7 @@ the `/admin/*` path — same backend, same deploy, no separate server. Before us
 
 1. Re-import `../backend/db/schema.sql` via phpMyAdmin — adds `admin_users`, `content_reports.status`,
    `support_messages.status`/`support_replies`, `admin_notes`, `admin_tasks`, `roadmap_items`,
-   `users.banned_at`, `crews.disabled_at`, `app_announcements`. Safe to re-run, only adds what's
+   `users.banned_at`, `crews.disabled_at`, `app_banners`. Safe to re-run, only adds what's
    missing.
 2. In the live `backend/.env`, set:
    - `ADMIN_JWT_SECRET` — a long random string (e.g. `php -r "echo bin2hex(random_bytes(32));"`).

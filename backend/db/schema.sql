@@ -693,9 +693,8 @@ CREATE TABLE IF NOT EXISTS admin_users (
   UNIQUE KEY uniq_admin_users_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- A single active app-wide announcement banner, shown on the app's Home tab (see
--- components/AnnouncementBanner.tsx) — the admin panel's "Page Management" (see routes/admin.php).
--- Only ever one row is `active`; setting a new one active clears the previous automatically.
+-- LEGACY: the old single-message announcement banner. Superseded by `app_banners` below and no longer
+-- read or written by anything — kept only so re-importing this file never fails. Safe to drop.
 CREATE TABLE IF NOT EXISTS app_announcements (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   message VARCHAR(500) NOT NULL,
@@ -703,6 +702,35 @@ CREATE TABLE IF NOT EXISTS app_announcements (
   created_by VARCHAR(64) NOT NULL,
   created_at BIGINT NOT NULL,
   INDEX idx_announcements_active (active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- In-app banners and popups managed from the admin panel's "Banners & Promos" page (see
+-- routes/banners.php) — deals with a promo code, important notices, news. `kind`, `display`,
+-- `placement` and `audience` are plain VARCHARs validated in PHP (see the BANNER_* constants there) so a
+-- new option never needs a schema change. `starts_at`/`ends_at` are epoch milliseconds (NULL = no limit);
+-- `views`/`clicks` are simple counters bumped by the app.
+CREATE TABLE IF NOT EXISTS app_banners (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  kind VARCHAR(16) NOT NULL DEFAULT 'info',          -- info | deal | important | success
+  display VARCHAR(16) NOT NULL DEFAULT 'banner',     -- banner | popup
+  placement VARCHAR(16) NOT NULL DEFAULT 'home',     -- home | log | crew | ranks | profile (banners only)
+  title VARCHAR(120) NULL,
+  message VARCHAR(500) NOT NULL,
+  cta_label VARCHAR(40) NULL,
+  cta_url VARCHAR(500) NULL,                         -- "/screen/in/app" or "https://..."
+  promo_code VARCHAR(40) NULL,
+  audience VARCHAR(24) NOT NULL DEFAULT 'all',       -- all | new | no_crew | in_crew | founding | no_workout
+  starts_at BIGINT NULL,
+  ends_at BIGINT NULL,
+  dismissible TINYINT(1) NOT NULL DEFAULT 1,
+  priority INT NOT NULL DEFAULT 0,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  views INT NOT NULL DEFAULT 0,
+  clicks INT NOT NULL DEFAULT 0,
+  created_by VARCHAR(64) NOT NULL,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  INDEX idx_banners_live (active, starts_at, ends_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Two-way support conversation — a support_messages row is the ticket/thread; each back-and-forth

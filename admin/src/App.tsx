@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router";
 
 import SignIn from "./pages/AuthPages/SignIn";
 import NotFound from "./pages/OtherPage/NotFound";
@@ -18,7 +18,7 @@ import SupportDetail from "./pages/Support/SupportDetail";
 import Tasks from "./pages/Tasks";
 import Roadmap from "./pages/Roadmap";
 import Admins from "./pages/Admins";
-import Announcements from "./pages/Announcements";
+import Banners from "./pages/Banners";
 import Email from "./pages/Email";
 import Analytics from "./pages/Analytics";
 import AuditLog from "./pages/AuditLog";
@@ -68,7 +68,8 @@ export default function App() {
             <Route path="/faq" element={<Faq />} />
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/status" element={<StatusPage />} />
-            <Route path="/announcements" element={<Announcements />} />
+            <Route path="/banners" element={<Banners />} />
+            <Route path="/announcements" element={<Navigate to="/banners" replace />} />
             <Route path="/email" element={<Email />} />
             <Route path="/push" element={<PushComposer />} />
             <Route path="/reports-center" element={<ReportsCenter />} />

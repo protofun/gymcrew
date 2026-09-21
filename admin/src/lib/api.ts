@@ -304,7 +304,38 @@ export type AdminSupportDetail = {
   replies: SupportReply[];
 };
 
-export type AdminAnnouncement = { id: number; message: string; active: boolean; createdAt: number };
+export type BannerKind = "info" | "deal" | "important" | "success";
+export type BannerDisplay = "banner" | "popup";
+export type BannerPlacement = "home" | "log" | "crew" | "ranks" | "profile";
+export type BannerAudience = "all" | "new" | "no_crew" | "in_crew" | "founding" | "no_workout";
+export type BannerStatus = "live" | "scheduled" | "expired" | "off";
+
+/** What the banner form sends (and what the server stores) — everything an admin can set. */
+export type BannerInput = {
+  kind: BannerKind;
+  display: BannerDisplay;
+  placement: BannerPlacement;
+  title: string | null;
+  message: string;
+  ctaLabel: string | null;
+  ctaUrl: string | null;
+  promoCode: string | null;
+  audience: BannerAudience;
+  /** Epoch milliseconds; null = no limit. */
+  startsAt: number | null;
+  endsAt: number | null;
+  dismissible: boolean;
+  priority: number;
+  active: boolean;
+};
+
+export type AdminBanner = BannerInput & {
+  id: number;
+  status: BannerStatus;
+  views: number;
+  clicks: number;
+  createdAt: number;
+};
 
 /** The personal data an admin may change on a user (any subset). An empty string clears a field. */
 export type UserProfileUpdate = Partial<{
@@ -476,9 +507,11 @@ export const api = {
   createAdmin: (email: string, password: string) => request<{ id: string; email: string }>("/admins", { method: "POST", body: { email, password } }),
   deleteAdmin: (id: string) => request<{ ok: true }>(`/admins/${id}`, { method: "DELETE" }),
 
-  getAnnouncements: () => request<AdminAnnouncement[]>("/announcements"),
-  createAnnouncement: (message: string) => request<{ ok: true }>("/announcements", { method: "POST", body: { message } }),
-  deactivateAnnouncement: (id: number) => request<{ ok: true }>(`/announcements/${id}`, { method: "PUT", body: { active: false } }),
+  // ---- Banners & popups shown in the app ----
+  getBanners: () => request<AdminBanner[]>("/banners"),
+  createBanner: (banner: BannerInput) => request<{ ok: true; id: number }>("/banners", { method: "POST", body: banner }),
+  updateBanner: (id: number, fields: Partial<BannerInput>) => request<{ ok: true }>(`/banners/${id}`, { method: "PUT", body: fields }),
+  deleteBanner: (id: number) => request<{ ok: true }>(`/banners/${id}`, { method: "DELETE" }),
 
   sendBroadcastEmail: (subject: string, body: string, bodyHtml: string, audience: "all" | "single" | "founding", userId?: string) =>
     request<{ ok: true; sent: number; total: number }>("/email/broadcast", { method: "POST", body: { subject, body, bodyHtml, audience, userId } }),

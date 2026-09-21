@@ -14,7 +14,7 @@ import { HomeSkeleton } from "@/components/HomeSkeleton";
 import { LastWorkoutWidget } from "@/components/LastWorkoutWidget";
 import { MuscleSuggestions } from "@/components/MuscleSuggestions";
 import { VisualTrainingCalendar } from "@/components/VisualTrainingCalendar";
-import { AnnouncementBanner } from "@/components/AnnouncementBanner";
+import { PromoBanners } from "@/components/PromoBanners";
 import { WelcomeWidget } from "@/components/WelcomeWidget";
 import { deriveWorkoutSessions } from "@/lib/workout-sessions";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
@@ -48,7 +48,7 @@ export default function HomeScreen() {
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
-      <AnnouncementBanner />
+      <PromoBanners placement="home" />
       <AttachStep index={ATTACH_INDEXES.home} fill>
         <WelcomeWidget name={firstName} onPressStartWorkout={handleStartWorkout} />
       </AttachStep>

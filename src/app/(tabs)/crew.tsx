@@ -24,6 +24,7 @@ import { GoalRing } from "@/components/GoalRing";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { PeerDuelsCard } from "@/components/PeerDuelsCard";
 import { ProgressBar } from "@/components/ProgressBar";
+import { PromoBanners } from "@/components/PromoBanners";
 import { ShareCardModal } from "@/components/ShareCardModal";
 import { StatsTab } from "@/components/StatsTab";
 import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
@@ -676,6 +677,7 @@ export default function CrewScreen() {
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
+      <PromoBanners placement="crew" />
       <CrewBanner />
       <CrewTopTabs active={activeTab} onChange={setActiveTab} />
 

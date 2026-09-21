@@ -13,6 +13,7 @@ import { ATTACH_INDEXES } from "@/components/AppTourOverlay";
 import { EditableText } from "@/components/EditableText";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { ProgressBar } from "@/components/ProgressBar";
+import { PromoBanners } from "@/components/PromoBanners";
 import { RankBadge } from "@/components/RankBadge";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { images } from "@/constants/images";
@@ -478,6 +479,7 @@ export default function RanksScreen() {
         <SnapshotBanner asOfMs={snapshotAsOfMs} weightKg={snapshotWeightKg} weightUnit={weightUnit} onExit={clearSnapshot} />
       )}
       <ScrollView className="flex-1" contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
+        <PromoBanners placement="ranks" />
         <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="px-4 pt-4">
           <View ref={bannerRef} collapsable={false}>
             <RanksBanner power={power} tier={topTier} scope={scope} onChangeScope={setScope} onShare={handleShare} onOpenHistory={() => router.push("/ranks/history")} onOpenMuscleRank={() => router.push("/ranks/body-graph")} onOpenBuildYourGraph={developerModeEnabled ? () => router.push("/ranks/build-your-graph") : undefined} sharing={sharing} />

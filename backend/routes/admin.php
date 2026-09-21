@@ -45,9 +45,7 @@
  *   GET    /admin/admins                   -> other admin accounts
  *   POST   /admin/admins                   -> { email, password } -> create an admin
  *   DELETE /admin/admins/:id               -> remove an admin (not yourself, not the last one)
- *   GET    /admin/announcements            -> recent app-wide announcements
- *   POST   /admin/announcements            -> { message } -> create + activate one
- *   PUT    /admin/announcements/:id        -> { active: false } -> deactivate
+ *   GET/POST/PUT/DELETE /admin/banners     -> in-app banners & popups (see routes/banners.php)
  *   POST   /admin/email/broadcast          -> { subject, body, bodyHtml?, audience: 'all'|'single', userId? }
  */
 function handleAdmin(PDO $pdo, string $method, ?array $body, array $segments): void
@@ -291,10 +289,11 @@ function handleAdmin(PDO $pdo, string $method, ?array $body, array $segments): v
         if ($id !== null && $method === 'DELETE') { deleteAdmin($pdo, (string) $admin['sub'], (string) $admin['email'], $id); return; }
     }
 
-    if ($sub === 'announcements') {
-        if ($id === null && $method === 'GET') { respondWithAnnouncements($pdo); return; }
-        if ($id === null && $method === 'POST') { createAnnouncement($pdo, (string) $admin['sub'], (string) $admin['email'], $data); return; }
-        if ($id !== null && $method === 'PUT') { updateAnnouncement($pdo, $id, $data); return; }
+    if ($sub === 'banners') {
+        if ($id === null && $method === 'GET') { respondWithAdminBanners($pdo); return; }
+        if ($id === null && $method === 'POST') { createAdminBanner($pdo, (string) $admin['sub'], (string) $admin['email'], $data); return; }
+        if ($id !== null && $method === 'PUT') { updateAdminBanner($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data); return; }
+        if ($id !== null && $method === 'DELETE') { deleteAdminBanner($pdo, (string) $admin['sub'], (string) $admin['email'], $id); return; }
     }
 
     if ($sub === 'email' && ($segments[2] ?? null) === 'broadcast' && $method === 'POST') {
@@ -1134,49 +1133,6 @@ function deleteAdmin(PDO $pdo, string $callerId, string $callerEmail, string $ta
 
     $pdo->prepare('DELETE FROM admin_users WHERE id = ?')->execute([$targetId]);
     logAdminAction($pdo, $callerId, $callerEmail, 'delete_admin', 'admin', $targetId);
-    jsonResponse(['ok' => true]);
-}
-
-function respondWithAnnouncements(PDO $pdo): void
-{
-    $stmt = $pdo->query('SELECT id, message, active, created_at FROM app_announcements ORDER BY created_at DESC LIMIT 50');
-    jsonResponse(array_map(
-        fn(array $row) => ['id' => (int) $row['id'], 'message' => $row['message'], 'active' => (bool) $row['active'], 'createdAt' => (int) $row['created_at']],
-        $stmt->fetchAll()
-    ));
-}
-
-function createAnnouncement(PDO $pdo, string $adminId, string $adminEmail, array $data): void
-{
-    $message = trim((string) ($data['message'] ?? ''));
-    if ($message === '') {
-        errorResponse('message is required');
-        return;
-    }
-    $message = mb_substr($message, 0, 500);
-
-    $pdo->beginTransaction();
-    try {
-        $pdo->exec('UPDATE app_announcements SET active = 0 WHERE active = 1');
-        $pdo->prepare('INSERT INTO app_announcements (message, active, created_by, created_at) VALUES (?, 1, ?, ?)')
-            ->execute([$message, $adminId, (int) round(microtime(true) * 1000)]);
-        $pdo->commit();
-    } catch (Throwable $e) {
-        $pdo->rollBack();
-        throw $e;
-    }
-
-    logAdminAction($pdo, $adminId, $adminEmail, 'publish_announcement', 'announcement', null, $message);
-    jsonResponse(['ok' => true], 201);
-}
-
-function updateAnnouncement(PDO $pdo, string $id, array $data): void
-{
-    if (($data['active'] ?? null) !== false) {
-        errorResponse('Only deactivating is supported here — create a new announcement to activate one');
-        return;
-    }
-    $pdo->prepare('UPDATE app_announcements SET active = 0 WHERE id = ?')->execute([$id]);
     jsonResponse(['ok' => true]);
 }
 
