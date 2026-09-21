@@ -13,7 +13,8 @@ type AiScanPhotoHeaderProps = {
   photoUri: string;
   calories: number;
   ingredientCount: number;
-  totalGrams: number;
+  /** The meal's amounts per unit, e.g. "420 g · 250 ml". */
+  amountSummary: string;
   slotLabel: string;
   onBack: () => void;
   /** Removes the whole meal from the log. */
@@ -22,7 +23,7 @@ type AiScanPhotoHeaderProps = {
 
 /** The top of the results: your photo full-bleed, fading into the screen's own background, with the
  * meal's calories laid over it as one big rolling number. No card around it — the photo is the header. */
-export function AiScanPhotoHeader({ photoUri, calories, ingredientCount, totalGrams, slotLabel, onBack, onRemoveMeal }: AiScanPhotoHeaderProps) {
+export function AiScanPhotoHeader({ photoUri, calories, ingredientCount, amountSummary, slotLabel, onBack, onRemoveMeal }: AiScanPhotoHeaderProps) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -73,7 +74,7 @@ export function AiScanPhotoHeader({ photoUri, calories, ingredientCount, totalGr
           </Text>
         </View>
         <Text className="caption" style={{ color: AI_SCAN.textOnMedia }}>
-          {`${ingredientCount} ${ingredientCount === 1 ? "ingredient" : "ingredients"} · ${Math.round(totalGrams)} g · ${slotLabel}`}
+          {`${ingredientCount} ${ingredientCount === 1 ? "ingredient" : "ingredients"} · ${amountSummary} · ${slotLabel}`}
         </Text>
       </View>
     </View>

@@ -1,67 +1,58 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View, type ImageSourcePropType } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { TabBarFab } from "@/components/TabBarFab";
+import { nutritionIcons } from "@/constants/images";
+import { leaveNutrition, switchNutritionSection, type NutritionSection } from "@/lib/nutrition-nav";
 import { colors } from "@/theme";
 
-export type NutritionNavRoute = "diary" | "foods" | "progress" | "history";
-
-const NAV_ITEMS: {
-  key: NutritionNavRoute;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  activeIcon: keyof typeof Ionicons.glyphMap;
-  path: "/nutrition" | "/nutrition/my-foods" | "/nutrition/progress" | "/nutrition/history";
-}[] = [
-  { key: "diary", label: "Diary", icon: "book-outline", activeIcon: "book", path: "/nutrition" },
-  { key: "foods", label: "Foods", icon: "fast-food-outline", activeIcon: "fast-food", path: "/nutrition/my-foods" },
-  { key: "progress", label: "Progress", icon: "trending-up-outline", activeIcon: "trending-up", path: "/nutrition/progress" },
-  { key: "history", label: "History", icon: "bar-chart-outline", activeIcon: "bar-chart", path: "/nutrition/history" },
+const NAV_ITEMS: { key: NutritionSection; label: string; icon: ImageSourcePropType }[] = [
+  { key: "diary", label: "Diary", icon: nutritionIcons.calendar },
+  { key: "foods", label: "Foods", icon: nutritionIcons.myFoods },
+  { key: "progress", label: "Progress", icon: nutritionIcons.progress },
+  { key: "history", label: "History", icon: nutritionIcons.history },
 ];
 
-/** A section-local bottom nav for Nutrition — same chrome as the app's main `TabBar` (rounded bar,
- * raised "+" FAB in the middle, same `TabBarFab` component and press animation) but scoped to the 4
- * Nutrition hub screens, since Nutrition lives as a pushed stack outside the main tab bar and
- * previously had no consistent way to hop between its own sections. Mounted fixed at the bottom of
- * each hub screen (Diary/Foods/Progress/History) rather than via a nested Tabs navigator, since
- * sub-screens (food detail, meal builder, ...) shouldn't show it. */
-export function NutritionNavBar({ active, dateKey }: { active: NutritionNavRoute; dateKey: string }) {
+const ICON_SLOT = 44;
+const BAR_CLASS = "border border-divider bg-surface";
+const BAR_STYLE = { paddingTop: 10, borderRadius: 32 };
+
+/** The bottom of Nutrition, which is its own environment: the four hub pages in a rounded bar (the same
+ * look as the app's own), and next to it a separate Home button that leaves Nutrition — always in the same
+ * spot, so getting back to the rest of the app is one tap from any of the four. Sub-screens (food detail,
+ * meal builder, ...) don't show it. */
+export function NutritionNavBar({ active }: { active: NutritionSection }) {
   const insets = useSafeAreaInsets();
-  const leftItems = NAV_ITEMS.slice(0, 2);
-  const rightItems = NAV_ITEMS.slice(2);
 
   return (
-    <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingBottom: insets.bottom || 16 }}>
-      <View style={{ paddingHorizontal: 10, paddingTop: 10, borderRadius: 32 }} className="flex-row border border-divider bg-surface">
-        {leftItems.map((item) => (
-          <NavTab key={item.key} item={item} isActive={active === item.key} />
-        ))}
+    <View style={{ paddingHorizontal: 16, paddingBottom: insets.bottom || 16 }} className="flex-row items-stretch gap-2">
+      <Pressable onPress={leaveNutrition} accessibilityLabel="Back to the app" className={`items-center px-3.5 pb-2.5 ${BAR_CLASS}`} style={({ pressed }) => ({ ...BAR_STYLE, opacity: pressed ? 0.7 : 1 })}>
+        <View style={{ height: ICON_SLOT, width: ICON_SLOT }} className="items-center justify-center">
+          <Ionicons name="home" size={22} color={colors.brand.yellow} />
+        </View>
+        <Text className="caption font-body-semibold text-brand-yellow">Home</Text>
+      </Pressable>
 
-        <TabBarFab onPress={() => router.push({ pathname: "/nutrition/add", params: { date: dateKey } })} />
-
-        {rightItems.map((item) => (
-          <NavTab key={item.key} item={item} isActive={active === item.key} />
-        ))}
+      <View style={{ ...BAR_STYLE, paddingHorizontal: 6 }} className={`flex-1 flex-row ${BAR_CLASS}`}>
+        {NAV_ITEMS.map((item) => {
+          const isActive = active === item.key;
+          return (
+            <Pressable
+              key={item.key}
+              onPress={() => !isActive && switchNutritionSection(item.key)}
+              className="flex-1 items-center pb-2.5"
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            >
+              <View style={{ height: ICON_SLOT, width: ICON_SLOT }} className="items-center justify-center">
+                <Image source={item.icon} resizeMode="contain" style={{ width: 30, height: 30, opacity: isActive ? 1 : 0.5 }} />
+              </View>
+              <Text numberOfLines={1} className={`caption ${isActive ? "font-body-semibold text-brand-yellow" : "text-text-secondary"}`}>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
-  );
-}
-
-function NavTab({ item, isActive }: { item: (typeof NAV_ITEMS)[number]; isActive: boolean }) {
-  return (
-    <Pressable
-      onPress={() => !isActive && router.replace(item.path)}
-      className="flex-1 items-center pb-2.5"
-      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-    >
-      <View style={{ height: 46, width: 46 }} className="items-center justify-center">
-        <Ionicons name={isActive ? item.activeIcon : item.icon} size={22} color={isActive ? colors.brand.yellow : colors.neutral.textSecondary} />
-      </View>
-      <Text numberOfLines={1} className={`caption ${isActive ? "font-body-semibold text-brand-yellow" : "text-text-secondary"}`}>
-        {item.label}
-      </Text>
-    </Pressable>
   );
 }

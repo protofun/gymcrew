@@ -1,27 +1,36 @@
-import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
-import { MacroTotalsBar } from "@/components/MacroTotalsBar";
-import { MealItemRow } from "@/components/MealItemRow";
+import { ConfirmModal } from "@/components/ConfirmModal";
+import { IngredientRow } from "@/components/IngredientRow";
+import { MealActionBar } from "@/components/MealActionBar";
+import { MealTotalsHero } from "@/components/MealTotalsHero";
+import { HeaderRoundButton, NutritionPageHeader } from "@/components/NutritionPageHeader";
+import { AnimatedChip } from "@/components/ui/molecules/animated-chip";
+import { Accordion } from "@/components/ui/molecules/accordion";
+import { AI_ACCORDION_THEME } from "@/constants/ai-scan-theme";
 import type { MealItem } from "@/lib/api";
-import { formatDiaryDate, fromDateKey, toDateKey } from "@/lib/date";
-import { mealSlotForTime } from "@/lib/meal-slot";
+import { toDateKey } from "@/lib/date";
+import { MEAL_SLOTS, mealSlotForTime, type MealSlot } from "@/lib/meal-slot";
+import { goToNutrition } from "@/lib/nutrition-nav";
 import { scaleMacros, sumMacros } from "@/lib/nutrition-macros";
 import { useNutritionLogStore } from "@/store/nutrition-log-store";
 import { useNutritionMealsStore } from "@/store/nutrition-meals-store";
-import { colors } from "@/theme";
+import { colors, fontFamily } from "@/theme";
 
-/** Saved meal/shake detail — adjust quantities for today, then add. Editing a quantity here never
- * silently rewrites the saved recipe (see NUTRITION.md section 16): only "Update Saved Meal" does
- * that, "Use Once" logs the adjusted amounts without touching the original. */
+type SaveMode = "once" | "update";
+
+/** Saved meal/shake detail — adjust quantities for today, then add. Editing a quantity here never silently
+ * rewrites the saved recipe (see NUTRITION.md section 16): once you've changed something you choose between
+ * "just today" and "update the recipe" before adding — no pop-up, both are right there next to the amounts. */
 export default function MealDetailScreen() {
   const insets = useSafeAreaInsets();
   const posthog = usePostHog();
-  const { id, date } = useLocalSearchParams<{ id: string; date?: string }>();
+  const { id, date, slot } = useLocalSearchParams<{ id: string; date?: string; slot?: string }>();
   const targetDateKey = date ?? toDateKey(new Date());
 
   const meals = useNutritionMealsStore((state) => state.meals);
@@ -31,6 +40,9 @@ export default function MealDetailScreen() {
 
   const meal = useMemo(() => meals.find((m) => m.id === id), [meals, id]);
   const [items, setItems] = useState<MealItem[]>(meal?.items ?? []);
+  const [saveMode, setSaveMode] = useState<SaveMode>("once");
+  const [mealSlot, setMealSlot] = useState<MealSlot>(MEAL_SLOTS.find((option) => option.key === slot)?.key ?? mealSlotForTime());
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const totals = useMemo(() => sumMacros(items.map((item) => scaleMacros(item, item.quantity))), [items]);
   const isModified = useMemo(
@@ -40,64 +52,38 @@ export default function MealDetailScreen() {
 
   function handleBack() {
     if (router.canGoBack()) router.back();
-    else router.replace("/nutrition/my-meals");
+    else goToNutrition("foods", { tab: meal?.kind ?? "meal" });
   }
 
-  function logToday(loggedItems: MealItem[]) {
+  /** Logs the meal to the chosen day as it is now — and, when asked to, updates the saved recipe with it. */
+  function commitAdd() {
     if (!meal) return;
-    const loggedTotals = sumMacros(loggedItems.map((item) => scaleMacros(item, item.quantity)));
+    if (isModified && saveMode === "update") {
+      saveMeal({ id: meal.id, kind: meal.kind, name: meal.name, description: meal.description, items, totalCalories: totals.calories, totalProteinG: totals.proteinG, totalCarbsG: totals.carbsG, totalFatG: totals.fatG });
+      posthog.capture("meal_updated", { kind: meal.kind, ingredient_count: items.length, calories: totals.calories });
+    }
     addEntry({
       foodId: null,
       mealId: meal.id,
       name: meal.name,
-      mealSlot: mealSlotForTime(),
+      mealSlot,
       quantity: 1,
       unit: "serving",
-      calories: loggedTotals.calories,
-      proteinG: loggedTotals.proteinG,
-      carbsG: loggedTotals.carbsG,
-      fatG: loggedTotals.fatG,
+      calories: totals.calories,
+      proteinG: totals.proteinG,
+      carbsG: totals.carbsG,
+      fatG: totals.fatG,
       dateKey: targetDateKey,
     });
-    posthog.capture("meal_logged", { kind: meal.kind, meal_id: meal.id, calories: loggedTotals.calories, modified: isModified });
-    router.replace("/nutrition");
-  }
-
-  function handleAdd() {
-    if (!meal) return;
-    if (!isModified) {
-      logToday(items);
-      return;
-    }
-    Alert.alert("Add to Today's Log", "You've changed the amounts. Use them just for today, or update the saved recipe too?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Use Once", onPress: () => logToday(items) },
-      {
-        text: "Update Saved Meal",
-        onPress: () => {
-          const updatedTotals = sumMacros(items.map((item) => scaleMacros(item, item.quantity)));
-          saveMeal({ id: meal.id, kind: meal.kind, name: meal.name, description: meal.description, items, totalCalories: updatedTotals.calories, totalProteinG: updatedTotals.proteinG, totalCarbsG: updatedTotals.carbsG, totalFatG: updatedTotals.fatG });
-          posthog.capture("meal_updated", { kind: meal.kind, ingredient_count: items.length, calories: updatedTotals.calories });
-          logToday(items);
-        },
-      },
-    ]);
+    posthog.capture("meal_logged", { kind: meal.kind, meal_id: meal.id, calories: totals.calories, modified: isModified });
   }
 
   function handleDelete() {
     if (!meal) return;
-    Alert.alert(`Delete ${meal.kind === "shake" ? "Shake" : "Meal"}`, `Remove "${meal.name}" for good?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          removeMeal(meal.id);
-          posthog.capture("meal_deleted", { kind: meal.kind });
-          router.replace("/nutrition/my-meals");
-        },
-      },
-    ]);
+    setConfirmDelete(false);
+    removeMeal(meal.id);
+    posthog.capture("meal_deleted", { kind: meal.kind });
+    goToNutrition("foods", { tab: meal.kind });
   }
 
   if (!meal) {
@@ -111,40 +97,76 @@ export default function MealDetailScreen() {
     );
   }
 
-  return (
-    <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
-      <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={handleBack} hitSlop={8} style={{ position: "absolute", left: 16 }}>
-          <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
-        </Pressable>
-        <Text className="heading-4 text-text-primary">{meal.name}</Text>
-        <View className="flex-row items-center gap-4" style={{ position: "absolute", right: 16 }}>
-          <Pressable onPress={() => router.push({ pathname: "/nutrition/meal-builder", params: { id: meal.id, kind: meal.kind } })} hitSlop={8}>
-            <Ionicons name="create-outline" size={22} color={colors.neutral.textSecondary} />
-          </Pressable>
-          <Pressable onPress={handleDelete} hitSlop={8}>
-            <Ionicons name="trash-outline" size={20} color={colors.neutral.textSecondary} />
-          </Pressable>
-        </View>
-      </View>
+  const label = meal.kind === "shake" ? "shake" : "meal";
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 140, gap: 12 }} showsVerticalScrollIndicator={false}>
-        {items.map((item, index) => (
-          <MealItemRow
-            key={`${item.id}-${index}`}
-            item={item}
-            onChangeQuantity={(quantity) => setItems((current) => current.map((it, i) => (i === index ? { ...it, quantity } : it)))}
-            onRemove={() => setItems((current) => current.filter((_, i) => i !== index))}
-          />
-        ))}
+  return (
+    <View className="flex-1 bg-background">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 140 }}>
+        <NutritionPageHeader
+          title={meal.name}
+          subtitle={`${items.length} ${items.length === 1 ? "ingredient" : "ingredients"} — change an amount to log a bigger or smaller one.`}
+          onBack={handleBack}
+          actions={
+            <>
+              <HeaderRoundButton icon="create-outline" label={`Edit ${label}`} onPress={() => router.push({ pathname: "/nutrition/meal-builder", params: { id: meal.id, kind: meal.kind } })} />
+              <HeaderRoundButton icon="trash-outline" label={`Delete ${label}`} onPress={() => setConfirmDelete(true)} />
+            </>
+          }
+        />
+
+        <View className="gap-7 px-5 pt-2">
+          <MealTotalsHero totals={totals} />
+
+          <Animated.View layout={LinearTransition.springify().damping(18)}>
+            <Accordion type="single" flush theme={AI_ACCORDION_THEME}>
+              {items.map((item, index) => (
+                <IngredientRow
+                  key={`${item.id}#${index}`}
+                  item={{ ...item, id: `${item.id}#${index}` }}
+                  onChangeQuantity={(quantity) => setItems((current) => current.map((it, i) => (i === index ? { ...it, quantity } : it)))}
+                  onRemove={() => setItems((current) => current.filter((_, i) => i !== index))}
+                />
+              ))}
+            </Accordion>
+          </Animated.View>
+
+          {isModified && (
+            <Animated.View entering={FadeInDown.springify().damping(16)} className="gap-2.5">
+              <Text className="caption font-body-bold text-text-secondary" style={{ letterSpacing: 1.2 }}>
+                YOU CHANGED THE AMOUNTS — USE THEM…
+              </Text>
+              <View className="items-start">
+                <AnimatedChip.Group value={saveMode} onValueChange={(next) => setSaveMode(next as SaveMode)}>
+                  <AnimatedChip.Item value="once" activeColor={colors.brand.yellow} inactiveColor={colors.neutral.surface}>
+                    <AnimatedChip.Icon>{({ selected }) => <Text style={{ fontFamily: fontFamily.heading, fontSize: 18, color: selected ? colors.brand.iron : colors.neutral.textSecondary }}>1×</Text>}</AnimatedChip.Icon>
+                    <AnimatedChip.Label color={colors.brand.iron} style={{ fontFamily: fontFamily.bodyBold, fontSize: 13 }}>
+                      Just today
+                    </AnimatedChip.Label>
+                  </AnimatedChip.Item>
+                  <AnimatedChip.Item value="update" activeColor={colors.brand.yellow} inactiveColor={colors.neutral.surface}>
+                    <AnimatedChip.Icon>{({ selected }) => <Text style={{ fontFamily: fontFamily.heading, fontSize: 18, color: selected ? colors.brand.iron : colors.neutral.textSecondary }}>=</Text>}</AnimatedChip.Icon>
+                    <AnimatedChip.Label color={colors.brand.iron} style={{ fontFamily: fontFamily.bodyBold, fontSize: 13 }}>
+                      Update the {label}
+                    </AnimatedChip.Label>
+                  </AnimatedChip.Item>
+                </AnimatedChip.Group>
+              </View>
+            </Animated.View>
+          )}
+        </View>
       </ScrollView>
 
-      <View style={{ paddingBottom: insets.bottom + 12 }} className="gap-3 border-t border-divider bg-surface px-4 pt-3">
-        <MacroTotalsBar totals={totals} />
-        <Pressable onPress={handleAdd} className="items-center rounded-full bg-brand-yellow py-4">
-          <Text className="body-md font-body-semibold text-brand-iron">{`Add to ${formatDiaryDate(fromDateKey(targetDateKey))}'s Log`}</Text>
-        </Pressable>
-      </View>
+      <MealActionBar mealSlot={mealSlot} onChangeMealSlot={setMealSlot} actionLabel="Add to" saveLabel="Add" savedLabel="Added" disabled={items.length === 0} onSave={commitAdd} onSaved={() => goToNutrition()} />
+
+      <ConfirmModal
+        visible={confirmDelete}
+        title={`Delete this ${label}?`}
+        message={`"${meal.name}" will be removed for good.`}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </View>
   );
 }

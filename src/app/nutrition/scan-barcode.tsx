@@ -20,7 +20,7 @@ const FRAME_SIZE = 240;
 export default function ScanBarcodeScreen() {
   const insets = useSafeAreaInsets();
   const posthog = usePostHog();
-  const { date } = useLocalSearchParams<{ date?: string }>();
+  const { date, slot } = useLocalSearchParams<{ date?: string; slot?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
   const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "looking-up" | "not-found" | "error">("idle");
@@ -46,7 +46,7 @@ export default function ScanBarcodeScreen() {
       posthog.capture("barcode_scanned", { found: result.found });
       if (result.found) {
         rememberOffFoods([result.food]);
-        router.replace({ pathname: "/nutrition/food/[id]", params: { id: result.food.id, date } });
+        router.replace({ pathname: "/nutrition/food/[id]", params: { id: result.food.id, date, slot } });
       } else {
         setStatus("not-found");
       }
@@ -62,7 +62,7 @@ export default function ScanBarcodeScreen() {
   }
 
   function handleAddManually() {
-    router.replace({ pathname: "/nutrition/create-food", params: { barcode: scannedCode ?? undefined, date } });
+    router.replace({ pathname: "/nutrition/create-food", params: { barcode: scannedCode ?? undefined, date, slot } });
   }
 
   if (!permission) {

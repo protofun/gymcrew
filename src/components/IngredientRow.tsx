@@ -10,10 +10,10 @@ import { NUTRITION_COLORS } from "@/lib/nutrition-colors";
 import { scaleMacros } from "@/lib/nutrition-macros";
 import { colors, fontFamily } from "@/theme";
 
-type AiScanIngredientRowProps = {
+type IngredientRowProps = {
   item: MealItem;
   onChangeQuantity: (quantity: number) => void;
-  /** Takes the ingredient out of the meal (and out of the log). */
+  /** Takes the ingredient out. */
   onRemove: () => void;
   /** Set by the Accordion, which clones its children with it — it just has to reach `Accordion.Item`. */
   isLast?: boolean;
@@ -30,10 +30,10 @@ function MacroChip({ label, value, color }: { label: string; value: number; colo
   );
 }
 
-/** One ingredient of the meal as a plain accordion row: name, grams and calories, a trash can to take
- * it out if the AI got it wrong, and — opened up — the elastic slider and the macros. The meal is
- * already logged; every change here updates that one log entry. Must be a direct child of the Accordion. */
-export function AiScanIngredientRow({ item, onChangeQuantity, onRemove, isLast }: AiScanIngredientRowProps) {
+/** One ingredient as a plain accordion row: name, amount and calories, a trash can to take it out, and — opened up —
+ * the elastic slider and the macros. Used by the AI scan results (where every change updates the one log entry) and by
+ * the shake/meal builder. Must be a direct child of the Accordion. */
+export function IngredientRow({ item, onChangeQuantity, onRemove, isLast }: IngredientRowProps) {
   const macros = scaleMacros(item, item.quantity);
   // Room to correct the AI's guess well past its estimate, in whole steps.
   const maxQuantity = Math.max(100, Math.ceil((item.servingSize * 3) / 50) * 50);
@@ -49,7 +49,7 @@ export function AiScanIngredientRow({ item, onChangeQuantity, onRemove, isLast }
             <View className="flex-row items-baseline gap-1">
               <NumberFlow value={item.quantity} fontSize={13} color={AI_SCAN.textMuted} fontWeight="600" />
               <Text className="caption" style={{ color: AI_SCAN.textMuted }}>
-                g  ·
+                {`${item.servingUnit}  ·`}
               </Text>
               <NumberFlow value={macros.calories} fontSize={13} color={AI_SCAN.accent} fontWeight="700" />
               <Text className="caption font-body-semibold" style={{ color: AI_SCAN.accent }}>

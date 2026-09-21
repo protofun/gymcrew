@@ -16,8 +16,8 @@ const RING_SIZE = 68;
 
 /** Compact "Today's Fuel" card for Home (see NUTRITION.md section 29) — a calorie ring (same hero
  * language as the Nutrition dashboard, just small) plus a protein readout and macro chips, never
- * the full dashboard. Renders nothing until real targets exist, same "don't show half-real numbers"
- * rule the rest of Home follows (see home.tsx's sync gate). */
+ * the full dashboard. Until real targets exist it shows an invitation to start tracking instead of
+ * numbers, same "don't show half-real numbers" rule the rest of Home follows (see home.tsx's sync gate). */
 export function HomeNutritionWidget() {
   const todayKey = useMemo(() => toDateKey(new Date()), []);
   const entries = useNutritionLogStore((state) => state.entries);
@@ -31,7 +31,20 @@ export function HomeNutritionWidget() {
     [entries, todayKey],
   );
 
-  if (calories === null || proteinTarget === null || carbsTarget === null || fatTarget === null) return null;
+  if (calories === null || proteinTarget === null || carbsTarget === null || fatTarget === null) {
+    return (
+      <Pressable onPress={() => router.push("/nutrition")} className="mx-4 mt-8 flex-row items-center gap-3.5 rounded-3xl border border-divider bg-surface p-4">
+        <View style={{ backgroundColor: `${NUTRITION_COLORS.calories}26` }} className="h-12 w-12 items-center justify-center rounded-full">
+          <Ionicons name="nutrition" size={22} color={NUTRITION_COLORS.calories} />
+        </View>
+        <View className="flex-1 gap-0.5">
+          <Text className="body-md font-body-semibold text-text-primary">Track your food</Text>
+          <Text className="caption text-text-secondary">Set your targets, log meals, or scan a plate with AI.</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
+      </Pressable>
+    );
+  }
 
   const calorieRatio = calories > 0 ? todayTotals.calories / calories : 0;
   const proteinRatio = proteinTarget > 0 ? todayTotals.proteinG / proteinTarget : 0;

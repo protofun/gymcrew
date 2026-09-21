@@ -5,9 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { usePostHog } from "posthog-react-native";
 
+import { goToNutrition } from "@/lib/nutrition-nav";
 import { AiScanAnalyzing, type AnalysisStatus } from "@/components/AiScanAnalyzing";
 import { AiScanCamera } from "@/components/AiScanCamera";
-import { SLIDER_STEP } from "@/components/AiScanIngredientRow";
+import { SLIDER_STEP } from "@/components/IngredientRow";
 import { AiScanNotice } from "@/components/AiScanNotice";
 import { PORTION_FACTORS, type PortionSize } from "@/components/AiScanPortionChips";
 import { AiScanResults } from "@/components/AiScanResults";
@@ -15,7 +16,7 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { api, isApiConfigured, type MealItem, type MealPhotoItem, type MealScanCorrection, type MealScanQuota } from "@/lib/api";
 import { newAiMealId, saveAiMealToLog } from "@/lib/ai-meals";
 import { toDateKey } from "@/lib/date";
-import { mealSlotForTime, type MealSlot } from "@/lib/meal-slot";
+import { MEAL_SLOTS, mealSlotForTime, type MealSlot } from "@/lib/meal-slot";
 import { goBack } from "@/lib/navigation";
 import { scaleMacros, sumMacros } from "@/lib/nutrition-macros";
 import { useAiMealsStore, type AiMealItem } from "@/store/ai-meals-store";
@@ -38,7 +39,7 @@ function toMealItem(item: MealPhotoItem, index: number): MealItem {
     name: item.name,
     source: "user_created",
     servingSize: item.grams,
-    servingUnit: "g",
+    servingUnit: item.unit ?? "g",
     calories: item.calories,
     proteinG: item.proteinG,
     carbsG: item.carbsG,
@@ -49,7 +50,7 @@ function toMealItem(item: MealPhotoItem, index: number): MealItem {
 
 /** What gets stored for an ingredient: its grams and the macros of that whole portion. */
 function toAiMealItem(item: MealItem): AiMealItem {
-  return { id: item.id, name: item.name, grams: item.quantity, ...scaleMacros(item, item.quantity) };
+  return { id: item.id, name: item.name, grams: item.quantity, unit: item.servingUnit === "ml" ? "ml" : "g", ...scaleMacros(item, item.quantity) };
 }
 
 /** Identifies the meal's current state, to tell whether the log entry is still up to date. */
@@ -65,7 +66,7 @@ function signatureOf(items: MealItem[], slot: MealSlot): string {
  * This file holds the state and the API calls; every step is its own AiScan* component. */
 export default function ScanMealScreen() {
   const posthog = usePostHog();
-  const { date } = useLocalSearchParams<{ date?: string }>();
+  const { date, slot } = useLocalSearchParams<{ date?: string; slot?: string }>();
   const targetDateKey = date ?? toDateKey(new Date());
   const cameraRef = useRef<CameraView>(null);
   const applyOutcomeRef = useRef<(() => void) | null>(null);
@@ -81,7 +82,7 @@ export default function ScanMealScreen() {
   const [items, setItems] = useState<MealItem[]>([]);
   const [hint, setHint] = useState("");
   const [portion, setPortion] = useState<PortionSize>("regular");
-  const [mealSlot, setMealSlot] = useState<MealSlot>(mealSlotForTime());
+  const [mealSlot, setMealSlot] = useState<MealSlot>(MEAL_SLOTS.find((option) => option.key === slot)?.key ?? mealSlotForTime());
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
 
@@ -168,7 +169,7 @@ export default function ScanMealScreen() {
   }
 
   function handleDone() {
-    router.replace("/nutrition");
+    goToNutrition();
   }
 
   /** Takes the whole meal out of the log again. */
@@ -179,7 +180,7 @@ export default function ScanMealScreen() {
       aiMealIdRef.current = null;
       posthog.capture("ai_meal_removed");
     }
-    router.replace("/nutrition");
+    goToNutrition();
   }
 
   /** The result is in — but the analysing screen first winds its glow down. Whatever should happen
@@ -247,7 +248,7 @@ export default function ScanMealScreen() {
   function handleReanalyse() {
     const text = hint.trim();
     if (!photo || !text) return;
-    analyze(photo, { hint: text, previousItems: items.map((item) => ({ name: item.name, grams: item.quantity })) });
+    analyze(photo, { hint: text, previousItems: items.map((item) => ({ name: item.name, grams: item.quantity, unit: item.servingUnit })) });
   }
 
   async function handleCapture() {

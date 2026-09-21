@@ -248,19 +248,27 @@ Be concise. Explain what changed and how to test it.
 
 ---
 
-## Reacticx (AI meal-scan flow only)
+## Reacticx (Nutrition section)
 
 The AI meal-scan flow (`app/nutrition/scan-meal.tsx`, its detail screen `app/nutrition/ai-meal/[id].tsx`, and the
-`AiScan*` / `AiPhotoGlow` / `AiBeamFrame` components) is built on Reacticx components, copied in by its CLI (`component.config.json`, output in
-`src/components/ui` and `src/shared`). Nothing else in the app uses Reacticx — every other screen stays
+`AiScan*` / `AiPhotoGlow` / `AiBeamFrame` components) the Nutrition diary (`NutritionDiarySection`, `Diary*`), the Progress page (`NutritionProgressSection`), and the food pages (Add Food, food detail, Quick Add,
+My Foods, Create Food — `AmountPicker`, `FoodHeader`, `MealActionBar`, `FoodListRow`, ...) are built on Reacticx components, copied in by its CLI (`component.config.json`, output in
+`src/components/ui` and `src/shared`). Nutrition is its own environment, pushed on top of the tabs (not a tab): four hub pages (`app/nutrition/index|my-foods|progress|history.tsx`,
+each framed by `NutritionHub`) share `NutritionNavBar` — Diary, Foods, Progress, History plus a separate Home button that leaves Nutrition.
+The way in is `router.push("/nutrition")` — from the top bar's food button (`TopBar`), the Home widget and Profile. Inside Nutrition use
+`lib/nutrition-nav.ts` (`goToNutrition`, `switchNutritionSection`, `leaveNutrition`). The screens for adding things live in
+`app/nutrition/` and are pushed on top of a hub (no bar). Icons in this section are the app's own illustrations (`nutritionIcons`) or
+typography, not tinted line icons. Nothing outside the Nutrition section uses Reacticx — every other screen stays
 on NativeWind and our own components.
 
 - Add components with `npx reacticx add <name> --no-install`, and check their imports first. `expo-blur`
   and `@react-native-masked-view/masked-view` are NOT in the app's native build — patch them out of the
-  copied source (as done for `animated-text`, `animated-input-bar`, `fan-menu`, `accordion`) or pick another
+  copied source (as done for `animated-text`, `animated-input-bar`, `fan-menu`, `accordion`, `segmented-control`, `ruler`, `animated-chip`) or pick another
   component. Ask before installing any new native package.
-- Skia-based components (`apple-intelligence`, `border-beam`) are native only. Give each a `.web.tsx` twin
-  without Skia (see `AiPhotoGlow`, `AiBeamFrame`), because the app also ships as a web/PWA build.
+- Skia-based components (`apple-intelligence`, `border-beam`, `chroma-ring`, `ruler`, `bar-chart`, `line-chart`) are native only.
+  Give each a `.web.tsx` twin without Skia (see `AiPhotoGlow`, `AiBeamFrame`, `AiChromaButton`, `AmountRuler`,
+  `DiaryWeekChart`, `TrendChart`), because the app
+  also ships as a web/PWA build. Gestures inside a React Native `Modal` need their own `GestureHandlerRootView`.
 - The flow's screens use the app's own background and surface colors (`constants/ai-scan-theme.ts`), no
   gradient backdrop.
 - `src/components/ui/**` and `src/shared/**` are excluded from lint: it is third-party source.

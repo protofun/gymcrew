@@ -1,14 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
-import { SkewedStat } from "@/components/SkewedStat";
-import { Stepper } from "@/components/Stepper";
+import { goToNutrition } from "@/lib/nutrition-nav";
+import { AiScanMacroRing } from "@/components/AiScanMacroRing";
+import { AmountPicker } from "@/components/AmountPicker";
+import { ConfirmModal } from "@/components/ConfirmModal";
+import { FoodHeader } from "@/components/FoodHeader";
+import { MealActionBar } from "@/components/MealActionBar";
+import { Accordion } from "@/components/ui/molecules/accordion";
+import { AI_ACCORDION_THEME } from "@/constants/ai-scan-theme";
 import { api, isApiConfigured } from "@/lib/api";
-import { formatDiaryDate, fromDateKey, toDateKey } from "@/lib/date";
+import { toDateKey } from "@/lib/date";
 import { MEAL_SLOTS, mealSlotForTime, type MealSlot } from "@/lib/meal-slot";
 import { NUTRITION_COLORS } from "@/lib/nutrition-colors";
 import { scaleExtendedMacros, scaleMacros } from "@/lib/nutrition-macros";
@@ -18,14 +25,22 @@ import { useNutritionLogStore } from "@/store/nutrition-log-store";
 import { useOffFoodsCacheStore } from "@/store/off-foods-cache-store";
 import { colors } from "@/theme";
 
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="flex-row items-center justify-between py-1.5">
+      <Text className="body-sm text-text-secondary">{label}</Text>
+      <Text className="body-sm font-body-semibold text-text-primary">{value}</Text>
+    </View>
+  );
+}
+
 /** Food detail + amount screen (see NUTRITION.md section 7) — doubles as the "edit an already-logged
- * entry" screen when `logId` is present (tapping a row in Today's Food), same "one screen, two
- * entry points" trick the rest of the app uses (e.g. workout/summary.tsx handling both a
- * just-finished and a historical workout). */
+ * entry" screen when `logId` is present, same "one screen, two entry points" trick the rest of the app
+ * uses. The amount is picked by dragging a ruler (Reacticx `ruler`); the calories and macros roll along. */
 export default function FoodDetailScreen() {
   const insets = useSafeAreaInsets();
   const posthog = usePostHog();
-  const { id, logId, date } = useLocalSearchParams<{ id: string; logId?: string; date?: string }>();
+  const { id, logId, date, slot } = useLocalSearchParams<{ id: string; logId?: string; date?: string; slot?: string }>();
   const targetDateKey = date ?? toDateKey(new Date());
 
   const customFoods = useCustomFoodsStore((state) => state.foods);
@@ -58,10 +73,15 @@ export default function FoodDetailScreen() {
   }, [food, id, rememberOffFoods]);
 
   const [quantity, setQuantity] = useState(existingLog?.quantity ?? food?.servingSize ?? 100);
-  const [mealSlot, setMealSlot] = useState<MealSlot>(existingLog?.mealSlot ?? mealSlotForTime());
+  const [mealSlot, setMealSlot] = useState<MealSlot>(existingLog?.mealSlot ?? MEAL_SLOTS.find((option) => option.key === slot)?.key ?? mealSlotForTime());
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const isFavorite = food ? favoriteIds.includes(food.id) : false;
-  const step = food?.servingUnit === "piece" ? 1 : food && food.servingSize <= 30 ? 1 : 5;
+  const isPiece = food?.servingUnit === "piece";
+  const step = isPiece ? 1 : food && food.servingSize <= 30 ? 1 : 5;
+  // The ruler's range is fixed when the screen opens — its length must not change while it's being dragged.
+  const initialQuantity = existingLog?.quantity ?? food?.servingSize ?? 100;
+  const maxAmount = useMemo(() => (isPiece ? Math.max(20, Math.ceil(initialQuantity) + 10) : Math.max(step === 1 ? 300 : 1000, Math.ceil(initialQuantity * 1.5))), [isPiece, step, initialQuantity]);
 
   const macros = food ? scaleMacros(food, quantity) : existingLog
     ? { calories: existingLog.calories, proteinG: existingLog.proteinG, carbsG: existingLog.carbsG, fatG: existingLog.fatG }
@@ -69,12 +89,28 @@ export default function FoodDetailScreen() {
   const extendedMacros = food ? scaleExtendedMacros(food, quantity) : null;
   const hasExtendedInfo = extendedMacros && (extendedMacros.fiberG !== null || extendedMacros.sugarG !== null || extendedMacros.saturatedFatG !== null || extendedMacros.sodiumMg !== null);
 
+  const presets = useMemo(() => {
+    if (!food) return [];
+    if (isPiece) return [1, 2, 3, 4].map((count) => ({ label: `${count}`, value: count }));
+    const snap = (value: number) => Math.max(step, Math.round(value / step) * step);
+    return [
+      { label: "½ serving", value: snap(food.servingSize * 0.5) },
+      { label: "1 serving", value: snap(food.servingSize) },
+      { label: "2 servings", value: snap(food.servingSize * 2) },
+    ];
+  }, [food, isPiece, step]);
+
+  // Each macro's calories (protein and carbs are 4 kcal/g, fat 9) and its share of all three.
+  const kcal = { protein: macros.proteinG * 4, carbs: macros.carbsG * 4, fat: macros.fatG * 9 };
+  const kcalSum = kcal.protein + kcal.carbs + kcal.fat;
+  const percentOf = (value: number) => (kcalSum > 0 ? (value / kcalSum) * 100 : 0);
+
   function handleBack() {
     if (router.canGoBack()) router.back();
     else router.replace("/nutrition");
   }
 
-  function handleAdd() {
+  function commitAdd() {
     if (!food) return;
     addEntry({
       foodId: food.id,
@@ -94,10 +130,9 @@ export default function FoodDetailScreen() {
       calories: macros.calories,
       is_today: targetDateKey === toDateKey(new Date()),
     });
-    router.replace("/nutrition");
   }
 
-  function handleUpdate() {
+  function commitUpdate() {
     if (!existingLog) return;
     removeEntry(existingLog.id);
     addEntry({
@@ -111,11 +146,11 @@ export default function FoodDetailScreen() {
       ...macros,
     });
     posthog.capture("food_log_updated", { meal_slot: mealSlot, quantity, calories: macros.calories });
-    handleBack();
   }
 
   function handleRemove() {
     if (!existingLog) return;
+    setConfirmRemove(false);
     removeEntry(existingLog.id);
     posthog.capture("food_log_removed", { meal_slot: existingLog.mealSlot, calories: existingLog.calories });
     handleBack();
@@ -142,157 +177,102 @@ export default function FoodDetailScreen() {
 
   const displayName = food?.name ?? existingLog?.name ?? "Food";
   const canEditAmount = food !== undefined;
+  const subtitle = food ? [food.brand, `${food.calories} kcal / ${food.servingSize}${food.servingUnit}`].filter(Boolean).join(" · ") : undefined;
 
   return (
-    <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
-      <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={handleBack} hitSlop={8} style={{ position: "absolute", left: 16 }}>
-          <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
-        </Pressable>
-        <Text className="heading-4 text-text-primary">{logId ? "Edit Entry" : "Food"}</Text>
-        {food && (
-          <Pressable
-            onPress={() => {
-              toggleFavorite(food.id);
-              posthog.capture(isFavorite ? "food_unfavorited" : "food_favorited", { source: food.source });
-            }}
-            hitSlop={8}
-            style={{ position: "absolute", right: 16 }}
-          >
-            <Ionicons name={isFavorite ? "star" : "star-outline"} size={22} color={isFavorite ? colors.brand.yellow : colors.neutral.textSecondary} />
-          </Pressable>
-        )}
-      </View>
+    <View className="flex-1 bg-background">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 130 }}>
+        <FoodHeader
+          photoUrl={food?.photoUrl}
+          title={displayName}
+          subtitle={subtitle}
+          calories={macros.calories}
+          label={logId ? "EDIT ENTRY" : "FOOD"}
+          onBack={handleBack}
+          actions={
+            <>
+              {logId && (
+                <Pressable onPress={() => setConfirmRemove(true)} hitSlop={8} className="h-10 w-10 items-center justify-center rounded-full border border-divider bg-background/60" accessibilityLabel="Remove entry">
+                  <Ionicons name="trash-outline" size={19} color={colors.brand.white} />
+                </Pressable>
+              )}
+              {food && (
+                <Pressable
+                  onPress={() => {
+                    toggleFavorite(food.id);
+                    posthog.capture(isFavorite ? "food_unfavorited" : "food_favorited", { source: food.source });
+                  }}
+                  hitSlop={8}
+                  className="h-10 w-10 items-center justify-center rounded-full border border-divider bg-background/60"
+                  accessibilityLabel={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                >
+                  <Ionicons name={isFavorite ? "star" : "star-outline"} size={19} color={isFavorite ? colors.brand.yellow : colors.brand.white} />
+                </Pressable>
+              )}
+            </>
+          }
+        />
 
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: insets.bottom + 32, gap: 20 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="flex-row items-center gap-3">
-          {food?.photoUrl ? (
-            <Image source={{ uri: food.photoUrl }} style={{ width: 72, height: 72, borderRadius: 16 }} resizeMode="cover" />
-          ) : (
-            <View className="h-[72px] w-[72px] items-center justify-center rounded-2xl bg-surface">
-              <Ionicons name="fast-food-outline" size={26} color={colors.neutral.textSecondary} />
+        <View className="gap-7 px-5 pt-4">
+          {food?.source === "open_food_facts" && (
+            <View className="-mt-1 flex-row items-center gap-1.5">
+              <Ionicons name="information-circle-outline" size={13} color={colors.neutral.textSecondary} />
+              <Text className="caption flex-1 text-text-secondary">From Open Food Facts — community data, may not always be accurate.</Text>
             </View>
           )}
-          <View className="flex-1 gap-1">
-            <Text className="heading-3 text-text-primary">{displayName}</Text>
-            {food?.brand && <Text className="body-sm text-text-secondary">{food.brand}</Text>}
-            {food && <Text className="body-sm text-text-secondary">{`${food.calories} kcal / ${food.servingSize}${food.servingUnit}`}</Text>}
-          </View>
+
+          {canEditAmount && food && (
+            <Animated.View entering={FadeInDown.delay(100).springify().damping(16)}>
+              <AmountPicker value={quantity} unit={food.servingUnit} min={step} max={maxAmount} step={step} onChange={setQuantity} presets={presets} />
+            </Animated.View>
+          )}
+
+          <Animated.View entering={FadeInDown.delay(200).springify().damping(16)} className="flex-row justify-around border-y border-divider py-5">
+            <AiScanMacroRing label="PROTEIN" grams={macros.proteinG} kcal={kcal.protein} percent={percentOf(kcal.protein)} color={NUTRITION_COLORS.protein} />
+            <AiScanMacroRing label="CARBS" grams={macros.carbsG} kcal={kcal.carbs} percent={percentOf(kcal.carbs)} color={NUTRITION_COLORS.carbs} />
+            <AiScanMacroRing label="FAT" grams={macros.fatG} kcal={kcal.fat} percent={percentOf(kcal.fat)} color={NUTRITION_COLORS.fat} />
+          </Animated.View>
+
+          {hasExtendedInfo && extendedMacros && (
+            <Accordion type="single" flush theme={AI_ACCORDION_THEME}>
+              <Accordion.Item value="more">
+                <Accordion.Trigger>
+                  <Text className="body-md flex-1 font-body-semibold text-text-primary">More nutrition info</Text>
+                </Accordion.Trigger>
+                <Accordion.Content>
+                  <View>
+                    {extendedMacros.fiberG !== null && <InfoRow label="Fiber" value={`${extendedMacros.fiberG}g`} />}
+                    {extendedMacros.sugarG !== null && <InfoRow label="Sugar" value={`${extendedMacros.sugarG}g`} />}
+                    {extendedMacros.saturatedFatG !== null && <InfoRow label="Saturated Fat" value={`${extendedMacros.saturatedFatG}g`} />}
+                    {extendedMacros.sodiumMg !== null && <InfoRow label="Sodium" value={`${extendedMacros.sodiumMg}mg`} />}
+                  </View>
+                </Accordion.Content>
+              </Accordion.Item>
+            </Accordion>
+          )}
         </View>
-
-        {food?.source === "open_food_facts" && (
-          <View className="-mt-3 flex-row items-center gap-1.5">
-            <Ionicons name="information-circle-outline" size={13} color={colors.neutral.textSecondary} />
-            <Text className="caption flex-1 text-text-secondary">From Open Food Facts — community data, may not always be accurate.</Text>
-          </View>
-        )}
-
-        <View className="flex-row gap-2.5">
-          <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
-            <Ionicons name="flame" size={16} color={NUTRITION_COLORS.calories} />
-            <SkewedStat size={19} color={colors.neutral.textPrimary}>{String(macros.calories)}</SkewedStat>
-            <Text className="caption text-text-secondary">Calories</Text>
-          </View>
-          <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
-            <Ionicons name="barbell" size={16} color={NUTRITION_COLORS.protein} />
-            <SkewedStat size={19} color={colors.neutral.textPrimary}>{`${macros.proteinG}g`}</SkewedStat>
-            <Text className="caption text-text-secondary">Protein</Text>
-          </View>
-          <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
-            <Ionicons name="flash" size={16} color={NUTRITION_COLORS.carbs} />
-            <SkewedStat size={19} color={colors.neutral.textPrimary}>{`${macros.carbsG}g`}</SkewedStat>
-            <Text className="caption text-text-secondary">Carbs</Text>
-          </View>
-          <View className="flex-1 items-center gap-1 rounded-2xl border border-divider bg-surface p-3">
-            <Ionicons name="water" size={16} color={NUTRITION_COLORS.fat} />
-            <SkewedStat size={19} color={colors.neutral.textPrimary}>{`${macros.fatG}g`}</SkewedStat>
-            <Text className="caption text-text-secondary">Fat</Text>
-          </View>
-        </View>
-
-        {hasExtendedInfo && extendedMacros && (
-          <View className="gap-2 rounded-2xl border border-divider bg-surface p-3.5">
-            <Text className="caption font-body-semibold text-text-secondary">MORE NUTRITION INFO</Text>
-            <View className="gap-1.5">
-              {extendedMacros.fiberG !== null && (
-                <View className="flex-row items-center justify-between">
-                  <Text className="body-sm text-text-secondary">Fiber</Text>
-                  <Text className="body-sm font-body-semibold text-text-primary">{`${extendedMacros.fiberG}g`}</Text>
-                </View>
-              )}
-              {extendedMacros.sugarG !== null && (
-                <View className="flex-row items-center justify-between">
-                  <Text className="body-sm text-text-secondary">Sugar</Text>
-                  <Text className="body-sm font-body-semibold text-text-primary">{`${extendedMacros.sugarG}g`}</Text>
-                </View>
-              )}
-              {extendedMacros.saturatedFatG !== null && (
-                <View className="flex-row items-center justify-between">
-                  <Text className="body-sm text-text-secondary">Saturated Fat</Text>
-                  <Text className="body-sm font-body-semibold text-text-primary">{`${extendedMacros.saturatedFatG}g`}</Text>
-                </View>
-              )}
-              {extendedMacros.sodiumMg !== null && (
-                <View className="flex-row items-center justify-between">
-                  <Text className="body-sm text-text-secondary">Sodium</Text>
-                  <Text className="body-sm font-body-semibold text-text-primary">{`${extendedMacros.sodiumMg}mg`}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
-
-        {canEditAmount && food && (
-          <Stepper
-            label="Amount"
-            value={quantity}
-            onChange={setQuantity}
-            step={step}
-            min={0}
-            max={5000}
-            rightAdornment={<Text className="caption text-text-secondary">{food.servingUnit}</Text>}
-          />
-        )}
-
-        <View className="gap-2">
-          <Text className="body-sm text-text-secondary">Meal</Text>
-          <View className="flex-row gap-2">
-            {MEAL_SLOTS.map((option) => {
-              const selected = mealSlot === option.key;
-              return (
-                <Pressable
-                  key={option.key}
-                  onPress={() => setMealSlot(option.key)}
-                  className={`flex-1 items-center rounded-xl border py-2.5 ${selected ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"}`}
-                >
-                  <Text className={`caption font-body-semibold ${selected ? "text-brand-iron" : "text-text-secondary"}`}>{option.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        {logId ? (
-          <View className="gap-3">
-            <Pressable onPress={handleUpdate} className="items-center rounded-full bg-brand-yellow py-4">
-              <Text className="body-md font-body-semibold text-brand-iron">Update Entry</Text>
-            </Pressable>
-            <Pressable onPress={handleRemove} className="items-center rounded-full border border-divider py-4">
-              <Text className="body-md font-body-semibold text-error">Remove</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <Pressable onPress={handleAdd} disabled={!food} className={`items-center rounded-full py-4 ${food ? "bg-brand-yellow" : "bg-surface"}`}>
-            <Text className={`body-md font-body-semibold ${food ? "text-brand-iron" : "text-text-secondary"}`}>
-              {`Add to ${formatDiaryDate(fromDateKey(targetDateKey))}'s Log`}
-            </Text>
-          </Pressable>
-        )}
       </ScrollView>
+
+      <MealActionBar
+        mealSlot={mealSlot}
+        onChangeMealSlot={setMealSlot}
+        actionLabel={logId ? "Update in" : "Add to"}
+        saveLabel={logId ? "Update" : "Add"}
+        savedLabel={logId ? "Saved" : "Added"}
+        disabled={!food && !existingLog}
+        onSave={logId ? commitUpdate : commitAdd}
+        onSaved={() => (logId ? handleBack() : goToNutrition())}
+      />
+
+      <ConfirmModal
+        visible={confirmRemove}
+        title="Remove this entry?"
+        message="It will be taken out of your food log."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={handleRemove}
+        onCancel={() => setConfirmRemove(false)}
+      />
     </View>
   );
 }

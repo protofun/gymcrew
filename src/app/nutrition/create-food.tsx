@@ -11,7 +11,7 @@ import { colors } from "@/theme";
 export default function CreateFoodScreen() {
   const insets = useSafeAreaInsets();
   const posthog = usePostHog();
-  const { name, barcode, date } = useLocalSearchParams<{ name?: string; barcode?: string; date?: string }>();
+  const { name, barcode, date, slot } = useLocalSearchParams<{ name?: string; barcode?: string; date?: string; slot?: string }>();
   const addFood = useCustomFoodsStore((state) => state.addFood);
 
   function handleBack() {
@@ -29,20 +29,23 @@ export default function CreateFoodScreen() {
       has_brand: !!input.brand,
       serving_unit: input.servingUnit,
     });
-    router.replace({ pathname: "/nutrition/food/[id]", params: { id: food.id, date } });
+    router.replace({ pathname: "/nutrition/food/[id]", params: { id: food.id, date, slot } });
   }
 
   return (
-    <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
-      <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
-        <Pressable onPress={handleBack} hitSlop={8} style={{ position: "absolute", left: 16 }}>
-          <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
+    <View style={{ flex: 1, paddingTop: insets.top + 8 }} className="bg-background">
+      <View className="flex-row items-center justify-between px-4">
+        <Pressable onPress={handleBack} hitSlop={8} className="h-10 w-10 items-center justify-center rounded-full border border-divider bg-surface" accessibilityLabel="Back">
+          <Ionicons name="chevron-back" size={19} color={colors.neutral.textPrimary} />
         </Pressable>
-        <Text className="heading-4 text-text-primary">{barcode ? "Add This Product" : "Create Food"}</Text>
+        <Text className="caption font-body-bold text-text-secondary" style={{ letterSpacing: 1.4 }}>
+          {barcode ? "ADD THIS PRODUCT" : "CREATE FOOD"}
+        </Text>
+        <View className="h-10 w-10" />
       </View>
 
       {barcode && (
-        <View className="flex-row items-center gap-1.5 border-b border-divider bg-surface px-4 py-2.5">
+        <View className="mx-5 mt-3 flex-row items-center gap-1.5 self-start rounded-full bg-surface px-3 py-1.5">
           <Ionicons name="barcode-outline" size={14} color={colors.neutral.textSecondary} />
           <Text className="caption text-text-secondary">{`Barcode ${barcode}`}</Text>
         </View>

@@ -1,5 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 
 import { AnimatedChip } from "@/components/ui/molecules/animated-chip";
 import { AI_SCAN } from "@/constants/ai-scan-theme";
@@ -10,10 +9,10 @@ export type PortionSize = "small" | "regular" | "large";
 /** How much each preset scales the AI's estimated portions. */
 export const PORTION_FACTORS: Record<PortionSize, number> = { small: 0.75, regular: 1, large: 1.25 };
 
-const OPTIONS: { key: PortionSize; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { key: "small", label: "Smaller", icon: "contract-outline" },
-  { key: "regular", label: "As shown", icon: "ellipse-outline" },
-  { key: "large", label: "Bigger", icon: "expand-outline" },
+const OPTIONS: { key: PortionSize; label: string; mark: string }[] = [
+  { key: "small", label: "Smaller", mark: "−" },
+  { key: "regular", label: "As shown", mark: "=" },
+  { key: "large", label: "Bigger", mark: "+" },
 ];
 
 type AiScanPortionChipsProps = {
@@ -30,7 +29,7 @@ export function AiScanPortionChips({ value, onChange }: AiScanPortionChipsProps)
         {OPTIONS.map((option) => (
           <AnimatedChip.Item key={option.key} value={option.key} activeColor={AI_SCAN.accent} inactiveColor={AI_SCAN.surface}>
             <AnimatedChip.Icon>
-              {({ selected }) => <Ionicons name={option.icon} size={20} color={selected ? AI_SCAN.onAccent : AI_SCAN.textMuted} />}
+              {({ selected }) => <Text style={{ fontFamily: fontFamily.heading, fontSize: 24, color: selected ? AI_SCAN.onAccent : AI_SCAN.textMuted }}>{option.mark}</Text>}
             </AnimatedChip.Icon>
             <AnimatedChip.Label color={AI_SCAN.onAccent} style={{ fontFamily: fontFamily.bodyBold, fontSize: 14 }}>
               {option.label}

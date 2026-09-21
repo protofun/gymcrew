@@ -122,6 +122,8 @@ import nutritionIconTarget from "@/assets/images/icons/nutrition/target.png";
 import nutritionIconCalendar from "@/assets/images/icons/nutrition/calendar.png";
 import nutritionIconAchievements from "@/assets/images/icons/nutrition/achievements.png";
 import nutritionIconMore from "@/assets/images/icons/nutrition/more.png";
+import nutritionIconTasks from "@/assets/images/icons/nutrition/tasks.png";
+import nutritionIconWorkouts from "@/assets/images/icons/nutrition/workouts.png";
 import muscleAbs from "@/assets/images/musclegroup/muscle-abs.png";
 import muscleBack from "@/assets/images/musclegroup/muscle-back.png";
 import muscleBiceps from "@/assets/images/musclegroup/muscle-biceps.png";
@@ -182,6 +184,8 @@ export const nutritionIcons = {
   calendar: nutritionIconCalendar,
   achievements: nutritionIconAchievements,
   more: nutritionIconMore,
+  tasks: nutritionIconTasks,
+  workouts: nutritionIconWorkouts,
 };
 
 /** Division name (see lib/division.ts) to its illustrated badge — in ascending division order. */

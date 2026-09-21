@@ -1,14 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goToNutrition } from "@/lib/nutrition-nav";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { Polaroid } from "@/components/ui/pieces/polaroid";
 import { ReceiptCard } from "@/components/ui/pieces/receipt-card";
-import { aiMealFoodId, aiMealTotals, saveAiMealToLog } from "@/lib/ai-meals";
+import { aiMealFoodId, aiMealTotals, formatAmount, saveAiMealToLog } from "@/lib/ai-meals";
 import { formatDiaryDate, fromDateKey } from "@/lib/date";
 import { MEAL_SLOTS } from "@/lib/meal-slot";
 import { goBack } from "@/lib/navigation";
@@ -61,7 +62,7 @@ export default function AiMealDetailScreen() {
   function handleRemoveMeal() {
     setConfirmRemove(false);
     writeMeal([]);
-    router.replace("/nutrition");
+    goToNutrition();
   }
 
   return (
@@ -99,7 +100,7 @@ export default function AiMealDetailScreen() {
             <ReceiptCard.Separator />
             <ReceiptCard.Items>
               {meal.items.map((item) => (
-                <ReceiptCard.Item key={item.id} label={`${item.name} · ${Math.round(item.grams)} g`} value={`${Math.round(item.calories)} kcal`} />
+                <ReceiptCard.Item key={item.id} label={`${item.name} · ${formatAmount(item.grams, item.unit)}`} value={`${Math.round(item.calories)} kcal`} />
               ))}
             </ReceiptCard.Items>
             <ReceiptCard.Separator />

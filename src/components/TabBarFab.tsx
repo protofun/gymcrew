@@ -30,11 +30,7 @@ function PlusMark({ size, color }: { size: number; color: string }) {
 }
 
 /**
- * The raised "+" FAB shared by the main `TabBar` and `NutritionNavBar` — same size, same twist-and-
- * pop press animation, same focused ring, so Nutrition's own section-local bottom bar reads as part
- * of the same app chrome instead of a cheaper copy. `focused` only ever applies to the main tab bar
- * (Nutrition's FAB pushes a separate "Add" screen, never a tab it can sit "on"), but stays a prop
- * here rather than hardcoded so either caller can opt in.
+ * The raised "+" FAB of the main `TabBar` — a twist-and-pop press animation, and a ring when its tab is the current one.
  */
 export function TabBarFab({ onPress, focused = false }: { onPress: () => void; focused?: boolean }) {
   const scale = useSharedValue(1);

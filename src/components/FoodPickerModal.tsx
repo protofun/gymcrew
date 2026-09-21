@@ -1,3 +1,4 @@
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
@@ -119,7 +120,7 @@ export function FoodPickerModal({ visible, title = "Add Ingredient", onClose, on
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
-      <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.neutral.background }}>
+      <GestureHandlerRootView style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.neutral.background }}>
         <View className="border-b border-divider px-4 pb-3 pt-2">
           <View className="flex-row items-center justify-between">
             <Text className="heading-4 text-text-primary">{mode === "search" ? title : "Create Food"}</Text>
@@ -189,7 +190,7 @@ export function FoodPickerModal({ visible, title = "Add Ingredient", onClose, on
             />
           </>
         )}
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

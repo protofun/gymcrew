@@ -5,17 +5,18 @@ import Animated, { FadeInDown, FadeInUp, LinearTransition } from "react-native-r
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AiScanDayLine } from "@/components/AiScanDayLine";
-import { AiScanIngredientRow } from "@/components/AiScanIngredientRow";
-import { AiScanIngredientTicker } from "@/components/AiScanIngredientTicker";
+import { IngredientRow } from "@/components/IngredientRow";
 import { AiScanMacroRing } from "@/components/AiScanMacroRing";
-import { AiScanMealFan } from "@/components/AiScanMealFan";
+import { MealSlotFan } from "@/components/MealSlotFan";
 import { AiScanPhotoHeader } from "@/components/AiScanPhotoHeader";
 import { AiScanPortionChips, type PortionSize } from "@/components/AiScanPortionChips";
 import { AiScanPromptCard } from "@/components/AiScanPromptCard";
+import { TextTicker } from "@/components/TextTicker";
 import { SaveButton } from "@/components/ui/micro-interactions/save-button";
 import { Accordion } from "@/components/ui/molecules/accordion";
 import AnimatedText from "@/components/ui/organisms/animated-text";
 import { AI_ACCORDION_THEME, AI_SAVE_BUTTON_COLORS, AI_SCAN } from "@/constants/ai-scan-theme";
+import { amountSummary } from "@/lib/ai-meals";
 import type { MealItem } from "@/lib/api";
 import { MEAL_SLOTS, type MealSlot } from "@/lib/meal-slot";
 import { NUTRITION_COLORS } from "@/lib/nutrition-colors";
@@ -79,7 +80,7 @@ export function AiScanResults({
   const insets = useSafeAreaInsets();
 
   const mealTotals = useMemo(() => sumMacros(items.map((item) => scaleMacros(item, item.quantity))), [items]);
-  const totalGrams = items.reduce((sum, item) => sum + item.quantity, 0);
+  const amounts = amountSummary(items.map((item) => ({ amount: item.quantity, unit: item.servingUnit })));
   const slotLabel = MEAL_SLOTS.find((slot) => slot.key === mealSlot)?.label ?? "";
 
   // Each macro's calories (protein and carbs are 4 kcal/g, fat 9) and its share of all three — how far its ring fills.
@@ -95,14 +96,14 @@ export function AiScanResults({
             photoUri={photoUri}
             calories={mealTotals.calories}
             ingredientCount={items.length}
-            totalGrams={totalGrams}
+            amountSummary={amounts}
             slotLabel={slotLabel}
             onBack={onBack}
             onRemoveMeal={onRemoveMeal}
           />
 
           <View className="gap-6 px-5">
-            <AiScanIngredientTicker names={items.map((item) => item.name)} />
+            <TextTicker items={items.map((item) => item.name)} />
 
             <Animated.View entering={FadeInDown.delay(150).springify()} style={{ borderColor: AI_SCAN.border }} className="flex-row justify-around border-y py-5">
               <AiScanMacroRing label="PROTEIN" grams={mealTotals.proteinG} kcal={kcal.protein} percent={percentOf(kcal.protein)} color={NUTRITION_COLORS.protein} />
@@ -131,7 +132,7 @@ export function AiScanResults({
                 <Animated.View layout={LinearTransition.springify().damping(18)}>
                   <Accordion type="single" flush theme={AI_ACCORDION_THEME}>
                     {items.map((item) => (
-                      <AiScanIngredientRow key={item.id} item={item} onChangeQuantity={(quantity) => onChangeQuantity(item.id, quantity)} onRemove={() => onRemoveItem(item.id)} />
+                      <IngredientRow key={item.id} item={item} onChangeQuantity={(quantity) => onChangeQuantity(item.id, quantity)} onRemove={() => onRemoveItem(item.id)} />
                     ))}
                   </Accordion>
                 </Animated.View>
@@ -166,7 +167,7 @@ export function AiScanResults({
         </Animated.View>
       </KeyboardAvoidingView>
 
-      <AiScanMealFan mealSlot={mealSlot} onChange={onChangeMealSlot} bottom={insets.bottom + 12} buttonSize={BAR_BUTTON_SIZE} />
+      <MealSlotFan mealSlot={mealSlot} onChange={onChangeMealSlot} bottom={insets.bottom + 12} buttonSize={BAR_BUTTON_SIZE} />
     </View>
   );
 }
