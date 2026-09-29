@@ -34,6 +34,10 @@ yarn-error.*
 .env*.local
 backend/.env
 
+# database dumps (can contain real user data — never commit these)
+backup/*.sql
+!backup/founding_athletes.sql
+
 # typescript
 *.tsbuildinfo
 
