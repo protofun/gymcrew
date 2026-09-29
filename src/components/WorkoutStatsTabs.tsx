@@ -1,11 +1,10 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Text, View } from "react-native";
 
 import { ExerciseComparisonChart, type ComparisonPoint } from "@/components/ExerciseComparisonChart";
 import { MetricTrendChart, type TrendPoint } from "@/components/MetricTrendChart";
+import { PillRow } from "@/components/PillRow";
+import { AnimatedProgressBar } from "@/components/ui/organisms/progress";
 import { formatMuscleName } from "@/data/exercises";
 import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { displayWeight } from "@/lib/units";
@@ -13,18 +12,18 @@ import { findPreviousMatchingWorkout } from "@/lib/workout-comparison";
 import { estimateCalories } from "@/lib/workout-sessions";
 import type { LoggedExercise } from "@/store/active-workout-store";
 import type { CompletedWorkout } from "@/store/workout-history-store";
-import { colors } from "@/theme";
+import { colors, fontFamily } from "@/theme";
 
 type StatsTabKey = "volume" | "exercises" | "sets" | "muscles" | "duration" | "calories";
 
-const TABS: { key: StatsTabKey; label: string }[] = [
+const TABS = [
   { key: "volume", label: "Volume" },
   { key: "exercises", label: "Exercises" },
   { key: "sets", label: "Sets" },
   { key: "muscles", label: "Muscles" },
   { key: "duration", label: "Duration" },
   { key: "calories", label: "Calories" },
-];
+] as const;
 
 function exerciseVolume(exercise: LoggedExercise): number {
   return exercise.sets.filter((set) => set.completed).reduce((sum, set) => sum + (set.weightKg ?? 0) * (set.reps ?? 0), 0);
@@ -55,59 +54,10 @@ function BreakdownBars({ rows, unit, emptyLabel }: { rows: BreakdownRow[]; unit:
               {row.value.toLocaleString("en-US")} {unit}
             </Text>
           </View>
-          <View className="h-2 overflow-hidden rounded-full bg-background">
-            <View className="h-2 rounded-full bg-brand-yellow" style={{ width: `${Math.max(4, (row.value / maxValue) * 100)}%` }} />
-          </View>
+          <AnimatedProgressBar progress={Math.max(0.04, row.value / maxValue)} height={8} borderRadius={4} progressColor={colors.brand.yellow} trackColor={colors.neutral.divider} animationDuration={800} />
         </View>
       ))}
     </View>
-  );
-}
-
-type MetricPickerSheetProps = {
-  visible: boolean;
-  tab: StatsTabKey;
-  onChange: (key: StatsTabKey) => void;
-  onClose: () => void;
-};
-
-/** Same bottom-sheet pattern as the Ranks tab's "Sort lifts by" menu (`SortMenu` in
- * `(tabs)/ranks.tsx`) — a plain tap-to-pick list, no text input involved, so there's no risk of the
- * keyboard popping up over it. */
-function MetricPickerSheet({ visible, tab, onChange, onClose }: MetricPickerSheetProps) {
-  const insets = useSafeAreaInsets();
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1 }} onPress={onClose} className="justify-end bg-black/50">
-        {/* Swallows taps so they don't bubble to the backdrop Pressable and close the sheet. */}
-        <Pressable onPress={() => {}}>
-          <Animated.View
-            entering={FadeInUp.springify().damping(18).mass(0.7)}
-            style={{ paddingBottom: insets.bottom + 16 }}
-            className="gap-1 rounded-t-3xl border-t border-divider bg-surface p-4"
-          >
-            <Text className="heading-4 mb-2 text-text-primary">View by</Text>
-            {TABS.map((option) => {
-              const active = option.key === tab;
-              return (
-                <Pressable
-                  key={option.key}
-                  onPress={() => {
-                    onChange(option.key);
-                    onClose();
-                  }}
-                  className="flex-row items-center justify-between rounded-xl px-2 py-3"
-                >
-                  <Text className={active ? "body-md font-body-semibold text-brand-yellow" : "body-md text-text-primary"}>{option.label}</Text>
-                  {active && <Ionicons name="checkmark" size={18} color={colors.brand.yellow} />}
-                </Pressable>
-              );
-            })}
-          </Animated.View>
-        </Pressable>
-      </Pressable>
-    </Modal>
   );
 }
 
@@ -124,8 +74,6 @@ type WorkoutStatsTabsProps = {
  * care about. */
 export function WorkoutStatsTabs({ workout, workouts, bodyWeightKg }: WorkoutStatsTabsProps) {
   const [tab, setTab] = useState<StatsTabKey>("volume");
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const tabLabel = TABS.find((option) => option.key === tab)?.label ?? "Volume";
   // Every underlying volume number is stored in kg regardless of which unit was active when that
   // particular workout was logged — always convert to the user's *current* display preference here,
   // not each workout's own historical `unit`, so a multi-workout trend never mixes units.
@@ -168,19 +116,11 @@ export function WorkoutStatsTabs({ workout, workouts, bodyWeightKg }: WorkoutSta
     .sort((a, b) => b.value - a.value);
 
   return (
-    <View className="gap-3">
-      <View className="flex-row items-center justify-between">
-        <Text className="body-md font-body-semibold text-text-primary">Your Stats</Text>
-        <Pressable
-          onPress={() => setPickerOpen(true)}
-          className="flex-row items-center gap-1 rounded-full border border-divider bg-surface px-3 py-1.5"
-        >
-          <Text className="caption font-body-semibold text-text-secondary">{tabLabel}</Text>
-          <Ionicons name="chevron-down" size={12} color={colors.neutral.textSecondary} />
-        </Pressable>
-      </View>
+    <View className="gap-4">
+      <Text style={{ fontFamily: fontFamily.heading, fontSize: 30, letterSpacing: 1, color: colors.brand.white }}>YOUR STATS</Text>
 
-      <MetricPickerSheet visible={pickerOpen} tab={tab} onChange={setTab} onClose={() => setPickerOpen(false)} />
+      {/* One row of chips to slide between the six cuts of the same data (Reacticx `animated-chip`), instead of a dropdown that hides them. */}
+      <PillRow options={TABS} value={tab} onChange={setTab} />
 
       {tab === "volume" && (
         <MetricTrendChart

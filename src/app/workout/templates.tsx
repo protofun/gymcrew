@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
+import { HOME_EYEBROW, HOME_ROW_DETAIL } from "@/components/homeStyle";
 import { WorkoutTemplateCard } from "@/components/WorkoutTemplateCard";
 import { EXERCISE_BY_ID } from "@/data/exercises";
 import { ALL_TEMPLATES, getTemplatesForSplit, type WorkoutTemplate } from "@/data/workout-templates";
@@ -60,24 +61,26 @@ export default function WorkoutTemplatesScreen() {
       >
         <View className="gap-3">
           <View className="gap-0.5">
-            <Text className="body-md font-body-semibold text-text-primary">
-              {trainingSplit ? `Based on your split` : "Quick Start Templates"}
-            </Text>
-            <Text className="caption text-text-secondary">
+            <Text style={HOME_EYEBROW}>{trainingSplit ? "BASED ON YOUR SPLIT" : "QUICK START TEMPLATES"}</Text>
+            <Text style={HOME_ROW_DETAIL}>
               {trainingSplit ? trainingSplit : "Set a training split in your profile to get personalized picks"}
             </Text>
           </View>
 
-          {splitTemplates.map((template) => (
-            <WorkoutTemplateCard key={template.key} template={template} onPress={() => handleStartTemplate(template)} />
-          ))}
+          <View>
+            {splitTemplates.map((template) => (
+              <WorkoutTemplateCard key={template.key} template={template} onPress={() => handleStartTemplate(template)} />
+            ))}
+          </View>
         </View>
 
         <View className="gap-3">
-          <Text className="body-md font-body-semibold text-text-primary">Browse All Templates</Text>
-          {otherTemplates.map((template) => (
-            <WorkoutTemplateCard key={template.key} template={template} onPress={() => handleStartTemplate(template)} />
-          ))}
+          <Text style={HOME_EYEBROW}>BROWSE ALL TEMPLATES</Text>
+          <View>
+            {otherTemplates.map((template) => (
+              <WorkoutTemplateCard key={template.key} template={template} onPress={() => handleStartTemplate(template)} />
+            ))}
+          </View>
         </View>
       </ScrollView>
     </View>

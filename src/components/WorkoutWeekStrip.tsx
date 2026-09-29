@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { DayWorkoutsSheet } from "@/components/DayWorkoutsSheet";
+import { HOME_ROW_DETAIL, HOME_ROW_TITLE } from "@/components/homeStyle";
 import { getCurrentWeekDates, toDateKey } from "@/lib/date";
 import type { CompletedWorkout } from "@/store/workout-history-store";
 import { colors } from "@/theme";
@@ -41,9 +42,11 @@ export function WorkoutWeekStrip({ workouts, onPressWorkout, onSeeAll }: Workout
   return (
     <View className="gap-4">
       <View className="flex-row items-baseline justify-between">
-        <Text className="body-md font-body-semibold text-text-primary">This Week</Text>
+        <Text style={[HOME_ROW_TITLE, { fontSize: 17, lineHeight: 19 }]}>THIS WEEK</Text>
         <View className="flex-row items-center gap-3">
-          <Text className="caption text-text-secondary">{trainedCount} workout{trainedCount === 1 ? "" : "s"}</Text>
+          <Text style={HOME_ROW_DETAIL}>
+            {trainedCount} workout{trainedCount === 1 ? "" : "s"}
+          </Text>
           {onSeeAll && (
             <Pressable onPress={onSeeAll} hitSlop={8}>
               <Text className="caption font-body-semibold text-brand-yellow">See All</Text>

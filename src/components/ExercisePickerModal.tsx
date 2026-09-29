@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FlatList, Image, Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CreateExerciseForm } from "@/components/CreateExerciseForm";
+import { ExerciseFiltersSheet } from "@/components/ExerciseFiltersSheet";
 import { ExerciseInstructionsModal } from "@/components/ExerciseInstructionsModal";
-import { type Exercise, formatMuscleName, searchExercises } from "@/data/exercises";
+import { EXERCISE_LIBRARY, type Exercise, formatMuscleName, searchExercises } from "@/data/exercises";
 import { useCustomExercisesStore } from "@/store/custom-exercises-store";
 import { useFavoriteExercisesStore } from "@/store/favorite-exercises-store";
 import { colors } from "@/theme";
@@ -103,6 +105,10 @@ export function ExercisePickerModal({
   const [mode, setMode] = useState<"search" | "create">("search");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [infoExercise, setInfoExercise] = useState<Exercise | null>(null);
+  const [equipmentFilter, setEquipmentFilter] = useState<string[]>([]);
+  const [muscleFilter, setMuscleFilter] = useState<string[]>([]);
+  const [filtersVisible, setFiltersVisible] = useState(false);
+  const activeFilterCount = equipmentFilter.length + muscleFilter.length;
 
   const customExercises = useCustomExercisesStore((state) => state.exercises);
   const addCustomExercise = useCustomExercisesStore((state) => state.addExercise);
@@ -126,24 +132,28 @@ export function ExercisePickerModal({
   }, [visible]);
 
   const results = useMemo(() => {
-    const trimmed = query.trim().toLowerCase();
-    const matchingCustom = trimmed
-      ? customExercises.filter(
-          (exercise) =>
-            exercise.name.toLowerCase().includes(trimmed) ||
-            exercise.primaryMuscles.some((muscle) => muscle.toLowerCase().includes(trimmed)),
-        )
-      : customExercises;
     // No cap — the library is ~870 exercises and FlatList virtualizes rendering, so showing
     // everything (rather than an arbitrary slice) is cheap and lets people actually browse it all.
-    const all = [...matchingCustom, ...searchExercises(query)];
+    // Custom exercises run through the same word-matching + equipment/muscle filters as the
+    // library, on one combined list, instead of a separate ad-hoc filter for just the custom ones.
+    const all = searchExercises(query, { equipment: equipmentFilter, muscles: muscleFilter }, [...customExercises, ...EXERCISE_LIBRARY]);
     return favoritesOnly ? all.filter((exercise) => favoriteIds.includes(exercise.id)) : all;
-  }, [query, customExercises, favoritesOnly, favoriteIds]);
+  }, [query, customExercises, favoritesOnly, favoriteIds, equipmentFilter, muscleFilter]);
 
   function reset() {
     setQuery("");
     setMode("search");
     setFavoritesOnly(false);
+    setEquipmentFilter([]);
+    setMuscleFilter([]);
+  }
+
+  function toggleEquipmentFilter(value: string) {
+    setEquipmentFilter((current) => (current.includes(value) ? current.filter((item) => item !== value) : [...current, value]));
+  }
+
+  function toggleMuscleFilter(value: string) {
+    setMuscleFilter((current) => (current.includes(value) ? current.filter((item) => item !== value) : [...current, value]));
   }
 
   function handleSelect(exercise: Exercise) {
@@ -163,7 +173,10 @@ export function ExercisePickerModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
-      <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.neutral.background }}>
+      {/* The filters sheet (`ExerciseFiltersSheet`, a Reacticx `Tray`) needs its own real drag-to-
+          dismiss pan gesture, nested inside this plain RN `Modal` — that needs its own
+          `GestureHandlerRootView`, or the gesture never binds. */}
+      <GestureHandlerRootView style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.neutral.background }}>
         <View className="border-b border-divider px-4 pb-3 pt-2">
           <View className="flex-row items-center justify-between">
             <Text className="heading-4 text-text-primary">{mode === "search" ? title : "Create Exercise"}</Text>
@@ -197,6 +210,16 @@ export function ExercisePickerModal({
                 <Ionicons name={favoritesOnly ? "star" : "star-outline"} size={13} color={favoritesOnly ? colors.brand.iron : colors.neutral.textSecondary} />
                 <Text className={`caption font-body-semibold ${favoritesOnly ? "text-brand-iron" : "text-text-secondary"}`}>Favorites</Text>
               </Pressable>
+              <Pressable
+                onPress={() => setFiltersVisible(true)}
+                hitSlop={8}
+                className={`shrink-0 flex-row items-center gap-1 rounded-full px-2.5 py-1 ${activeFilterCount > 0 ? "bg-brand-yellow" : "border border-divider"}`}
+              >
+                <Ionicons name="options-outline" size={13} color={activeFilterCount > 0 ? colors.brand.iron : colors.neutral.textSecondary} />
+                <Text className={`caption font-body-semibold ${activeFilterCount > 0 ? "text-brand-iron" : "text-text-secondary"}`}>
+                  {activeFilterCount > 0 ? `Filters (${activeFilterCount})` : "Filters"}
+                </Text>
+              </Pressable>
             </View>
 
             <FlatList
@@ -217,15 +240,33 @@ export function ExercisePickerModal({
               ListHeaderComponent={hideCreateRow ? undefined : <CreateExerciseRow onPress={() => setMode("create")} />}
               ListEmptyComponent={
                 <Text className="body-md py-10 text-center text-text-secondary">
-                  {favoritesOnly ? "No favorites yet — tap the star on an exercise to save it." : "No exercises found."}
+                  {favoritesOnly
+                    ? "No favorites yet — tap the star on an exercise to save it."
+                    : activeFilterCount > 0
+                      ? "No exercises match these filters."
+                      : "No exercises found."}
                 </Text>
               }
             />
           </>
         )}
-      </View>
 
-      <ExerciseInstructionsModal exercise={infoExercise} onClose={() => setInfoExercise(null)} />
+        <ExerciseFiltersSheet
+          visible={filtersVisible}
+          onClose={() => setFiltersVisible(false)}
+          equipment={equipmentFilter}
+          onToggleEquipment={toggleEquipmentFilter}
+          muscles={muscleFilter}
+          onToggleMuscle={toggleMuscleFilter}
+          onClear={() => {
+            setEquipmentFilter([]);
+            setMuscleFilter([]);
+          }}
+          resultCount={results.length}
+        />
+
+        <ExerciseInstructionsModal exercise={infoExercise} onClose={() => setInfoExercise(null)} />
+      </GestureHandlerRootView>
     </Modal>
   );
 }

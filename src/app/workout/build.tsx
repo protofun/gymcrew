@@ -1,11 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
+import { HOME_EYEBROW, HOME_ROW_DETAIL, HOME_ROW_TITLE } from "@/components/homeStyle";
+import { HomeRowLead } from "@/components/HomeRowLead";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { RankBadge } from "@/components/RankBadge";
 import { WorkoutOptionsSheet } from "@/components/WorkoutOptionsSheet";
 import { WorkoutTemplateCard } from "@/components/WorkoutTemplateCard";
@@ -17,23 +21,21 @@ import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { type CustomWorkout, useCustomWorkoutsStore } from "@/store/custom-workouts-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
-import { colors } from "@/theme";
+import { colors, fontFamily } from "@/theme";
 
 function BuilderExerciseRow({ exercise, onRemove }: { exercise: Exercise; onRemove: () => void }) {
   return (
-    <View className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3">
+    <View className="flex-row items-center gap-3 border-b border-divider py-3">
       {exercise.imageUrl ? (
-        <Image source={{ uri: exercise.imageUrl }} className="h-12 w-12 rounded-xl bg-background" />
+        <Image source={{ uri: exercise.imageUrl }} className="h-11 w-11 rounded-full bg-surface" />
       ) : (
-        <View className="h-12 w-12 items-center justify-center rounded-xl bg-background">
-          <Ionicons name="barbell-outline" size={20} color={colors.neutral.textSecondary} />
-        </View>
+        <HomeRowLead kind="flat">
+          <Ionicons name="barbell-outline" size={18} color={colors.neutral.textSecondary} />
+        </HomeRowLead>
       )}
       <View className="flex-1 gap-0.5">
-        <Text className="body-md font-body-semibold text-text-primary">{exercise.name}</Text>
-        {!!exercise.primaryMuscles[0] && (
-          <Text className="caption text-brand-yellow">{formatMuscleName(exercise.primaryMuscles[0])}</Text>
-        )}
+        <Text style={[HOME_ROW_TITLE, { fontSize: 16, lineHeight: 18 }]}>{exercise.name.toUpperCase()}</Text>
+        {!!exercise.primaryMuscles[0] && <Text style={[HOME_ROW_DETAIL, { color: colors.brand.yellow }]}>{formatMuscleName(exercise.primaryMuscles[0])}</Text>}
       </View>
       <Pressable onPress={onRemove} hitSlop={8}>
         <Ionicons name="close" size={20} color={colors.neutral.textSecondary} />
@@ -50,6 +52,7 @@ export default function BuildWorkoutScreen() {
   const [draftExercises, setDraftExercises] = useState<Exercise[]>([]);
   const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
   const [optionsFor, setOptionsFor] = useState<CustomWorkout | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   const customWorkouts = useCustomWorkoutsStore((state) => state.workouts);
   const addCustomWorkout = useCustomWorkoutsStore((state) => state.addWorkout);
@@ -96,12 +99,12 @@ export default function BuildWorkoutScreen() {
     setMode("create");
   }
 
+  // `Alert.alert` with multiple buttons never shows a dialog on React Native Web (see
+  // `ConfirmModal`'s own doc comment, and `workout/active.tsx`'s discard-workout confirm for the
+  // same fix) — on the web/PWA build this made "Delete" on a saved workout silently do nothing.
   function handleDeleteExisting(id: string, name: string) {
     setOptionsFor(null);
-    Alert.alert("Delete workout?", `"${name}" will be removed from your saved workouts.`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => removeCustomWorkout(id) },
-    ]);
+    setPendingDelete({ id, name });
   }
 
   function persistDraft(): string | null {
@@ -164,10 +167,17 @@ export default function BuildWorkoutScreen() {
         >
           <Pressable
             onPress={() => setMode("create")}
-            className="flex-row items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-yellow py-4"
+            style={{ borderRadius: 24, backgroundColor: colors.neutral.surfaceElevated }}
+            className="flex-row items-center gap-3 p-4"
           >
-            <Ionicons name="add-circle" size={20} color={colors.brand.yellow} />
-            <Text className="body-lg font-body-semibold text-brand-yellow">Create New Workout</Text>
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brand.yellow }} className="items-center justify-center">
+              <Ionicons name="add" size={24} color={colors.brand.iron} />
+            </View>
+            <View className="flex-1 gap-0.5">
+              <Text style={[HOME_ROW_TITLE, { fontSize: 16 }]}>CREATE NEW WORKOUT</Text>
+              <Text style={HOME_ROW_DETAIL}>Pick your own exercises and save it for next time</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.neutral.textSecondary} />
           </Pressable>
 
           {customWorkouts.length === 0 ? (
@@ -179,15 +189,17 @@ export default function BuildWorkoutScreen() {
             </View>
           ) : (
             <View className="gap-3">
-              <Text className="body-md font-body-semibold text-text-primary">My Workouts</Text>
-              {customWorkouts.map((workout) => (
-                <WorkoutTemplateCard
-                  key={workout.id}
-                  template={{ key: workout.id, name: workout.name, icon: "construct-outline", exerciseIds: workout.exerciseIds }}
-                  onPress={() => handleStartExisting(workout.name, workout.exerciseIds)}
-                  onLongPress={() => setOptionsFor(workout)}
-                />
-              ))}
+              <Text style={HOME_EYEBROW}>MY WORKOUTS</Text>
+              <View>
+                {customWorkouts.map((workout) => (
+                  <WorkoutTemplateCard
+                    key={workout.id}
+                    template={{ key: workout.id, name: workout.name, icon: "construct-outline", exerciseIds: workout.exerciseIds }}
+                    onPress={() => handleStartExisting(workout.name, workout.exerciseIds)}
+                    onLongPress={() => setOptionsFor(workout)}
+                  />
+                ))}
+              </View>
               <Text className="caption text-center text-text-secondary">Hold a workout to edit or delete it</Text>
             </View>
           )}
@@ -201,13 +213,14 @@ export default function BuildWorkoutScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <View className="gap-1.5">
-              <Text className="body-sm text-text-secondary">Workout Name</Text>
+              <Text style={HOME_EYEBROW}>WORKOUT NAME</Text>
               <TextInput
                 value={draftName}
                 onChangeText={setDraftName}
                 placeholder="e.g. My Push Day"
                 placeholderTextColor={colors.neutral.textSecondary}
-                className="body-md rounded-xl border border-divider bg-surface px-4 py-3 text-text-primary"
+                style={{ borderRadius: 16, backgroundColor: colors.neutral.surfaceElevated }}
+                className="body-md px-4 py-3.5 text-text-primary"
               />
             </View>
 
@@ -223,10 +236,11 @@ export default function BuildWorkoutScreen() {
 
             <Pressable
               onPress={() => setPickerVisible(true)}
-              className="flex-row items-center justify-center gap-1.5 rounded-xl border border-dashed border-divider py-3.5"
+              style={{ borderRadius: 16, borderColor: colors.brand.yellow }}
+              className="flex-row items-center justify-center gap-1.5 border py-3.5"
             >
-              <Ionicons name="add" size={18} color={colors.neutral.textSecondary} />
-              <Text className="body-sm text-text-secondary">Add Exercise</Text>
+              <Ionicons name="add" size={18} color={colors.brand.yellow} />
+              <Text style={{ fontFamily: fontFamily.bodyBold, fontSize: 13, color: colors.brand.yellow }}>ADD EXERCISE</Text>
             </Pressable>
           </ScrollView>
 
@@ -239,15 +253,7 @@ export default function BuildWorkoutScreen() {
               gap: 10,
             }}
           >
-            <Pressable
-              onPress={handleSaveAndStart}
-              disabled={!canSave}
-              className={`items-center rounded-full py-4 ${canSave ? "bg-brand-yellow" : "bg-surface"}`}
-            >
-              <Text className={`body-lg font-body-semibold ${canSave ? "text-brand-iron" : "text-text-secondary"}`}>
-                Save &amp; Start Now
-              </Text>
-            </Pressable>
+            <PrimaryButton label="Save & Start Now" onPress={handleSaveAndStart} disabled={!canSave} />
             <Pressable onPress={handleSaveDraft} disabled={!canSave} className="items-center py-1">
               <Text className={`body-md font-body-semibold ${canSave ? "text-text-primary" : "text-text-secondary"}`}>
                 Just Save for Later
@@ -273,6 +279,19 @@ export default function BuildWorkoutScreen() {
         onClose={() => setOptionsFor(null)}
         onEdit={() => optionsFor && handleEditExisting(optionsFor)}
         onDelete={() => optionsFor && handleDeleteExisting(optionsFor.id, optionsFor.name)}
+      />
+
+      <ConfirmModal
+        visible={pendingDelete !== null}
+        title="Delete workout?"
+        message={pendingDelete ? `"${pendingDelete.name}" will be removed from your saved workouts.` : ""}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (pendingDelete) removeCustomWorkout(pendingDelete.id);
+          setPendingDelete(null);
+        }}
+        onCancel={() => setPendingDelete(null)}
       />
     </View>
   );

@@ -56,6 +56,22 @@ export function formatMuscleLabel(group: MuscleGroup): string {
   return group.charAt(0).toUpperCase() + group.slice(1);
 }
 
+/** Short, fixed-width labels for a muscle group's own bar/chip in tight spaces (e.g. a 10-bar chart
+ * across one phone-width card) — `formatMuscleLabel` reads fine as a row's own headline, but "SHLD" /
+ * "GLUT" fits ten in a row where "SHOULDERS" / "GLUTES" wouldn't. */
+export const MUSCLE_SHORT_LABEL: Record<MuscleGroup, string> = {
+  chest: "CHEST",
+  shoulders: "SHLD",
+  back: "BACK",
+  biceps: "BI",
+  triceps: "TRI",
+  abs: "ABS",
+  quads: "QUAD",
+  hamstrings: "HAM",
+  calves: "CALF",
+  glutes: "GLUT",
+};
+
 /** A fixed, distinct color per muscle group — unlike the crew Stats muscle-split chart's
  * rank-position palette (MUSCLE_SPLIT_PALETTE in crew-stats.ts), this stays the same color for the
  * same muscle everywhere it appears (e.g. the training calendar), so it's learnable at a glance. */

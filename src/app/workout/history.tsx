@@ -1,98 +1,98 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import Animated, { Easing, FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
 import { DayWorkoutsSheet } from "@/components/DayWorkoutsSheet";
+import { HOME_EYEBROW } from "@/components/homeStyle";
+import { SectionHeading } from "@/components/SectionHeading";
+import { ShareCardModal } from "@/components/ShareCardModal";
+import { WorkoutListRow } from "@/components/WorkoutListRow";
+import { WorkoutShareCard } from "@/components/WorkoutShareCard";
 import { getMonthGrid, isSameMonth, startOfMonth, toDateKey } from "@/lib/date";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import { useWorkoutHistoryStore, type CompletedWorkout } from "@/store/workout-history-store";
-import { colors } from "@/theme";
+import { colors, fontFamily } from "@/theme";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const DAY_SIZE = 34;
+const DAY_SIZE = 36;
 
+/** Same pulsing-ring-on-today language `VisualTrainingCalendar` (Home's own 2-week calendar) already
+ * uses — this month view is the same calendar system at a different scale, not a separate design. */
 function DayCell({
   date,
   dayWorkouts,
   isToday,
+  index,
   onPress,
 }: {
   date: Date;
   dayWorkouts: CompletedWorkout[];
   isToday: boolean;
+  index: number;
   onPress: () => void;
 }) {
   const isTrained = dayWorkouts.length > 0;
   const hasPr = dayWorkouts.some((w) => w.prs.length > 0);
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    if (!isToday) return;
+    pulse.value = withRepeat(withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.sin) }), -1, true);
+  }, [isToday, pulse]);
+  const todayRing = useAnimatedStyle(() => ({ opacity: 0.4 + pulse.value * 0.6 }));
 
   return (
-    <Pressable className="flex-1 items-center py-1" onPress={onPress} disabled={!isTrained} hitSlop={2}>
-      <View>
-        <View
-          className={`items-center justify-center rounded-full ${
-            isTrained ? "bg-brand-yellow" : isToday ? "border border-brand-yellow" : ""
-          }`}
-          style={{ width: DAY_SIZE, height: DAY_SIZE }}
-        >
-          <Text
-            className={`body-sm ${
-              isTrained ? "font-body-semibold text-brand-iron" : isToday ? "text-brand-yellow" : "text-text-primary"
-            }`}
-          >
-            {date.getDate()}
-          </Text>
-        </View>
-
-        {hasPr && (
+    <Animated.View entering={FadeIn.delay(index * 12).duration(300)} className="flex-1 items-center py-1">
+      <Pressable onPress={onPress} disabled={!isTrained} hitSlop={2}>
+        <View>
           <View
-            className="absolute items-center justify-center rounded-full bg-success"
-            style={{ width: 14, height: 14, top: -3, right: -3, borderWidth: 1.5, borderColor: colors.neutral.background }}
+            className="items-center justify-center rounded-full"
+            style={{ width: DAY_SIZE, height: DAY_SIZE, backgroundColor: isTrained ? colors.brand.yellow : "transparent" }}
           >
-            <Ionicons name="trophy" size={8} color={colors.brand.iron} />
+            {isToday && !isTrained ? (
+              <Animated.View
+                pointerEvents="none"
+                style={[{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, borderRadius: DAY_SIZE / 2, borderWidth: 1.5, borderColor: colors.brand.yellow }, todayRing]}
+              />
+            ) : null}
+            <Text style={{ fontFamily: isTrained ? fontFamily.bodyBold : fontFamily.bodySemiBold, fontSize: 14, color: isTrained ? colors.brand.iron : isToday ? colors.brand.yellow : colors.brand.white }}>
+              {date.getDate()}
+            </Text>
           </View>
-        )}
-      </View>
-    </Pressable>
+
+          {hasPr && (
+            <View
+              className="absolute items-center justify-center rounded-full bg-success"
+              style={{ width: 14, height: 14, top: -3, right: -3, borderWidth: 1.5, borderColor: colors.neutral.background }}
+            >
+              <Ionicons name="trophy" size={8} color={colors.brand.iron} />
+            </View>
+          )}
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
-function WorkoutHistoryRow({ workout, onPress }: { workout: CompletedWorkout; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4"
-      style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
-    >
-      <View className="h-11 w-11 items-center justify-center rounded-full bg-background">
-        <Ionicons
-          name={workout.prs.length > 0 ? "trophy" : "barbell-outline"}
-          size={18}
-          color={workout.prs.length > 0 ? colors.brand.yellow : colors.neutral.textSecondary}
-        />
-      </View>
-
-      <View className="flex-1 gap-0.5">
-        <Text className="body-md font-body-semibold text-text-primary">{workout.name}</Text>
-        <Text className="caption text-text-secondary">
-          {new Date(workout.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} ·{" "}
-          {workout.completedSets} sets · {workout.volumeKg.toLocaleString("en-US")} {workout.unit}
-          {workout.prs.length > 0 ? ` · ${workout.prs.length} PR${workout.prs.length === 1 ? "" : "s"}` : ""}
-        </Text>
-      </View>
-
-      <Ionicons name="chevron-forward" size={18} color={colors.neutral.textSecondary} />
-    </Pressable>
-  );
+function formatDuration(totalSeconds: number): string {
+  const totalMinutes = Math.round(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
 export default function WorkoutHistoryScreen() {
   const insets = useSafeAreaInsets();
   const workouts = useWorkoutHistoryStore((state) => state.workouts);
+  const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const today = useMemo(() => new Date(), []);
   const [visibleMonth, setVisibleMonth] = useState(startOfMonth(today));
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [sharingWorkout, setSharingWorkout] = useState<CompletedWorkout | null>(null);
 
   const workoutsByDay = useMemo(() => {
     const map = new Map<string, CompletedWorkout[]>();
@@ -130,78 +130,95 @@ export default function WorkoutHistoryScreen() {
         <Text className="heading-4 text-text-primary">Workout History</Text>
       </View>
 
+      {/* `style`, not `className`, for the same reason workout/summary.tsx's ScrollView uses one —
+          `flex-1` as a className is unreliable on native with this project's NativeWind preview
+          version, and a ScrollView that silently doesn't get constrained to the remaining space
+          reads as its header scrolling away with everything else. */}
       <ScrollView
-        className="flex-1"
+        style={{ flex: 1 }}
         contentContainerStyle={{ gap: 20, padding: 16, paddingBottom: insets.bottom + 24 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-3 rounded-3xl border border-divider bg-surface p-4">
-          <View className="flex-row items-center justify-between">
-            <Pressable
-              onPress={() => setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-              hitSlop={8}
-            >
-              <Ionicons name="chevron-back" size={20} color={colors.neutral.textSecondary} />
-            </Pressable>
-            <Text className="body-md font-body-semibold text-text-primary">
-              {visibleMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-            </Text>
-            <Pressable
-              onPress={() => setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-              hitSlop={8}
-              disabled={isCurrentMonth}
-            >
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={isCurrentMonth ? colors.neutral.divider : colors.neutral.textSecondary}
-              />
-            </Pressable>
-          </View>
-
-          <View className="flex-row justify-between">
-            {WEEKDAY_LABELS.map((label) => (
-              <Text key={label} className="caption flex-1 text-center text-text-secondary">
-                {label}
-              </Text>
-            ))}
-          </View>
-
-          <View className="gap-1">
-            {weeks.map((week, weekIndex) => (
-              <View key={weekIndex} className="flex-row">
-                {week.map((date, dayIndex) =>
-                  date ? (
-                    <DayCell
-                      key={dayIndex}
-                      date={date}
-                      dayWorkouts={workoutsByDay.get(toDateKey(date)) ?? []}
-                      isToday={toDateKey(date) === toDateKey(today)}
-                      onPress={() => handlePressDay(date)}
-                    />
-                  ) : (
-                    <View key={dayIndex} className="flex-1" />
-                  ),
-                )}
+        <View className="gap-4">
+          <SectionHeading
+            id="workout.history.calendarHeadline"
+            title={visibleMonth.toLocaleDateString("en-US", { month: "long" })}
+            eyebrow={visibleMonth.toLocaleDateString("en-US", { year: "numeric" })}
+            size={28}
+            right={
+              <View className="flex-row items-center gap-3 pb-1.5">
+                <Pressable
+                  onPress={() => setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                  hitSlop={8}
+                  accessibilityLabel="Previous month"
+                >
+                  <Ionicons name="chevron-back" size={20} color={colors.neutral.textSecondary} />
+                </Pressable>
+                <Pressable
+                  onPress={() => setVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                  hitSlop={8}
+                  disabled={isCurrentMonth}
+                  accessibilityLabel="Next month"
+                >
+                  <Ionicons name="chevron-forward" size={20} color={isCurrentMonth ? colors.neutral.divider : colors.neutral.textSecondary} />
+                </Pressable>
               </View>
-            ))}
+            }
+          />
+
+          <View className="gap-3 border-y border-divider py-4">
+            <View className="flex-row justify-between">
+              {WEEKDAY_LABELS.map((label) => (
+                <Text key={label} style={[HOME_EYEBROW, { flex: 1, textAlign: "center" }]}>
+                  {label.toUpperCase()}
+                </Text>
+              ))}
+            </View>
+
+            <View className="gap-1">
+              {weeks.map((week, weekIndex) => (
+                <View key={weekIndex} className="flex-row">
+                  {week.map((date, dayIndex) =>
+                    date ? (
+                      <DayCell
+                        key={dayIndex}
+                        index={weekIndex * 7 + dayIndex}
+                        date={date}
+                        dayWorkouts={workoutsByDay.get(toDateKey(date)) ?? []}
+                        isToday={toDateKey(date) === toDateKey(today)}
+                        onPress={() => handlePressDay(date)}
+                      />
+                    ) : (
+                      <View key={dayIndex} className="flex-1" />
+                    ),
+                  )}
+                </View>
+              ))}
+            </View>
           </View>
         </View>
 
         <View className="gap-3">
-          <Text className="body-md font-body-semibold text-text-primary">
-            All Workouts {workouts.length > 0 ? `(${workouts.length})` : ""}
-          </Text>
+          <Text style={HOME_EYEBROW}>ALL WORKOUTS {workouts.length > 0 ? `(${workouts.length})` : ""}</Text>
 
           {workouts.length === 0 ? (
-            <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-14">
+            <View className="items-center gap-2 py-14">
               <Ionicons name="calendar-outline" size={28} color={colors.neutral.textSecondary} />
               <Text className="body-md text-text-secondary">No workouts logged yet</Text>
             </View>
           ) : (
-            <View className="gap-2.5">
-              {workouts.map((workout) => (
-                <WorkoutHistoryRow key={workout.id} workout={workout} onPress={() => goToWorkout(workout)} />
+            <View>
+              {workouts.map((workout, index) => (
+                <WorkoutListRow
+                  key={workout.id}
+                  name={workout.name}
+                  dateLabel={new Date(workout.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  detail={`${workout.completedSets} sets · ${workout.volumeKg.toLocaleString("en-US")} ${workout.unit}${workout.prs.length > 0 ? ` · ${workout.prs.length} PR${workout.prs.length === 1 ? "" : "s"}` : ""}`}
+                  hasPr={workout.prs.length > 0}
+                  isLast={index === workouts.length - 1}
+                  onPress={() => goToWorkout(workout)}
+                  onShare={() => setSharingWorkout(workout)}
+                />
               ))}
             </View>
           )}
@@ -218,6 +235,18 @@ export default function WorkoutHistoryScreen() {
           goToWorkout(workout);
         }}
       />
+
+      <ShareCardModal
+        visible={sharingWorkout !== null}
+        onClose={() => setSharingWorkout(null)}
+        fallbackMessage={
+          sharingWorkout
+            ? `${sharingWorkout.name} — ${formatDuration(sharingWorkout.durationSeconds)}, ${sharingWorkout.volumeKg.toLocaleString("en-US")} ${sharingWorkout.unit} lifted across ${sharingWorkout.completedSets} sets on GymCrew.`
+            : ""
+        }
+      >
+        {sharingWorkout && <WorkoutShareCard workout={sharingWorkout} gender={gender} />}
+      </ShareCardModal>
     </View>
   );
 }

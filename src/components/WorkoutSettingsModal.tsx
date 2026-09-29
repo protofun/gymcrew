@@ -1,11 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Modal, Pressable, Switch, Text, TextInput, View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
+import { Pressable, Text, TextInput, View } from "react-native";
 
+import { BottomSheet } from "@/components/BottomSheet";
+import { PillRow } from "@/components/PillRow";
+import { ToggleRow } from "@/components/ToggleRow";
 import type { WeightUnit } from "@/store/active-workout-store";
-import { colors } from "@/theme";
+import { colors, fontFamily } from "@/theme";
 
 const REST_DURATION_PRESETS = [0, 30, 60, 90, 120, 180];
+const UNIT_OPTIONS = [
+  { key: "kg", label: "KG" },
+  { key: "lbs", label: "LBS" },
+] as const;
 
 function formatRestDuration(seconds: number): string {
   if (seconds === 0) return "Off";
@@ -14,6 +20,8 @@ function formatRestDuration(seconds: number): string {
   const remainder = seconds % 60;
   return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
 }
+
+const REST_OPTIONS = REST_DURATION_PRESETS.map((seconds) => ({ key: String(seconds), label: formatRestDuration(seconds) }));
 
 type WorkoutSettingsModalProps = {
   visible: boolean;
@@ -29,6 +37,11 @@ type WorkoutSettingsModalProps = {
   onDiscard: () => void;
 };
 
+/** The gear-icon screen — a real Reacticx `BottomSheet` now (drag-to-dismiss, the same shell every
+ * other settings sheet in the app uses) instead of a plain centered `Modal`, `PillRow` for weight
+ * unit and rest-timer presets instead of hand-rolled bordered pills, and `ToggleRow` (the
+ * spring-animated whole-row switch from the onboarding kit, reused everywhere a plain `Switch` used
+ * to be) for auto-fill — matching the pass Crew's own settings screen already went through. */
 export function WorkoutSettingsModal({
   visible,
   onClose,
@@ -43,106 +56,43 @@ export function WorkoutSettingsModal({
   onDiscard,
 }: WorkoutSettingsModalProps) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "rgba(0,0,0,0.7)",
-          paddingHorizontal: 24,
-        }}
-      >
-        <Animated.View
-          entering={FadeInUp.springify().damping(16).mass(0.7)}
-          className="w-full gap-4 rounded-3xl border border-divider bg-surface p-5"
-        >
-          <View className="flex-row items-center justify-between">
-            <Text className="heading-4 text-text-primary">Workout Settings</Text>
-            <Pressable onPress={onClose} hitSlop={12}>
-              <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
-            </Pressable>
-          </View>
-
-          <View className="gap-1.5">
-            <Text className="body-sm text-text-secondary">Workout Name</Text>
-            <TextInput
-              value={name}
-              onChangeText={onChangeName}
-              placeholder="Workout"
-              placeholderTextColor={colors.neutral.textSecondary}
-              className="body-md rounded-xl bg-background px-4 py-3 text-text-primary"
-            />
-          </View>
-
-          <View className="gap-1.5">
-            <Text className="body-sm text-text-secondary">Weight Unit</Text>
-            <View className="flex-row gap-2">
-              {(["kg", "lbs"] as WeightUnit[]).map((option) => {
-                const selected = unit === option;
-                return (
-                  <Pressable
-                    key={option}
-                    onPress={() => onChangeUnit(option)}
-                    className={`flex-1 items-center rounded-full border py-2.5 ${
-                      selected ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-background"
-                    }`}
-                  >
-                    <Text className={`body-md font-body-semibold ${selected ? "text-brand-iron" : "text-text-secondary"}`}>
-                      {option.toUpperCase()}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          <View className="gap-1.5">
-            <Text className="body-sm text-text-secondary">Rest Timer</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {REST_DURATION_PRESETS.map((seconds) => {
-                const selected = restDurationSeconds === seconds;
-                return (
-                  <Pressable
-                    key={seconds}
-                    onPress={() => onChangeRestDurationSeconds(seconds)}
-                    className={`items-center rounded-full border px-4 py-2.5 ${
-                      selected ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-background"
-                    }`}
-                  >
-                    <Text className={`body-sm font-body-semibold ${selected ? "text-brand-iron" : "text-text-secondary"}`}>
-                      {formatRestDuration(seconds)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          <View className="flex-row items-center justify-between rounded-xl bg-background px-4 py-3.5">
-            <View className="flex-1 pr-3">
-              <Text className="body-md text-text-primary">Auto-fill Sets</Text>
-              <Text className="body-sm text-text-secondary">New sets start with the weight & reps from the set above</Text>
-            </View>
-            <Switch
-              value={autoFillPreviousSet}
-              onValueChange={onChangeAutoFillPreviousSet}
-              trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
-              thumbColor={colors.brand.white}
-            />
-          </View>
-
-          <View className="h-px bg-divider" />
-
-          <Pressable
-            onPress={onDiscard}
-            className="flex-row items-center justify-center gap-2 rounded-full border border-error py-3"
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.semantic.error} />
-            <Text className="body-md font-body-semibold text-error">Discard Workout</Text>
+    <BottomSheet visible={visible} onClose={onClose} maxDynamicContentSize={560}>
+      <View className="gap-5 px-5 pb-6 pt-1">
+        <View className="flex-row items-center justify-between">
+          <Text style={{ fontFamily: fontFamily.heading, fontSize: 22, letterSpacing: 0.5, color: colors.brand.white }}>WORKOUT SETTINGS</Text>
+          <Pressable onPress={onClose} hitSlop={12}>
+            <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
           </Pressable>
-        </Animated.View>
+        </View>
+
+        <View className="gap-1.5">
+          <Text className="body-sm text-text-secondary">Workout Name</Text>
+          <TextInput
+            value={name}
+            onChangeText={onChangeName}
+            placeholder="Workout"
+            placeholderTextColor={colors.neutral.textSecondary}
+            className="body-md rounded-xl bg-background px-4 py-3 text-text-primary"
+          />
+        </View>
+
+        <View className="gap-1.5">
+          <Text className="body-sm text-text-secondary">Weight Unit</Text>
+          <PillRow options={UNIT_OPTIONS} value={unit} onChange={(value) => onChangeUnit(value as WeightUnit)} wrap />
+        </View>
+
+        <View className="gap-1.5">
+          <Text className="body-sm text-text-secondary">Rest Timer</Text>
+          <PillRow options={REST_OPTIONS} value={String(restDurationSeconds)} onChange={(value) => onChangeRestDurationSeconds(Number(value))} wrap />
+        </View>
+
+        <ToggleRow title="Auto-fill Sets" subtitle="New sets start with the weight & reps from the set above" value={autoFillPreviousSet} onValueChange={onChangeAutoFillPreviousSet} />
+
+        <Pressable onPress={onDiscard} className="flex-row items-center justify-center gap-2 rounded-full border border-error py-3">
+          <Ionicons name="trash-outline" size={18} color={colors.semantic.error} />
+          <Text className="body-md font-body-semibold text-error">Discard Workout</Text>
+        </Pressable>
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }

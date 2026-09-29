@@ -76,17 +76,38 @@ export function findExerciseByDisplayName(name: string): Exercise | undefined {
   return id ? EXERCISE_BY_ID[id] : undefined;
 }
 
-export function searchExercises(query: string): Exercise[] {
-  const trimmed = query.trim().toLowerCase();
-  if (!trimmed) return EXERCISE_LIBRARY;
-  return EXERCISE_LIBRARY.filter(
-    (exercise) =>
-      exercise.name.toLowerCase().includes(trimmed) ||
-      exercise.primaryMuscles.some((muscle) => muscle.toLowerCase().includes(trimmed)),
-  );
+export type ExerciseSearchFilters = {
+  equipment?: string[];
+  muscles?: string[];
+};
+
+function matchesFilters(exercise: Exercise, filters: ExerciseSearchFilters | undefined): boolean {
+  if (filters?.equipment?.length && !(exercise.equipment && filters.equipment.includes(exercise.equipment))) return false;
+  if (filters?.muscles?.length && !exercise.primaryMuscles.some((muscle) => filters.muscles!.includes(muscle))) return false;
+  return true;
 }
 
-/** Every distinct `equipment` value in the library, for building a picker in the create-exercise form. */
+/** Word-based, not exact-substring — "niet exact 1 op 1 over moet komen maar ook gehusseld mag
+ * zijn": splitting the query into words and requiring each one to appear SOMEWHERE in the name/
+ * muscles/equipment (any order) means "press bench" finds "Barbell Bench Press" just as well as
+ * "bench press" does, not just a query that happens to match the name's own word order.
+ * `list` defaults to the built-in library but takes the picker's own combined (custom + library)
+ * list too, so the same word-matching and equipment/muscle filters apply uniformly to both. */
+export function searchExercises(query: string, filters?: ExerciseSearchFilters, list: Exercise[] = EXERCISE_LIBRARY): Exercise[] {
+  const base = filters ? list.filter((exercise) => matchesFilters(exercise, filters)) : list;
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return base;
+  return base.filter((exercise) => {
+    const haystack = `${exercise.name} ${exercise.primaryMuscles.join(" ")} ${exercise.equipment ?? ""}`.toLowerCase();
+    return words.every((word) => haystack.includes(word));
+  });
+}
+
+/** Every distinct `equipment` value in the library, for building a picker in the create-exercise form
+ * and the exercise picker's equipment filter. */
 export const EXERCISE_EQUIPMENT_OPTIONS = Array.from(
   new Set(EXERCISE_LIBRARY.map((exercise) => exercise.equipment).filter((equipment): equipment is string => !!equipment)),
 ).sort();
+
+/** Every distinct primary-muscle value in the library, for the exercise picker's muscle-group filter. */
+export const EXERCISE_MUSCLE_OPTIONS = Array.from(new Set(EXERCISE_LIBRARY.flatMap((exercise) => exercise.primaryMuscles))).sort();

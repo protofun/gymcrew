@@ -1,15 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import Animated, { Easing, FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 
+import { SectionHeading } from "@/components/SectionHeading";
 import { toDateKey } from "@/lib/date";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { BODY_ASPECT_RATIO } from "@/data/body-muscle-paths";
 import type { MuscleGroup } from "@/data/workout-log";
+import { mergeMuscleIntensity } from "@/lib/muscle-intensity";
 import { preferredMuscleView } from "@/lib/muscle-groups";
 import type { Gender } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { NumberFlow } from "@/components/ui/molecules/number-flow";
+import { colors, fontFamily } from "@/theme";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAYS_PER_PERIOD = 14;
@@ -33,22 +37,13 @@ function mondayOf(date: Date): Date {
   return monday;
 }
 
-function mergeIntensity(workouts: CalendarWorkout[]): Partial<Record<MuscleGroup, number>> {
-  const merged: Partial<Record<MuscleGroup, number>> = {};
-  for (const workout of workouts) {
-    for (const [group, value] of Object.entries(workout.muscleIntensity) as [MuscleGroup, number][]) {
-      merged[group] = Math.min(10, (merged[group] ?? 0) + value);
-    }
-  }
-  return merged;
-}
-
 function DayCell({
   date,
   info,
   isToday,
   interactive,
   gender,
+  index,
   onPress,
 }: {
   date: Date;
@@ -56,29 +51,39 @@ function DayCell({
   isToday: boolean;
   interactive: boolean;
   gender: Gender;
+  /** Position in the two weeks — cells come in one after another. */
+  index: number;
   onPress: () => void;
 }) {
   const trained = !!info && info.workouts.length > 0;
-  const cellSize = { width: Math.round(CELL_HEIGHT * BODY_ASPECT_RATIO) + (isToday ? 4 : 0), height: CELL_HEIGHT + (isToday ? 4 : 0) };
+  const cellSize = { width: Math.round(CELL_HEIGHT * BODY_ASPECT_RATIO) + 6, height: CELL_HEIGHT + 6 };
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    if (!isToday) return;
+    pulse.value = withRepeat(withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.sin) }), -1, true);
+  }, [isToday, pulse]);
+  const todayRing = useAnimatedStyle(() => ({ opacity: 0.4 + pulse.value * 0.6 }));
 
   return (
-    <Pressable className="flex-1 items-center gap-1" onPress={onPress} disabled={!trained || !interactive} hitSlop={2}>
-      <Text className={`caption ${trained ? "font-body-bold text-text-primary" : isToday ? "font-body-bold text-brand-yellow" : "text-text-secondary"}`}>
-        {date.getDate()}
-      </Text>
-      {/* Untrained days still render a (gray, unfilled) silhouette rather than an empty box — a
-          consistent figure every day reads better than blank rest days breaking up the row. */}
-      <View className={`items-center justify-center rounded-lg ${isToday ? "border border-brand-yellow" : ""}`} style={cellSize}>
-        <MuscleHeatmap
-          muscleIntensity={trained ? info.muscleIntensity : {}}
-          height={CELL_HEIGHT}
-          view={trained ? preferredMuscleView(info.muscleIntensity) : "front"}
-          showViewLabel={false}
-          showLegend={false}
-          gender={gender}
-        />
-      </View>
-    </Pressable>
+    <Animated.View entering={FadeIn.delay(index * 30).duration(350)} className="flex-1">
+      <Pressable className="items-center gap-1" onPress={onPress} disabled={!trained || !interactive} hitSlop={2}>
+        <Text style={{ fontFamily: fontFamily.bodyBold, fontSize: 12, color: trained ? colors.brand.white : isToday ? colors.brand.yellow : colors.neutral.textSecondary }}>{date.getDate()}</Text>
+        {/* Untrained days still render a (gray, unfilled) silhouette rather than an empty box — a
+            consistent figure every day reads better than blank rest days breaking up the row. */}
+        <View className="items-center justify-center rounded-2xl" style={[cellSize, { backgroundColor: trained ? "rgba(255,255,255,0.04)" : "transparent" }]}>
+          {isToday ? <Animated.View pointerEvents="none" style={[{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, borderRadius: 14, borderWidth: 1.5, borderColor: colors.brand.yellow }, todayRing]} /> : null}
+          <MuscleHeatmap
+            muscleIntensity={trained ? info.muscleIntensity : {}}
+            height={CELL_HEIGHT}
+            view={trained ? preferredMuscleView(info.muscleIntensity) : "front"}
+            showViewLabel={false}
+            showLegend={false}
+            gender={gender}
+          />
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -93,11 +98,14 @@ export function VisualTrainingCalendar({
   interactive = true,
   footerNote = "Each figure shows exactly what you trained that day",
   gender = "male",
+  /** Adds the current streak next to the heading — only meaningful for the signed-in user's own history (see Home). */
+  streak,
 }: {
   workouts: CalendarWorkout[];
   interactive?: boolean;
   footerNote?: string;
   gender?: Gender;
+  streak?: number;
 }) {
   const today = new Date();
   // Deliberately computed once at mount, not on every re-render as `today` ticks over — the default
@@ -122,7 +130,7 @@ export function VisualTrainingCalendar({
     for (const workout of workouts) {
       const key = toDateKey(new Date(workout.completedAt));
       const dayWorkouts = [...(map.get(key)?.workouts ?? []), workout];
-      map.set(key, { workouts: dayWorkouts, muscleIntensity: mergeIntensity(dayWorkouts) });
+      map.set(key, { workouts: dayWorkouts, muscleIntensity: mergeMuscleIntensity(dayWorkouts) });
     }
     return map;
   }, [workouts]);
@@ -148,46 +156,58 @@ export function VisualTrainingCalendar({
     : `${periodStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${periodEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   return (
-    <View className="gap-3 rounded-3xl border border-divider bg-surface p-4">
-      <View className="flex-row items-center justify-between">
-        <Text className="heading-4 text-text-primary" numberOfLines={1}>
-          Training Calendar
-        </Text>
-        <View className="flex-row items-center gap-2">
-          <Pressable onPress={goToPrevPeriod} hitSlop={8}>
-            <Ionicons name="chevron-back" size={18} color={colors.neutral.textSecondary} />
-          </Pressable>
-          <Text className="caption w-20 text-center font-body-semibold text-text-primary">{rangeLabel}</Text>
-          <Pressable onPress={goToNextPeriod} hitSlop={8} disabled={isCurrentPeriod}>
-            <Ionicons name="chevron-forward" size={18} color={isCurrentPeriod ? colors.neutral.divider : colors.neutral.textSecondary} />
-          </Pressable>
-        </View>
-      </View>
-
-      <View className="flex-row justify-between">
-        {WEEKDAY_LABELS.map((label) => (
-          <Text key={label} className="caption flex-1 text-center text-text-secondary">
-            {label}
-          </Text>
-        ))}
-      </View>
-
-      <View className="gap-3">
-        {weeks.map((week, weekIndex) => (
-          <View key={weekIndex} className="flex-row">
-            {week.map((date, dayIndex) => (
-              <DayCell
-                key={dayIndex}
-                date={date}
-                info={infoByDay.get(toDateKey(date))}
-                isToday={toDateKey(date) === toDateKey(today)}
-                interactive={interactive}
-                gender={gender}
-                onPress={() => handleDayPress(date)}
-              />
-            ))}
+    <View className="gap-4">
+      <SectionHeading
+        id="home.calendar.headline"
+        title="Calendar"
+        size={28}
+        eyebrow="The last two weeks"
+        right={
+          <View className="flex-row items-center gap-3 pb-1.5">
+            {streak !== undefined && streak > 0 && (
+              <View className="flex-row items-center gap-1">
+                <Ionicons name="flame" size={14} color={colors.semantic.streak} />
+                <NumberFlow value={streak} fontSize={15} color={colors.brand.white} fontWeight="800" />
+              </View>
+            )}
+            <Pressable onPress={goToPrevPeriod} hitSlop={8} accessibilityLabel="Previous two weeks">
+              <Ionicons name="chevron-back" size={18} color={colors.neutral.textSecondary} />
+            </Pressable>
+            <Text style={{ fontFamily: fontFamily.bodySemiBold, fontSize: 12, width: 74, textAlign: "center", color: colors.brand.white }}>{rangeLabel}</Text>
+            <Pressable onPress={goToNextPeriod} hitSlop={8} disabled={isCurrentPeriod} accessibilityLabel="Next two weeks">
+              <Ionicons name="chevron-forward" size={18} color={isCurrentPeriod ? colors.neutral.divider : colors.neutral.textSecondary} />
+            </Pressable>
           </View>
-        ))}
+        }
+      />
+
+      <View className="gap-3 border-y border-divider py-4">
+        <View className="flex-row justify-between">
+          {WEEKDAY_LABELS.map((label) => (
+            <Text key={label} style={{ fontFamily: fontFamily.bodySemiBold, fontSize: 11, flex: 1, textAlign: "center", color: colors.neutral.textSecondary }}>
+              {label.toUpperCase()}
+            </Text>
+          ))}
+        </View>
+
+        <View className="gap-3">
+          {weeks.map((week, weekIndex) => (
+            <View key={weekIndex} className="flex-row">
+              {week.map((date, dayIndex) => (
+                <DayCell
+                  key={dayIndex}
+                  index={weekIndex * 7 + dayIndex}
+                  date={date}
+                  info={infoByDay.get(toDateKey(date))}
+                  isToday={toDateKey(date) === toDateKey(today)}
+                  interactive={interactive}
+                  gender={gender}
+                  onPress={() => handleDayPress(date)}
+                />
+              ))}
+            </View>
+          ))}
+        </View>
       </View>
 
       <Text className="caption text-center text-text-secondary">{footerNote}</Text>

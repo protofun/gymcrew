@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
@@ -9,8 +10,10 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { RankBadge } from "@/components/RankBadge";
 import { RestTimerBanner } from "@/components/RestTimerBanner";
+import { SaveButton } from "@/components/ui/micro-interactions/save-button";
 import { WorkoutLogger } from "@/components/WorkoutLogger";
 import { WorkoutSettingsModal } from "@/components/WorkoutSettingsModal";
+import { AI_SAVE_BUTTON_COLORS } from "@/constants/ai-scan-theme";
 import { formatElapsed, useElapsedTimer } from "@/hooks/use-elapsed-timer";
 import { recordChallengeContributions } from "@/lib/challenge-progress";
 import { fromDateKey, toDateKey } from "@/lib/date";
@@ -30,7 +33,7 @@ import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
-import { colors } from "@/theme";
+import { colors, fontFamily, spring } from "@/theme";
 
 /** How long to wait after the last edit before pushing to the crew's shared live session — logging
  * a set is many quick edits in a row (weight, then reps, then complete), no need to push every one. */
@@ -41,6 +44,35 @@ const CREW_LIVE_SESSION_PUSH_DEBOUNCE_MS = 2000;
 const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100];
 /** A session this long is genuinely notable, not just a normal workout — see crew-feed-store.ts. */
 const LONG_SESSION_MINUTES = 75;
+
+/** The footer CTA, in `PrimaryButton`'s exact visual language (56px tall, heading font, the same
+ * press-dip spring) but with a leading "+" instead of a trailing arrow — "Add Exercise" isn't a
+ * "move forward" action, so `PrimaryButton`'s own baked-in arrow doesn't fit, and it has no slot for
+ * a custom leading icon. Not extracted into `PrimaryButton` itself given how many other screens rely
+ * on its current exact shape ("dikker en fancier... zodat het ook echt gebruikt gaat worden" — this
+ * needed to feel like the same weight of CTA as Start Workout, not a smaller, separate button
+ * language bolted on next to it). */
+function AddExerciseButton({ onPress }: { onPress: () => void }) {
+  const pressed = useSharedValue(0);
+  const buttonStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 - pressed.value * 0.04 }] }));
+
+  return (
+    <Animated.View style={buttonStyle}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => (pressed.value = withSpring(1, spring.press))}
+        onPressOut={() => (pressed.value = withSpring(0, spring.press))}
+        accessibilityRole="button"
+        accessibilityLabel="Add Exercise"
+        style={{ height: 56, borderRadius: 28, backgroundColor: colors.brand.yellow }}
+        className="flex-row items-center justify-center gap-2"
+      >
+        <Ionicons name="add" size={24} color={colors.brand.iron} />
+        <Text style={{ fontFamily: fontFamily.heading, fontSize: 22, letterSpacing: 1, color: colors.brand.iron }}>ADD EXERCISE</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
 
 export default function ActiveWorkoutScreen() {
   const insets = useSafeAreaInsets();
@@ -61,6 +93,10 @@ export default function ActiveWorkoutScreen() {
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(
     () => useActiveWorkoutStore.getState().exercises[0]?.exerciseId ?? null,
   );
+  // Where `handleFinish` (the header `SaveButton`'s `onSave`) stashes its result for
+  // `handleFinished` (`onSaved`) to navigate with, once the save→success animation has actually
+  // played — see both functions' own comments below.
+  const finishResultRef = useRef<{ id: string; hasPrs: boolean } | null>(null);
 
   const startedAt = useActiveWorkoutStore((state) => state.startedAt);
   const logDateKey = useActiveWorkoutStore((state) => state.logDateKey);
@@ -117,6 +153,26 @@ export default function ActiveWorkoutScreen() {
   const rankCards = useMemo(() => buildLiftRankCards(records, rankProfile, "gym"), [records, rankProfile]);
 
   function handleFinish() {
+    const id = finishWorkoutData();
+    finishResultRef.current = id;
+  }
+
+  function handleFinished() {
+    const result = finishResultRef.current;
+    if (!result) return;
+    // PR or not, this always lands on the results screen — `workout/complete` no longer exists as
+    // its own stop; `justFinished` tells the results screen to show its "just finished" hero.
+    if (result.hasPrs) {
+      router.replace({ pathname: "/workout/pr-celebration", params: { id: result.id } });
+    } else {
+      router.replace({ pathname: "/workout/summary", params: { id: result.id, justFinished: "1" } });
+    }
+  }
+
+  // Everything `handleFinish` used to do, minus the final navigation — split out so the header's
+  // `SaveButton` can run this as its `onSave` (its own loading→success animation) and only navigate
+  // once that's actually finished playing, in `onSaved`/`handleFinished` above.
+  function finishWorkoutData(): { id: string; hasPrs: boolean } {
     const id = `workout-${Date.now()}`;
     // Snapshot records before they're updated below — capping a challenge contribution against a
     // PR set in this same workout would let a fabricated set validate itself.
@@ -201,13 +257,7 @@ export default function ActiveWorkoutScreen() {
 
     if (isLeadingCrew) endLiveSession();
     finishWorkout();
-    // PR or not, this always lands on the results screen — `workout/complete` no longer exists as
-    // its own stop; `justFinished` tells the results screen to show its "just finished" hero.
-    if (prs.length > 0) {
-      router.replace({ pathname: "/workout/pr-celebration", params: { id } });
-    } else {
-      router.replace({ pathname: "/workout/summary", params: { id, justFinished: "1" } });
-    }
+    return { id, hasPrs: prs.length > 0 };
   }
 
   // `Alert.alert` with multiple buttons never shows a dialog on React Native Web (see
@@ -256,26 +306,41 @@ export default function ActiveWorkoutScreen() {
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
-      <View className="relative flex-row items-center justify-between border-b border-divider px-4 pb-4 pt-1">
-        <Pressable onPress={handleClose} hitSlop={8}>
-          <Ionicons name="close" size={26} color={colors.neutral.textPrimary} />
-        </Pressable>
-
-        <View className="flex-row items-center gap-4">
-          <Pressable onPress={() => setSettingsVisible(true)} hitSlop={8}>
-            <Ionicons name="settings-outline" size={22} color={colors.neutral.textSecondary} />
-          </Pressable>
-          <Pressable onPress={handleFinish} className="rounded-full bg-brand-yellow px-5 py-2.5">
-            <Text className="body-sm font-body-semibold text-brand-iron">Finish</Text>
+      {/* A real 3-column flex row, not an absolutely-centered overlay — the timer used to sit on
+          `position: absolute, inset: 0` centered across the FULL row regardless of how wide the close
+          button vs. the settings+Finish group actually were, so on a narrower screen (or once the
+          Finish `SaveButton` rendered its full label) the true screen-center landed on top of the gear
+          icon instead of the empty space between them ("de tandwiel loopt door de klok heen"). Two
+          `minWidth`-matched side columns plus a `flex-1` centered middle can't overlap the sides no
+          matter how wide either one renders, since the timer's slot is real layout space, not a
+          floating overlay guessing where the gaps are. */}
+      <View className="flex-row items-center justify-between border-b border-divider px-4 pb-4 pt-1">
+        <View style={{ minWidth: 96 }} className="flex-row items-center">
+          <Pressable onPress={handleClose} hitSlop={8} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.neutral.surface }} className="items-center justify-center">
+            <Ionicons name="close" size={22} color={colors.neutral.textPrimary} />
           </Pressable>
         </View>
 
-        {/* Absolutely centered on the full row so it stays put regardless of how wide the side content is. */}
-        <View pointerEvents="none" className="absolute inset-0 items-center justify-center">
+        <View className="flex-1 items-center">
           <View className="flex-row items-center gap-1.5">
             <Ionicons name="time-outline" size={16} color={colors.brand.yellow} />
             <Text className="body-lg font-body-semibold text-text-primary">{formatElapsed(elapsedSeconds)}</Text>
           </View>
+        </View>
+
+        <View style={{ minWidth: 96 }} className="flex-row items-center justify-end gap-3">
+          <Pressable onPress={() => setSettingsVisible(true)} hitSlop={8} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.neutral.surface }} className="items-center justify-center">
+            <Ionicons name="settings-outline" size={19} color={colors.neutral.textSecondary} />
+          </Pressable>
+          {/* Reacticx `save-button` — a real loading→success moment for the one action that ends the
+              whole session, instead of a plain pill that just instantly navigates away. `handleFinish`
+              (still every bit of the original business logic — XP, tokens, Crew War, PRs, etc.,
+              untouched) runs as `onSave`; the actual navigation waits for `onSaved`, which fires once
+              the success animation has actually played (see both functions' own comments above). */}
+          <SaveButton.Root onSave={handleFinish} onSaved={handleFinished} colors={AI_SAVE_BUTTON_COLORS} minLoading={300} successPause={350}>
+            <SaveButton.Label style={{ fontFamily: fontFamily.bodyBold, fontSize: 15 }}>Finish</SaveButton.Label>
+            <SaveButton.Saved style={{ fontFamily: fontFamily.bodyBold, fontSize: 15 }}>Done!</SaveButton.Saved>
+          </SaveButton.Root>
         </View>
       </View>
 
@@ -288,17 +353,20 @@ export default function ActiveWorkoutScreen() {
         </View>
       )}
 
-      {/* contentContainerStyle is all-inline here, not contentContainerClassName — mixing the two
-          is unreliable on native with this project's NativeWind preview version (same class of bug
-          as the TextInput textAlign crash: works on web, silently drops or conflicts on native). */}
+      {/* Both style props are inline here, not className — mixing the two is unreliable on native with
+          this project's NativeWind preview version (same class of bug as the TextInput textAlign crash:
+          works on web, silently drops or conflicts on native). A `flex-1` className that quietly
+          doesn't apply is exactly what would let this ScrollView size to its content instead of the
+          remaining space, which reads as "the header above it scrolls away too" — there's no longer a
+          distinct fixed region above a constrained scrollable one, just one tall column. */}
       <ScrollView
-        className="flex-1"
+        style={{ flex: 1 }}
         contentContainerStyle={{ gap: 20, paddingHorizontal: 16, paddingTop: 20, paddingBottom: footerHeight + 20 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         {exercises.length === 0 ? (
-          <View className="items-center gap-3 rounded-2xl border border-dashed border-divider py-14">
+          <View className="items-center gap-3 py-14">
             <Ionicons name="barbell-outline" size={32} color={colors.neutral.textSecondary} />
             <Text className="body-md text-text-secondary">Add your first exercise to get started</Text>
           </View>
@@ -334,14 +402,7 @@ export default function ActiveWorkoutScreen() {
           onStop={stopRest}
         />
 
-        <Pressable
-          onPress={() => setPickerVisible(true)}
-          className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4"
-          style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
-        >
-          <Ionicons name="add" size={20} color={colors.brand.iron} />
-          <Text className="body-lg font-body-semibold text-brand-iron">Add Exercise</Text>
-        </Pressable>
+        <AddExerciseButton onPress={() => setPickerVisible(true)} />
       </View>
 
       <ExercisePickerModal

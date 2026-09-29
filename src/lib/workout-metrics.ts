@@ -8,8 +8,10 @@ import type { LoggedExercise } from "@/store/active-workout-store";
  * lib/demo-seed.ts, doesn't pull in that store and risk a circular import.
  */
 
-/** Per-muscle-group set counts for the session, capped at 10 to match the heatmap's 1-10 scale. */
-export function computeMuscleIntensity(exercises: LoggedExercise[]): Partial<Record<MuscleGroup, number>> {
+/** Real, uncapped per-muscle-group completed-set counts for the session. `computeMuscleIntensity`
+ * below caps this at 10 for the heatmap's fixed color scale — anything that wants the actual number
+ * (a real weekly total, not a color-scale value) should use this instead. */
+export function computeMuscleSetCounts(exercises: LoggedExercise[]): Partial<Record<MuscleGroup, number>> {
   const setsByGroup: Partial<Record<MuscleGroup, number>> = {};
 
   for (const exercise of exercises) {
@@ -20,6 +22,12 @@ export function computeMuscleIntensity(exercises: LoggedExercise[]): Partial<Rec
     setsByGroup[group] = (setsByGroup[group] ?? 0) + completedSets;
   }
 
+  return setsByGroup;
+}
+
+/** Per-muscle-group set counts for the session, capped at 10 to match the heatmap's 1-10 scale. */
+export function computeMuscleIntensity(exercises: LoggedExercise[]): Partial<Record<MuscleGroup, number>> {
+  const setsByGroup = computeMuscleSetCounts(exercises);
   const intensity: Partial<Record<MuscleGroup, number>> = {};
   for (const [group, sets] of Object.entries(setsByGroup) as [MuscleGroup, number][]) {
     intensity[group] = Math.min(10, sets);
