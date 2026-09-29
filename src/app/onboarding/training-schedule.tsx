@@ -1,43 +1,38 @@
-import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
-import { Pressable, SafeAreaView, Text, TextInput, View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
+import { useEffect, useState } from "react";
+import { Pressable, Text, TextInput, View } from "react-native";
+import Animated, { FadeInUp, interpolateColor, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { usePostHog } from "posthog-react-native";
 
-import { OnboardingFooter } from "@/components/OnboardingFooter";
-import { OnboardingHeader } from "@/components/OnboardingHeader";
+import { OnboardingScreen } from "@/components/OnboardingScreen";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { WEEKDAY_SHORT_LABEL, WEEKDAYS, type Weekday } from "@/data/weekdays";
 import { getTemplatesForSplit } from "@/data/workout-templates";
+import { onboardingProgress } from "@/lib/onboarding-steps";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors, spring } from "@/theme";
+import { colors, fontFamily, spring } from "@/theme";
 
 const CUSTOM_SPLIT = "Other / Custom";
 
-function WeekdayChip({
-  label,
-  state,
-  onPress,
-}: {
-  label: string;
-  state: "selected" | "taken" | "free";
-  onPress: () => void;
-}) {
+/** One weekday in a row of seven: it fills yellow and pops when this workout is on it, and dims when another workout has it. */
+function DayPill({ label, state, onPress }: { label: string; state: "selected" | "taken" | "free"; onPress: () => void }) {
+  const on = useSharedValue(state === "selected" ? 1 : 0);
+
+  useEffect(() => {
+    on.value = withSpring(state === "selected" ? 1 : 0, spring.press);
+  }, [state, on]);
+
+  const style = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(on.value, [0, 1], [colors.neutral.background, colors.brand.yellow]),
+    borderColor: interpolateColor(on.value, [0, 1], [colors.neutral.divider, colors.brand.yellow]),
+    transform: [{ scale: 1 + on.value * 0.1 }],
+  }));
+
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={state === "taken"}
-      className={`h-9 w-9 items-center justify-center rounded-full border ${
-        state === "selected"
-          ? "border-brand-yellow bg-brand-yellow"
-          : state === "taken"
-            ? "border-divider bg-background opacity-40"
-            : "border-divider bg-background"
-      }`}
-    >
-      <Text className={`caption font-body-semibold ${state === "selected" ? "text-brand-iron" : "text-text-secondary"}`}>
-        {label}
-      </Text>
+    <Pressable onPress={onPress} disabled={state === "taken"} className="flex-1" style={{ opacity: state === "taken" ? 0.35 : 1 }}>
+      <Animated.View style={[{ height: 40, borderRadius: 20, borderWidth: 1.5 }, style]} className="items-center justify-center">
+        <Text style={{ fontFamily: fontFamily.bodyBold, fontSize: 12, color: state === "selected" ? colors.brand.iron : colors.neutral.textSecondary }}>{label}</Text>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -77,64 +72,44 @@ export default function TrainingScheduleScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <View className="flex-1 px-6 pb-6 pt-4">
-        <OnboardingHeader
-          title="Weekly Schedule"
-          subtitle={isCustom ? "What do you train on each day?" : "Assign your split to your week."}
-        />
-
-        <Animated.ScrollView
-          entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-          className="flex-1"
-          contentContainerClassName="gap-4 py-6"
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {isCustom
-            ? WEEKDAYS.map((weekday) => (
-                <View key={weekday} className="gap-2">
-                  <Text className="body-md text-text-primary">{weekday}</Text>
-                  <TextInput
-                    value={assignments[weekday] ?? ""}
-                    onChangeText={(text) => (text.trim() ? assignDay(text, weekday) : clearDay(weekday))}
-                    placeholder="Rest day"
-                    placeholderTextColor={colors.neutral.textSecondary}
-                    className="body-md rounded-xl border border-divider bg-surface px-4 py-3 text-text-primary"
-                    style={{ outlineWidth: 0, outlineColor: "transparent" }}
-                  />
+    <OnboardingScreen
+      progress={onboardingProgress("training-schedule")}
+      title="Weekly Schedule"
+      subtitle={isCustom ? "What do you train on each day?" : "Assign your split to your week."}
+      footer={<PrimaryButton label="Continue" onPress={handleContinue} />}
+    >
+      {isCustom
+        ? WEEKDAYS.map((weekday) => (
+            <View key={weekday} className="gap-2">
+              <Text style={{ fontFamily: fontFamily.heading, fontSize: 20, letterSpacing: 0.8, color: colors.brand.white }}>{weekday.toUpperCase()}</Text>
+              <TextInput
+                value={assignments[weekday] ?? ""}
+                onChangeText={(text) => (text.trim() ? assignDay(text, weekday) : clearDay(weekday))}
+                placeholder="Rest day"
+                placeholderTextColor={colors.neutral.textSecondary}
+                className="body-md rounded-2xl border-[1.5px] border-divider bg-surface px-4 py-3 text-text-primary"
+                style={{ outlineWidth: 0, outlineColor: "transparent" }}
+              />
+            </View>
+          ))
+        : templates.map((template, index) => {
+            const assignedDay = WEEKDAYS.find((weekday) => assignments[weekday] === template.name);
+            return (
+              <Animated.View key={template.key} entering={FadeInUp.delay(index * 70).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="gap-3 border-b border-divider pb-5">
+                <View className="flex-row items-baseline justify-between">
+                  <Text style={{ fontFamily: fontFamily.heading, fontSize: 24, letterSpacing: 0.8, color: colors.brand.white }}>{template.name.toUpperCase()}</Text>
+                  <Text style={{ fontFamily: fontFamily.bodySemiBold, fontSize: 12, color: assignedDay ? colors.brand.yellow : colors.neutral.textSecondary }}>{assignedDay ? assignedDay.toUpperCase() : "PICK A DAY"}</Text>
                 </View>
-              ))
-            : templates.map((template) => {
-                const assignedDay = WEEKDAYS.find((weekday) => assignments[weekday] === template.name);
-                return (
-                  <View key={template.key} className="gap-3 rounded-xl border border-divider bg-surface p-4">
-                    <View className="flex-row items-center gap-2">
-                      <Ionicons name={template.icon} size={18} color={colors.brand.yellow} />
-                      <Text className="body-md font-body-semibold text-text-primary">{template.name}</Text>
-                    </View>
-                    <View className="flex-row flex-wrap gap-2">
-                      {WEEKDAYS.map((weekday) => {
-                        const takenBy = assignments[weekday];
-                        const state = takenBy === template.name ? "selected" : takenBy ? "taken" : "free";
-                        return (
-                          <WeekdayChip
-                            key={weekday}
-                            label={WEEKDAY_SHORT_LABEL[weekday]}
-                            state={state}
-                            onPress={() => (state === "selected" ? clearDay(weekday) : assignDay(template.name, weekday))}
-                          />
-                        );
-                      })}
-                    </View>
-                    {assignedDay && <Text className="caption text-brand-yellow">Scheduled for {assignedDay}</Text>}
-                  </View>
-                );
-              })}
-        </Animated.ScrollView>
-
-        <OnboardingFooter label="Continue" activeIndex={3} dotCount={5} onPress={handleContinue} />
-      </View>
-    </SafeAreaView>
+                <View className="flex-row gap-1.5">
+                  {WEEKDAYS.map((weekday) => {
+                    const takenBy = assignments[weekday];
+                    const state = takenBy === template.name ? "selected" : takenBy ? "taken" : "free";
+                    return <DayPill key={weekday} label={WEEKDAY_SHORT_LABEL[weekday]} state={state} onPress={() => (state === "selected" ? clearDay(weekday) : assignDay(template.name, weekday))} />;
+                  })}
+                </View>
+              </Animated.View>
+            );
+          })}
+    </OnboardingScreen>
   );
 }

@@ -1,17 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { RankRevealCard } from "@/components/RankRevealCard";
+import AnimatedText from "@/components/ui/organisms/animated-text";
 import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { calculateLiftRankDetail, type MajorLift, type RankProfile } from "@/lib/rank";
 import { displayWeight } from "@/lib/units";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, fontFamily } from "@/theme";
 
 type LiftEntry = { lift: MajorLift; name: string; weightKg: number };
 
@@ -71,7 +73,12 @@ export default function OnboardingRankRevealScreen() {
     <View style={{ flex: 1, backgroundColor: "#000000", paddingTop: insets.top }}>
       <View style={{ flex: 1 }} className="items-center justify-center gap-4 px-6">
         <Animated.View key={`label-${entry.lift}`} entering={FadeInDown.delay(100).duration(350)} className="items-center gap-1">
-          <Text className="body-md font-body-semibold tracking-wide text-brand-yellow">YOUR ESTIMATED RANK</Text>
+          <AnimatedText
+            text="YOUR ESTIMATED RANK"
+            animationConfig={{ characterDelay: 26 }}
+            enterFrom={{ translateY: 28, scale: 0.4 }}
+            style={{ fontFamily: fontFamily.heading, fontSize: 34, letterSpacing: 1.5, color: colors.brand.yellow }}
+          />
         </Animated.View>
 
         <Animated.View key={`card-${entry.lift}`} entering={FadeInUp.delay(250).springify().damping(16)} className="w-full">
@@ -113,10 +120,7 @@ export default function OnboardingRankRevealScreen() {
           </View>
         )}
 
-        <Pressable onPress={handleNext} className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4">
-          <Text className="body-lg font-body-semibold text-brand-iron">{isLast ? "Continue" : "Next"}</Text>
-          <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
-        </Pressable>
+        <PrimaryButton label={isLast ? "Continue" : "Next"} onPress={handleNext} />
       </Animated.View>
     </View>
   );

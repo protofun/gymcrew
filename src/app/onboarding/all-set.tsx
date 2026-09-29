@@ -1,14 +1,25 @@
 import { useAuth } from "@clerk/expo";
 import { router } from "expo-router";
-import { SafeAreaView, Text, View } from "react-native";
-import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
+import { Image, useWindowDimensions, View } from "react-native";
+import Animated, { FadeInUp, ZoomIn } from "react-native-reanimated";
 
-import { OnboardingFooter } from "@/components/OnboardingFooter";
+import { OnboardingScreen } from "@/components/OnboardingScreen";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { ReceiptCard } from "@/components/ui/pieces/receipt-card";
 import { images } from "@/constants/images";
-import { colors, spring } from "@/theme";
+import { useOnboardingStore } from "@/store/onboarding-store";
+import { spring } from "@/theme";
+
+/** "build-muscle" → "Build Muscle". */
+function readable(key: string | undefined): string {
+  if (!key) return "—";
+  return key.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export default function AllSetScreen() {
   const { isSignedIn } = useAuth();
+  const { width } = useWindowDimensions();
+  const onboarding = useOnboardingStore((state) => state.onboarding);
 
   // Reaching the wizard while already signed in happens when an existing account has no
   // "completed onboarding" record anywhere yet (fresh browser + a Clerk account from before that
@@ -23,38 +34,46 @@ export default function AllSetScreen() {
     }
   }
 
+  const rows = [
+    { label: "GOAL", value: readable(onboarding.goal) },
+    { label: "LEVEL", value: readable(onboarding.experienceLevel) },
+    { label: "SPLIT", value: onboarding.trainingSplit ?? "—" },
+    { label: "DAYS / WEEK", value: onboarding.workoutsPerWeek ? String(onboarding.workoutsPerWeek) : "—" },
+  ];
+
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.neutral.background }}
-    >
-      <View className="flex-1 px-6 pb-6 pt-4">
-        <Animated.View
-          entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-          className="items-center gap-2"
-        >
-          <Text className="font-body-bold text-5xl italic text-brand-yellow">
-            You&apos;re All Set!
-          </Text>
-          <Text className="font-body-medium text-center text-xl leading-snug text-text-secondary">
-            Let&apos;s get to work and become unstoppable.
-          </Text>
+    <OnboardingScreen
+      hideBack
+      centered
+      title="You're all set!"
+      subtitle="Let's get to work and become unstoppable."
+      hero={
+        <Animated.View entering={ZoomIn.delay(100).springify().damping(spring.press.damping).mass(spring.press.mass)} className="items-center">
+          <Image source={images.mascotSplash} resizeMode="contain" style={{ width: 140, height: 140 * (250 / 261) }} />
         </Animated.View>
-
-        <View className="flex-1 items-center justify-center">
-          <Animated.Image
-            entering={ZoomIn.delay(150).springify().damping(spring.press.damping).mass(spring.press.mass)}
-            source={images.mascotSplash}
-            style={{ width: 400, height: 400 * (250 / 261) }}
-            resizeMode="contain"
-          />
+      }
+      footer={<PrimaryButton label="Start My Journey" onPress={handleContinue} />}
+    >
+      <Animated.View entering={FadeInUp.delay(500).springify().damping(spring.entrance.damping).mass(spring.entrance.mass)} className="items-center">
+        <View>
+          <ReceiptCard.Root width={Math.min(width - 48, 340)}>
+            <ReceiptCard.Header>
+              <ReceiptCard.Store>{`GYMCREW · ${(onboarding.fullName?.trim().split(" ")[0] ?? "ATHLETE").toUpperCase()}`}</ReceiptCard.Store>
+              <ReceiptCard.Meta>Your starting point</ReceiptCard.Meta>
+            </ReceiptCard.Header>
+            <ReceiptCard.Separator />
+            <ReceiptCard.Items>
+              {rows.map((row) => (
+                <ReceiptCard.Item key={row.label} label={row.label} value={row.value} />
+              ))}
+            </ReceiptCard.Items>
+            <ReceiptCard.Separator variant="solid" />
+            <ReceiptCard.Total label="STATUS" value="READY TO LIFT" />
+            <ReceiptCard.Barcode code={onboarding.username ?? "gymcrew"} />
+            <ReceiptCard.TornEdge side="bottom" />
+          </ReceiptCard.Root>
         </View>
-
-        <OnboardingFooter
-          label="Start My Journey"
-          activeIndex={3}
-          onPress={handleContinue}
-        />
-      </View>
-    </SafeAreaView>
+      </Animated.View>
+    </OnboardingScreen>
   );
 }

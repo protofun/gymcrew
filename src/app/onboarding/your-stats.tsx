@@ -1,20 +1,23 @@
-import { useState } from "react";
-import { Pressable, SafeAreaView, Text, View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
 import { router } from "expo-router";
+import { useState } from "react";
+import { View } from "react-native";
 import { usePostHog } from "posthog-react-native";
 
-import { OnboardingFooter } from "@/components/OnboardingFooter";
-import { OnboardingHeader } from "@/components/OnboardingHeader";
-import { SliderField } from "@/components/SliderField";
-import { Stepper } from "@/components/Stepper";
-import { UnitToggle } from "@/components/UnitToggle";
+import { MetricRows } from "@/components/MetricRows";
+import { FieldLabel, OnboardingScreen } from "@/components/OnboardingScreen";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { SegmentedField } from "@/components/SegmentedField";
 import { useUnitToggle } from "@/hooks/use-unit-toggle";
+import { onboardingProgress } from "@/lib/onboarding-steps";
 import { type Gender, useOnboardingStore } from "@/store/onboarding-store";
-import { colors, spring } from "@/theme";
 
 const CM_TO_IN = 0.393701;
 const KG_TO_LB = 2.20462;
+
+const GENDERS = [
+  { key: "male", label: "♂  Male" },
+  { key: "female", label: "♀  Female" },
+] as const;
 
 export default function YourStatsScreen() {
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
@@ -32,70 +35,45 @@ export default function YourStatsScreen() {
     router.push("/onboarding/your-goal");
   }
 
+  const setters: Record<string, (value: number) => void> = { age: setAge, height: height.setValue, weight: weight.setValue };
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <View className="flex-1 px-6 pb-6 pt-4">
-        <OnboardingHeader title="Your Stats" subtitle="Help us personalize your experience." />
-
-        <Animated.ScrollView
-          entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-          className="flex-1"
-          contentContainerClassName="flex-grow justify-center gap-6 py-6"
-          showsVerticalScrollIndicator={false}
-        >
-          <SliderField
-            label="Age"
-            value={age}
-            onChange={setAge}
-            step={1}
-            min={13}
-            max={90}
-            rightAdornment={<Text className="body-md text-text-secondary"> years</Text>}
-          />
-
-          <View className="gap-2">
-            <Text className="body-md text-text-primary">Gender</Text>
-            <View className="flex-row gap-3">
-              {(["male", "female"] as const).map((option) => (
-                <Pressable
-                  key={option}
-                  onPress={() => setGender(option)}
-                  className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl border py-4 ${
-                    gender === option ? "border-brand-yellow" : "border-divider"
-                  } bg-surface`}
-                >
-                  <Text className="text-lg text-text-primary">{option === "male" ? "♂" : "♀"}</Text>
-                  <Text className="body-md text-text-primary">{option === "male" ? "Male" : "Female"}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          <SliderField
-            label="Height"
-            value={height.value}
-            onChange={height.setValue}
-            step={height.unit === "cm" ? 1 : 0.5}
-            min={height.unit === "cm" ? 120 : 47}
-            max={height.unit === "cm" ? 220 : 87}
-            decimals={height.unit === "cm" ? 0 : 1}
-            rightAdornment={<UnitToggle unit={height.unit} onPress={height.toggle} />}
-          />
-
-          <Stepper
-            label="Weight"
-            value={weight.value}
-            onChange={weight.setValue}
-            step={weight.unit === "kg" ? 0.5 : 1}
-            min={weight.unit === "kg" ? 30 : 66}
-            max={weight.unit === "kg" ? 200 : 440}
-            decimals={weight.unit === "kg" ? 1 : 0}
-            rightAdornment={<UnitToggle unit={weight.unit} onPress={weight.toggle} />}
-          />
-        </Animated.ScrollView>
-
-        <OnboardingFooter label="Continue" activeIndex={3} onPress={handleContinue} />
+    <OnboardingScreen progress={onboardingProgress("your-stats")} title="Your Stats" subtitle="Help us personalize your experience." footer={<PrimaryButton label="Continue" onPress={handleContinue} />}>
+      <View className="gap-2">
+        <FieldLabel>Gender</FieldLabel>
+        <SegmentedField options={GENDERS} value={gender} onChange={setGender} />
       </View>
-    </SafeAreaView>
+
+      <MetricRows
+        onChange={(key, value) => setters[key]?.(value)}
+        rows={[
+          { key: "age", label: "Age", value: age, unit: "years", min: 13, max: 90, step: 1 },
+          {
+            key: "height",
+            label: "Height",
+            value: height.value,
+            unit: height.unit,
+            min: height.unit === "cm" ? 120 : 47,
+            max: height.unit === "cm" ? 220 : 87,
+            step: height.unit === "cm" ? 1 : 0.5,
+            decimals: height.unit === "cm" ? 0 : 1,
+            unitOptions: ["cm", "in"],
+            onUnitChange: (unit) => unit !== height.unit && height.toggle(),
+          },
+          {
+            key: "weight",
+            label: "Weight",
+            value: weight.value,
+            unit: weight.unit,
+            min: weight.unit === "kg" ? 30 : 66,
+            max: weight.unit === "kg" ? 200 : 440,
+            step: weight.unit === "kg" ? 0.5 : 1,
+            decimals: weight.unit === "kg" ? 1 : 0,
+            unitOptions: ["kg", "lb"],
+            onUnitChange: (unit) => unit !== weight.unit && weight.toggle(),
+          },
+        ]}
+      />
+    </OnboardingScreen>
   );
 }

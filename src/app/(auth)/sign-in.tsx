@@ -3,12 +3,15 @@ import { useSSO } from "@clerk/expo/experimental";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { usePostHog } from "posthog-react-native";
 
 import { AuthDivider } from "@/components/AuthDivider";
-import { AuthHeader } from "@/components/AuthHeader";
-import { FormField } from "@/components/FormField";
+import { AuthField, FormError } from "@/components/AuthField";
+import { AuthHero } from "@/components/AuthHero";
+import { AuthStatus } from "@/components/AuthStatus";
+import { OnboardingScreen } from "@/components/OnboardingScreen";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { SocialAuthButton } from "@/components/SocialAuthButton";
 import { VerificationCodeModal } from "@/components/VerificationCodeModal";
 import { useWarmUpBrowser } from "@/hooks/use-warm-up-browser";
@@ -16,6 +19,8 @@ import { waitForAuthToken } from "@/lib/api";
 import { getClerkErrorMessage } from "@/lib/clerk";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
+
+const EMAIL_PLACEHOLDERS = ["alex@gmail.com", "you@gym.com", "lifter@crew.fit"];
 
 /** After a real sign-in (not sign-up), pulls this account's backend profile so known fields (e.g. a
  * Founding Athlete's linked name/username, see profile.php's maybeLinkFoundingAthlete) are already
@@ -71,25 +76,14 @@ export default function SignInScreen() {
   }, [authLoaded, isSignedIn, resumeAttempt]);
 
   if (!authLoaded || (isSignedIn && !resumeStuck)) {
-    return (
-      <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.neutral.background, gap: 12 }}>
-        <ActivityIndicator size="large" color={colors.brand.yellow} />
-        {authLoaded && isSignedIn && <Text className="body-sm text-text-secondary">Signing you in…</Text>}
-      </SafeAreaView>
-    );
+    return <AuthStatus busy message={authLoaded && isSignedIn ? "Signing you in…" : undefined} />;
   }
 
   if (isSignedIn && resumeStuck) {
     return (
-      <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.neutral.background, gap: 16, padding: 24 }}>
-        <Text className="body-md text-center text-text-secondary">Taking longer than expected to sign you in.</Text>
-        <Pressable
-          onPress={() => setResumeAttempt((n) => n + 1)}
-          className="flex-row items-center gap-2 rounded-full bg-brand-yellow px-6 py-3"
-        >
-          <Text className="body-md font-body-bold text-brand-iron">Try Again</Text>
-        </Pressable>
-      </SafeAreaView>
+      <AuthStatus message="Taking longer than expected to sign you in.">
+        <PrimaryButton label="Try Again" hideArrow onPress={() => setResumeAttempt((n) => n + 1)} />
+      </AuthStatus>
     );
   }
 
@@ -167,67 +161,46 @@ export default function SignInScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerClassName="gap-6 px-6 pb-10 pt-4" keyboardShouldPersistTaps="handled">
-          <AuthHeader title="Welcome back" subtitle="Log in to keep your streak going" />
-
-          <View className="-mt-8 gap-4">
-            <FormField
-              label="Email"
-              placeholder="alex@gmail.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-            />
-            <FormField
-              label="Password"
-              placeholder="Enter your password"
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-              rightAdornment={
-                <Pressable onPress={() => setShowPassword((prev) => !prev)} hitSlop={8}>
-                  <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={colors.brand.yellow} />
-                </Pressable>
-              }
-            />
-            {formError && <Text className="body-sm text-error">{formError}</Text>}
-
-            <Pressable hitSlop={8} onPress={() => router.push("/forgot-password")} className="self-end">
-              <Text className="body-sm text-brand-yellow">Forgot password?</Text>
+    <>
+      <OnboardingScreen title="Welcome back" subtitle="Log in to keep your streak going" hero={<AuthHero />}>
+        <AuthField label="Email" placeholders={EMAIL_PLACEHOLDERS} keyboardType="email-address" autoCapitalize="none" autoComplete="email" value={email} onChangeText={setEmail} />
+        <AuthField
+          label="Password"
+          placeholders={["Enter your password"]}
+          secureTextEntry={!showPassword}
+          value={password}
+          onChangeText={setPassword}
+          right={
+            <Pressable onPress={() => setShowPassword((prev) => !prev)} hitSlop={8} accessibilityLabel={showPassword ? "Hide password" : "Show password"}>
+              <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={colors.brand.yellow} />
             </Pressable>
-          </View>
+          }
+        />
+        <FormError message={formError} />
 
-          <Pressable
-            onPress={handleSignIn}
-            disabled={submitting}
-            className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4"
-            style={({ pressed }) => ({ opacity: pressed || submitting ? 0.85 : 1 })}
-          >
-            <Text className="heading-4 text-brand-iron">{submitting ? "Logging In..." : "Log In"}</Text>
-            <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
+        <Pressable hitSlop={8} onPress={() => router.push("/forgot-password")} className="self-end">
+          <Text className="body-sm text-brand-yellow">Forgot password?</Text>
+        </Pressable>
+
+        <PrimaryButton label="Log In" loading={submitting} onPress={handleSignIn} />
+
+        <AuthDivider />
+
+        <View className="flex-row justify-center gap-5">
+          <SocialAuthButton index={0} provider="google" onPress={() => handleSocialAuth("oauth_google")} />
+          <SocialAuthButton index={1} provider="facebook" onPress={() => handleSocialAuth("oauth_facebook")} />
+          <SocialAuthButton index={2} provider="apple" onPress={() => handleSocialAuth("oauth_apple")} />
+        </View>
+
+        <View className="flex-row justify-center gap-1">
+          <Text className="body-md text-text-secondary">Don&apos;t have an account?</Text>
+          <Pressable hitSlop={8} onPress={() => router.push("/sign-up")}>
+            <Text className="body-md text-brand-yellow">Sign up</Text>
           </Pressable>
-
-          <AuthDivider />
-
-          <View className="gap-3">
-            <SocialAuthButton provider="google" onPress={() => handleSocialAuth("oauth_google")} />
-            <SocialAuthButton provider="facebook" onPress={() => handleSocialAuth("oauth_facebook")} />
-            <SocialAuthButton provider="apple" onPress={() => handleSocialAuth("oauth_apple")} />
-          </View>
-
-          <View className="flex-row justify-center gap-1">
-            <Text className="body-md text-text-secondary">Don&apos;t have an account?</Text>
-            <Pressable hitSlop={8} onPress={() => router.push("/sign-up")}>
-              <Text className="body-md text-brand-yellow">Sign up</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </View>
+      </OnboardingScreen>
 
       <VerificationCodeModal visible={verifyingDevice} email={email || "your email"} onClose={() => setVerifyingDevice(false)} onComplete={handleVerifyDeviceCode} />
-    </SafeAreaView>
+    </>
   );
 }

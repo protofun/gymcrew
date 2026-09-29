@@ -1,16 +1,17 @@
-import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
-import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import { Alert, Image, Pressable, Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { usePostHog } from "posthog-react-native";
 
-import { goBack } from "@/lib/navigation";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
+import { OnboardingScreen } from "@/components/OnboardingScreen";
+import { PulsingDots } from "@/components/ui/molecules/pulsing-dots";
+import { images } from "@/constants/images";
 import { api, isApiConfigured, type ApiDiscoverableCrew } from "@/lib/api";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors, spring } from "@/theme";
+import { colors, fontFamily } from "@/theme";
 
 export default function DiscoverCrewsScreen() {
   const setCrewData = useOnboardingStore((state) => state.setCrewData);
@@ -46,40 +47,28 @@ export default function DiscoverCrewsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <ScrollView className="flex-1" contentContainerClassName="px-6 pb-6 pt-4" showsVerticalScrollIndicator={false}>
-        <Pressable
-          onPress={() => goBack()}
-          hitSlop={8}
-          className="mb-2 h-9 w-9 items-center justify-center rounded-full border border-divider"
-        >
-          <Ionicons name="chevron-back" size={20} color={colors.neutral.textPrimary} />
-        </Pressable>
-
-        <View className="gap-2">
-          <Animated.Text entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="font-body-bold text-3xl text-text-primary">
-            Discover Crews
-          </Animated.Text>
-          <Animated.Text entering={FadeInUp.delay(80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="font-body-medium text-lg leading-snug text-text-secondary">
-            Public crews anyone can join instantly — no invite code needed.
-          </Animated.Text>
+    <OnboardingScreen title="Discover Crews" subtitle="Public crews anyone can join instantly — no invite code needed.">
+      {crews === null ? (
+        <View className="items-center py-10">
+          <PulsingDots color={colors.brand.yellow} radius={5} spacing={20} />
         </View>
-
-        <View className="mt-6 gap-3">
-          {crews === null ? (
-            <ActivityIndicator color={colors.brand.yellow} style={{ marginTop: 24 }} />
-          ) : crews.length === 0 ? (
-            <View className="items-center gap-2 rounded-2xl border border-divider bg-surface p-6">
-              <Ionicons name="telescope-outline" size={28} color={colors.neutral.textSecondary} />
-              <Text className="body-md text-center text-text-secondary">No public crews yet — check back soon, or join with an invite code instead.</Text>
-            </View>
-          ) : (
-            crews.map((crew) => (
-              <View key={crew.id} className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4">
-                <CrewIconBadge iconKey={crew.icon} size={48} />
+      ) : crews.length === 0 ? (
+        <View className="items-center gap-3 py-6">
+          <Image source={images.mascotFlexing} resizeMode="contain" style={{ width: 130, height: 130 * (205 / 250) }} />
+          <Text style={{ fontFamily: fontFamily.bodyMedium, fontSize: 15, lineHeight: 22, color: colors.neutral.textSecondary, textAlign: "center" }}>
+            No public crews yet — check back soon, or join with an invite code instead.
+          </Text>
+        </View>
+      ) : (
+        <View>
+          {crews.map((crew, index) => {
+            const full = crew.memberCount >= crew.maxMembers;
+            return (
+              <Animated.View key={crew.id} entering={FadeInDown.delay(index * 70).duration(350)} className="flex-row items-center gap-3 border-b border-divider py-4">
+                <CrewIconBadge iconKey={crew.icon} size={52} />
                 <View className="flex-1 gap-0.5">
-                  <Text className="body-md font-body-semibold text-text-primary" numberOfLines={1}>
-                    {crew.name}
+                  <Text style={{ fontFamily: fontFamily.heading, fontSize: 22, letterSpacing: 0.8, color: colors.brand.white }} numberOfLines={1}>
+                    {crew.name.toUpperCase()}
                   </Text>
                   {crew.tagline ? (
                     <Text className="body-sm text-text-secondary" numberOfLines={1}>
@@ -92,21 +81,17 @@ export default function DiscoverCrewsScreen() {
                 </View>
                 <Pressable
                   onPress={() => handleJoin(crew)}
-                  disabled={joiningId !== null || crew.memberCount >= crew.maxMembers}
-                  style={{ opacity: crew.memberCount >= crew.maxMembers ? 0.4 : joiningId && joiningId !== crew.id ? 0.5 : 1 }}
-                  className="items-center justify-center rounded-full bg-brand-yellow px-4 py-2.5"
+                  disabled={joiningId !== null || full}
+                  style={{ opacity: full ? 0.4 : joiningId && joiningId !== crew.id ? 0.5 : 1, minWidth: 68, height: 40 }}
+                  className="items-center justify-center rounded-full bg-brand-yellow px-4"
                 >
-                  {joiningId === crew.id ? (
-                    <ActivityIndicator size="small" color={colors.brand.iron} />
-                  ) : (
-                    <Text className="body-sm font-body-bold text-brand-iron">{crew.memberCount >= crew.maxMembers ? "Full" : "Join"}</Text>
-                  )}
+                  {joiningId === crew.id ? <PulsingDots color={colors.brand.iron} radius={3} spacing={11} /> : <Text style={{ fontFamily: fontFamily.heading, fontSize: 18, letterSpacing: 1, color: colors.brand.iron }}>{full ? "FULL" : "JOIN"}</Text>}
                 </Pressable>
-              </View>
-            ))
-          )}
+              </Animated.View>
+            );
+          })}
         </View>
-      </ScrollView>
-    </SafeAreaView>
+      )}
+    </OnboardingScreen>
   );
 }

@@ -1,49 +1,24 @@
-import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { type ImageSourcePropType, Pressable, SafeAreaView, Text, View } from "react-native";
-import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut } from "react-native-reanimated";
+import { View } from "react-native";
+import Animated, { FadeInUp } from "react-native-reanimated";
 import { usePostHog } from "posthog-react-native";
 
-import { goBack } from "@/lib/navigation";
-import { OnboardingFooter } from "@/components/OnboardingFooter";
+import { OnboardingScreen } from "@/components/OnboardingScreen";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { SelectTile } from "@/components/SelectTile";
 import { images } from "@/constants/images";
+import { crewProgress } from "@/lib/onboarding-steps";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors, spring } from "@/theme";
+import { spring } from "@/theme";
 
 type PathKey = "join" | "create" | "later";
 
-const MASCOT_WIDTH = 84;
-
-const PATHS: {
-  key: PathKey;
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  description: string;
-  mascot: { source: ImageSourcePropType; aspectRatio: number };
-}[] = [
-  {
-    key: "join",
-    icon: "people",
-    title: "Join a Crew",
-    description: "Find your friends or discover awesome crews.",
-    mascot: { source: images.mascotsCrew, aspectRatio: 520 / 420 },
-  },
-  {
-    key: "create",
-    icon: "add",
-    title: "Create a Crew",
-    description: "Build your own crew and invite your friends.",
-    mascot: { source: images.mascotteLaptop, aspectRatio: 904 / 762 },
-  },
-  {
-    key: "later",
-    icon: "time-outline",
-    title: "Maybe Later",
-    description: "Skip for now and do it later.",
-    mascot: { source: images.mascotteCrew, aspectRatio: 426 / 394 },
-  },
-];
+const PATHS = [
+  { key: "join", title: "Join a Crew", description: "Find your friends or discover awesome crews.", image: images.mascotsCrew },
+  { key: "create", title: "Create a Crew", description: "Build your own crew and invite your friends.", image: images.mascotteLaptop },
+  { key: "later", title: "Maybe Later", description: "Skip for now and do it later.", image: images.mascotteCrew },
+] as const;
 
 export default function ChoosePathScreen() {
   const setCrewData = useOnboardingStore((state) => state.setCrewData);
@@ -63,82 +38,14 @@ export default function ChoosePathScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <View className="flex-1 px-6 pb-6 pt-4">
-        <Pressable
-          onPress={() => goBack()}
-          hitSlop={8}
-          className="mb-2 h-9 w-9 items-center justify-center rounded-full border border-divider"
-        >
-          <Ionicons name="chevron-back" size={20} color={colors.neutral.textPrimary} />
-        </Pressable>
-
-        <View className="items-center gap-2">
-          <Animated.Text
-            entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-            className="font-body-bold text-3xl text-center text-text-primary"
-          >
-            Choose Your Path
-          </Animated.Text>
-          <Animated.Text
-            entering={FadeInUp.delay(80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-            className="font-body-medium text-lg text-center text-text-secondary"
-          >
-            What do you want to do?
-          </Animated.Text>
-        </View>
-
-        <View className="flex-1 justify-center gap-2.5">
-          {PATHS.map((path, index) => {
-            const active = path.key === selected;
-            return (
-              <Animated.View
-                key={path.key}
-                entering={FadeInUp.delay(150 + index * 80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-              >
-                <Pressable
-                  onPress={() => setSelected(path.key)}
-                  className={`flex-row items-center overflow-hidden rounded-2xl border bg-surface p-3 ${
-                    active ? "border-brand-yellow" : "border-divider"
-                  }`}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
-                >
-                  <View
-                    className="h-10 w-10 items-center justify-center rounded-full border"
-                    style={{ borderColor: active ? colors.brand.yellow : colors.neutral.divider }}
-                  >
-                    <Ionicons name={path.icon} size={18} color={active ? colors.brand.yellow : colors.neutral.textPrimary} />
-                  </View>
-
-                  <View className="flex-1 gap-0.5 pl-3 pr-2">
-                    <Text className="body-lg font-body-bold text-text-primary">{path.title}</Text>
-                    <Text className="body-sm text-text-secondary" numberOfLines={2}>
-                      {path.description}
-                    </Text>
-                  </View>
-
-                  {active && (
-                    <Animated.Image
-                      entering={FadeIn.duration(220)}
-                      exiting={FadeOut.duration(120)}
-                      source={path.mascot.source}
-                      style={{ width: MASCOT_WIDTH, height: MASCOT_WIDTH / path.mascot.aspectRatio }}
-                      resizeMode="contain"
-                    />
-                  )}
-                </Pressable>
-              </Animated.View>
-            );
-          })}
-        </View>
-
-        <OnboardingFooter
-          label="Continue"
-          activeIndex={2}
-          dotCount={5}
-          onPress={handleContinue}
-        />
+    <OnboardingScreen progress={crewProgress("choose-path")} title="Choose Your Path" subtitle="What do you want to do?" footer={<PrimaryButton label="Continue" onPress={handleContinue} />}>
+      <View className="gap-3">
+        {PATHS.map((path, index) => (
+          <Animated.View key={path.key} entering={FadeInUp.delay(380 + index * 90).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}>
+            <SelectTile layout="row" selected={selected === path.key} onPress={() => setSelected(path.key)} title={path.title} caption={path.description} image={path.image} />
+          </Animated.View>
+        ))}
       </View>
-    </SafeAreaView>
+    </OnboardingScreen>
   );
 }

@@ -1,111 +1,41 @@
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Modal, Pressable, SafeAreaView, ScrollView, Switch, Text, View } from "react-native";
-import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import { View } from "react-native";
 
-import { goBack } from "@/lib/navigation";
-import { OnboardingFooter } from "@/components/OnboardingFooter";
+import { FieldLabel, OnboardingScreen } from "@/components/OnboardingScreen";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { SegmentedField } from "@/components/SegmentedField";
+import { ToggleRow } from "@/components/ToggleRow";
+import { navIcons } from "@/constants/images";
+import { crewProgress } from "@/lib/onboarding-steps";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors, spring } from "@/theme";
 
-const VISIBILITY_OPTIONS = ["Public", "Private"] as const;
-const WHO_CAN_JOIN_OPTIONS = ["Anyone", "Invite Only", "Approval Required"] as const;
-const MAX_MEMBERS_OPTIONS = ["10 Members", "20 Members", "50 Members", "100 Members"] as const;
-
-type SettingsSelectRowProps = {
-  label: string;
-  value: string;
-  options: readonly string[];
-  onChange: (value: string) => void;
-};
-
-function SettingsSelectRow({ label, value, options, onChange }: SettingsSelectRowProps) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <View className="rounded-xl border border-divider bg-surface px-4 py-4">
-      <Pressable onPress={() => setOpen(true)} className="flex-row items-center justify-between gap-2">
-        <Text className="body-md flex-1 text-text-primary" numberOfLines={1}>
-          {label}
-        </Text>
-        <View className="flex-row items-center gap-1">
-          <Text className="body-md text-text-secondary" numberOfLines={1}>
-            {value}
-          </Text>
-          <MaterialCommunityIcons name="chevron-down" size={20} color={colors.neutral.textSecondary} />
-        </View>
-      </Pressable>
-
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <Pressable
-          onPress={() => setOpen(false)}
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}
-        >
-          <Pressable
-            onPress={() => {}}
-            style={{
-              backgroundColor: colors.neutral.surface,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-            }}
-            className="gap-2 p-6"
-          >
-            <Text className="heading-4 mb-2 text-text-primary">{label}</Text>
-            {options.map((option) => (
-              <Pressable
-                key={option}
-                onPress={() => {
-                  onChange(option);
-                  setOpen(false);
-                }}
-                className="border-b border-divider py-3"
-              >
-                <Text className={`body-md ${option === value ? "text-brand-yellow" : "text-text-primary"}`}>
-                  {option}
-                </Text>
-              </Pressable>
-            ))}
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </View>
-  );
-}
-
-type SettingsToggleRowProps = {
-  title: string;
-  subtitle: string;
-  value: boolean;
-  onValueChange: (value: boolean) => void;
-};
-
-function SettingsToggleRow({ title, subtitle, value, onValueChange }: SettingsToggleRowProps) {
-  return (
-    <View className="flex-row items-center justify-between rounded-xl border border-divider bg-surface px-4 py-4">
-      <View className="flex-1 gap-1 pr-3">
-        <Text className="body-md text-text-primary">{title}</Text>
-        <Text className="body-sm text-text-secondary">{subtitle}</Text>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
-        thumbColor={colors.brand.white}
-      />
-    </View>
-  );
-}
+// The keys are what the wizard stores (and crew-ready.tsx reads); the labels are just shorter to fit a row.
+const VISIBILITY_OPTIONS = [
+  { key: "Public", label: "Public" },
+  { key: "Private", label: "Private" },
+] as const;
+const WHO_CAN_JOIN_OPTIONS = [
+  { key: "Anyone", label: "Anyone" },
+  { key: "Invite Only", label: "Invite only" },
+  { key: "Approval Required", label: "Approval" },
+] as const;
+const MAX_MEMBERS_OPTIONS = [
+  { key: "10 Members", label: "10" },
+  { key: "20 Members", label: "20" },
+  { key: "50 Members", label: "50" },
+  { key: "100 Members", label: "100" },
+] as const;
 
 export default function CrewSettingsScreen() {
   const { crewName } = useLocalSearchParams<{ crewName?: string }>();
   const setCrewData = useOnboardingStore((state) => state.setCrewData);
 
-  const [visibility, setVisibility] = useState<string>(VISIBILITY_OPTIONS[0]);
-  const [whoCanJoin, setWhoCanJoin] = useState<string>(WHO_CAN_JOIN_OPTIONS[0]);
+  const [visibility, setVisibility] = useState<string>(VISIBILITY_OPTIONS[0].key);
+  const [whoCanJoin, setWhoCanJoin] = useState<string>(WHO_CAN_JOIN_OPTIONS[0].key);
   const [allowChallenges, setAllowChallenges] = useState(true);
   const [allowInvitations, setAllowInvitations] = useState(true);
-  const [maxMembers, setMaxMembers] = useState<string>(MAX_MEMBERS_OPTIONS[1]);
+  const [maxMembers, setMaxMembers] = useState<string>(MAX_MEMBERS_OPTIONS[1].key);
 
   function handleContinue() {
     setCrewData({ visibility, whoCanJoin, allowChallenges, allowInvitations, maxMembers });
@@ -113,71 +43,24 @@ export default function CrewSettingsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <ScrollView className="flex-1" contentContainerClassName="px-6 pb-6 pt-4" showsVerticalScrollIndicator={false}>
-        <Pressable
-          onPress={() => goBack()}
-          hitSlop={8}
-          className="mb-2 h-9 w-9 items-center justify-center rounded-full border border-divider"
-        >
-          <Ionicons name="chevron-back" size={20} color={colors.neutral.textPrimary} />
-        </Pressable>
+    <OnboardingScreen progress={crewProgress("settings")} title="Crew Settings" subtitle="Customize your crew preferences." footer={<PrimaryButton label="Continue" onPress={handleContinue} />}>
+      <View className="gap-2">
+        <FieldLabel>Crew visibility</FieldLabel>
+        <SegmentedField options={VISIBILITY_OPTIONS} value={visibility as (typeof VISIBILITY_OPTIONS)[number]["key"]} onChange={setVisibility} />
+      </View>
+      <View className="gap-2">
+        <FieldLabel>Who can join</FieldLabel>
+        <SegmentedField options={WHO_CAN_JOIN_OPTIONS} value={whoCanJoin as (typeof WHO_CAN_JOIN_OPTIONS)[number]["key"]} onChange={setWhoCanJoin} />
+      </View>
+      <View className="gap-2">
+        <FieldLabel>Max members</FieldLabel>
+        <SegmentedField options={MAX_MEMBERS_OPTIONS} value={maxMembers as (typeof MAX_MEMBERS_OPTIONS)[number]["key"]} onChange={setMaxMembers} />
+      </View>
 
-        <View className="items-center gap-2">
-          <Animated.Text
-            entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-            className="font-body-bold text-3xl text-center text-text-primary"
-          >
-            Crew Settings
-          </Animated.Text>
-          <Animated.Text
-            entering={FadeInUp.delay(80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-            className="font-body-medium text-lg text-center text-text-secondary"
-          >
-            Customize your crew{"\n"}preferences.
-          </Animated.Text>
-        </View>
-
-        <Animated.View
-          entering={FadeInUp.delay(150).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-          className="mt-6 gap-3"
-        >
-          <SettingsSelectRow
-            label="Crew Visibility"
-            value={visibility}
-            options={VISIBILITY_OPTIONS}
-            onChange={setVisibility}
-          />
-          <SettingsSelectRow
-            label="Who can join"
-            value={whoCanJoin}
-            options={WHO_CAN_JOIN_OPTIONS}
-            onChange={setWhoCanJoin}
-          />
-          <SettingsToggleRow
-            title="Allow Challenges"
-            subtitle="Crew vs Crew challenges"
-            value={allowChallenges}
-            onValueChange={setAllowChallenges}
-          />
-          <SettingsToggleRow
-            title="Allow Invitations"
-            subtitle="Members can invite others"
-            value={allowInvitations}
-            onValueChange={setAllowInvitations}
-          />
-          <SettingsSelectRow
-            label="Max Members"
-            value={maxMembers}
-            options={MAX_MEMBERS_OPTIONS}
-            onChange={setMaxMembers}
-          />
-        </Animated.View>
-
-        <View className="mt-8">
-          <OnboardingFooter label="Continue" activeIndex={4} dotCount={5} onPress={handleContinue} />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <View>
+        <ToggleRow title="Allow Challenges" subtitle="Crew vs Crew challenges" image={navIcons.challenges} value={allowChallenges} onValueChange={setAllowChallenges} />
+        <ToggleRow title="Allow Invitations" subtitle="Members can invite others" image={navIcons.friends} value={allowInvitations} onValueChange={setAllowInvitations} />
+      </View>
+    </OnboardingScreen>
   );
 }

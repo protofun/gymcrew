@@ -1,12 +1,14 @@
 import { useAuth, useSignIn } from "@clerk/expo";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, Text } from "react-native";
+import { Pressable, Text } from "react-native";
+
+import { AuthStatus } from "@/components/AuthStatus";
+import { PrimaryButton } from "@/components/PrimaryButton";
 
 import { waitForAuthToken } from "@/lib/api";
 import { getClerkErrorMessage } from "@/lib/clerk";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
 
 /**
  * Where `gymcrew://auth-handoff?ticket=...` lands — the deep link minted by the marketing site's
@@ -60,39 +62,29 @@ export default function AuthHandoffScreen() {
 
   if (!ticket) {
     return (
-      <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.neutral.background, gap: 12, padding: 24 }}>
-        <Text className="body-md text-center text-text-secondary">This link is missing what it needs to sign you in.</Text>
-        <Pressable onPress={() => router.replace("/sign-in")} className="rounded-full bg-brand-yellow px-6 py-3">
-          <Text className="body-md font-body-bold text-brand-iron">Go to Sign In</Text>
-        </Pressable>
-      </SafeAreaView>
+      <AuthStatus message="This link is missing what it needs to sign you in.">
+        <PrimaryButton label="Go to Sign In" hideArrow onPress={() => router.replace("/sign-in")} />
+      </AuthStatus>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.neutral.background, gap: 16, padding: 24 }}>
-        <Text className="body-md text-center text-text-secondary">{error}</Text>
-        <Pressable
+      <AuthStatus message={error}>
+        <PrimaryButton
+          label="Try Again"
+          hideArrow
           onPress={() => {
             setError(null);
             setAttempt((n) => n + 1);
           }}
-          className="rounded-full bg-brand-yellow px-6 py-3"
-        >
-          <Text className="body-md font-body-bold text-brand-iron">Try Again</Text>
-        </Pressable>
-        <Pressable onPress={() => router.replace("/sign-in")} hitSlop={8}>
+        />
+        <Pressable onPress={() => router.replace("/sign-in")} hitSlop={8} className="items-center">
           <Text className="body-sm text-brand-yellow">Sign in manually instead</Text>
         </Pressable>
-      </SafeAreaView>
+      </AuthStatus>
     );
   }
 
-  return (
-    <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.neutral.background, gap: 12 }}>
-      <ActivityIndicator size="large" color={colors.brand.yellow} />
-      <Text className="body-sm text-text-secondary">Signing you in…</Text>
-    </SafeAreaView>
-  );
+  return <AuthStatus busy message="Signing you in…" />;
 }

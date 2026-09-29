@@ -32,21 +32,39 @@ export default function BuildCrewLayout() {
   // someone who already has a real Crew waiting for them. Most accounts have no founding crew, so
   // this costs one extra round trip only for the rare founding case; everyone else's picker still
   // shows promptly once both calls resolve (the email push is cheap and usually already in flight).
-  const [hasFoundingCrew, setHasFoundingCrew] = useState(false);
+  //
+  // A fourth: `app/invite/[code].tsx` stashes a code here (`pendingInviteCode`) when someone taps a
+  // real `gymcrew://invite/{code}` link before they have an account — tried FIRST, ahead of the
+  // founding-crew check, since it's a specific, deliberate "I'm joining THIS crew" signal rather
+  // than an email-match guess. A bad/expired code just clears itself and falls through to the
+  // founding-crew check and then the normal picker, instead of getting stuck retrying forever.
+  const [hasResolvedCrew, setHasResolvedCrew] = useState(false);
   const email = user?.primaryEmailAddress?.emailAddress;
+  const pendingInviteCode = useOnboardingStore((state) => state.pendingInviteCode);
   useEffect(() => {
     if (!isSignedIn || hasCompletedCrewSelection || clerkCrewSelected) return;
     (async () => {
+      if (pendingInviteCode) {
+        const result = await useCrewStore.getState().joinCrewByCode(pendingInviteCode);
+        useOnboardingStore.getState().setPendingInviteCode(null);
+        if (result.ok) {
+          useOnboardingStore.getState().setCrewData({ choice: "join" });
+          setHasResolvedCrew(true);
+          completeCrewSelection();
+          return;
+        }
+      }
+
       if (email) {
         await useOnboardingStore.getState().syncEmailToBackend(email);
       }
       await useCrewStore.getState().syncFromServer();
       if (useCrewStore.getState().id) {
-        setHasFoundingCrew(true);
+        setHasResolvedCrew(true);
         completeCrewSelection();
       }
     })();
-  }, [isSignedIn, hasCompletedCrewSelection, clerkCrewSelected, completeCrewSelection, email]);
+  }, [isSignedIn, hasCompletedCrewSelection, clerkCrewSelected, completeCrewSelection, email, pendingInviteCode]);
 
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect href="/onboarding" />;
@@ -54,7 +72,7 @@ export default function BuildCrewLayout() {
   // reachable even after it's already been done once (e.g. picked "Maybe Later," or left a crew
   // later on) — see (tabs)/crew.tsx's empty state, whose "Set Up Your Crew" button lands here.
   if (!(hasCompletedOnboarding || clerkOnboarded)) return <Redirect href="/onboarding" />;
-  if (hasFoundingCrew) return <Redirect href="/home" />;
+  if (hasResolvedCrew) return <Redirect href="/home" />;
 
   return <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }} />;
 }

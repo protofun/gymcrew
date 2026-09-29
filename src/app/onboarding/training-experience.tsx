@@ -1,19 +1,23 @@
-import { useState } from "react";
-import { Pressable, SafeAreaView, Text, View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
 import { router } from "expo-router";
+import { useState } from "react";
+import { View } from "react-native";
+import Animated, { FadeInUp } from "react-native-reanimated";
 import { usePostHog } from "posthog-react-native";
 
-import { OnboardingFooter } from "@/components/OnboardingFooter";
-import { OnboardingHeader } from "@/components/OnboardingHeader";
+import { OnboardingScreen } from "@/components/OnboardingScreen";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { SelectTile } from "@/components/SelectTile";
+import { rankTierImages } from "@/constants/images";
+import { onboardingProgress } from "@/lib/onboarding-steps";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors, spring } from "@/theme";
+import { spring } from "@/theme";
 
+// Each level gets the rank medal it would roughly start at — a first taste of the rank system.
 const EXPERIENCE_LEVELS = [
-  { key: "beginner", label: "Beginner", duration: "0-6 months" },
-  { key: "intermediate", label: "Intermediate", duration: "6 months - 2 years" },
-  { key: "advanced", label: "Advanced", duration: "2 - 5 years" },
-  { key: "elite", label: "Elite", duration: "5+ years" },
+  { key: "beginner", label: "Beginner", duration: "0-6 months", image: rankTierImages.rookie },
+  { key: "intermediate", label: "Intermediate", duration: "6 months - 2 years", image: rankTierImages.bronze },
+  { key: "advanced", label: "Advanced", duration: "2 - 5 years", image: rankTierImages.gold },
+  { key: "elite", label: "Elite", duration: "5+ years", image: rankTierImages.platinum },
 ] as const;
 
 export default function TrainingExperienceScreen() {
@@ -28,30 +32,14 @@ export default function TrainingExperienceScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <View className="flex-1 px-6 pb-6 pt-4">
-        <OnboardingHeader title="Training Experience" subtitle="How experienced are you in the gym?" />
-
-        <Animated.ScrollView entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="flex-1" contentContainerClassName="flex-grow justify-center gap-4 py-6" showsVerticalScrollIndicator={false}>
-          {EXPERIENCE_LEVELS.map((level) => {
-            const active = selected === level.key;
-            return (
-              <Pressable
-                key={level.key}
-                onPress={() => setSelected(level.key)}
-                className={`flex-row items-center justify-between rounded-xl border bg-surface px-4 py-4 ${
-                  active ? "border-brand-yellow" : "border-divider"
-                }`}
-              >
-                <Text className="body-md text-text-primary">{level.label}</Text>
-                <Text className="body-sm text-text-secondary">{level.duration}</Text>
-              </Pressable>
-            );
-          })}
-        </Animated.ScrollView>
-
-        <OnboardingFooter label="Continue" activeIndex={2} onPress={handleContinue} />
+    <OnboardingScreen progress={onboardingProgress("training-experience")} title="Training Experience" subtitle="How experienced are you in the gym?" footer={<PrimaryButton label="Continue" onPress={handleContinue} />}>
+      <View className="gap-3">
+        {EXPERIENCE_LEVELS.map((level, index) => (
+          <Animated.View key={level.key} entering={FadeInUp.delay(380 + index * 80).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}>
+            <SelectTile layout="row" selected={selected === level.key} onPress={() => setSelected(level.key)} title={level.label} caption={level.duration} image={level.image} />
+          </Animated.View>
+        ))}
       </View>
-    </SafeAreaView>
+    </OnboardingScreen>
   );
 }

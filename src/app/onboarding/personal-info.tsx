@@ -1,56 +1,17 @@
-import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, Text, View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
 import { router } from "expo-router";
+import { useState } from "react";
+import { Image } from "react-native";
+import Animated, { ZoomIn } from "react-native-reanimated";
 import { usePostHog } from "posthog-react-native";
 
-import { FormField } from "@/components/FormField";
-import { OnboardingFooter } from "@/components/OnboardingFooter";
-import { OnboardingHeader } from "@/components/OnboardingHeader";
+import { AuthField } from "@/components/AuthField";
+import { OnboardingScreen } from "@/components/OnboardingScreen";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { images } from "@/constants/images";
 import { api, isApiConfigured } from "@/lib/api";
+import { onboardingProgress } from "@/lib/onboarding-steps";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors, spring } from "@/theme";
-
-function CameraIcon() {
-  return (
-    <View style={{ width: 26, height: 24 }}>
-      <View
-        style={{
-          position: "absolute",
-          top: -3,
-          left: 6,
-          width: 10,
-          height: 4,
-          borderTopLeftRadius: 3,
-          borderTopRightRadius: 3,
-          backgroundColor: colors.neutral.textPrimary,
-        }}
-      />
-      <View
-        style={{
-          marginTop: 4,
-          width: 26,
-          height: 20,
-          borderRadius: 6,
-          borderWidth: 2,
-          borderColor: colors.neutral.textPrimary,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <View
-          style={{
-            width: 12,
-            height: 12,
-            borderRadius: 6,
-            borderWidth: 2,
-            borderColor: colors.neutral.textPrimary,
-          }}
-        />
-      </View>
-    </View>
-  );
-}
+import { spring } from "@/theme";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
@@ -109,54 +70,40 @@ export default function PersonalInfoScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View className="flex-1 px-6 pb-6 pt-4">
-          <OnboardingHeader title="Personal Info" subtitle="Tell us a bit about yourself." />
-
-          <Animated.ScrollView
-            entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-            className="flex-1"
-            contentContainerClassName="flex-grow justify-center gap-6 py-6"
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <View className="gap-1">
-              <FormField
-                label="Full Name"
-                placeholder="Enter your name"
-                value={fullName}
-                onChangeText={(text) => {
-                  setFullName(text);
-                  setErrors((prev) => ({ ...prev, fullName: undefined }));
-                }}
-              />
-              {errors.fullName && <Text className="body-sm text-error">{errors.fullName}</Text>}
-            </View>
-            <View className="gap-1">
-              <FormField
-                label="Username"
-                placeholder="Choose a username"
-                autoCapitalize="none"
-                value={username}
-                onChangeText={(text) => {
-                  setUsername(text.toLowerCase());
-                  setErrors((prev) => ({ ...prev, username: undefined }));
-                }}
-              />
-              {errors.username && <Text className="body-sm text-error">{errors.username}</Text>}
-            </View>
-            <View className="gap-2">
-              <Text className="body-md text-text-primary">Profile Picture</Text>
-              <Pressable className="h-20 w-20 items-center justify-center self-center rounded-full border border-divider bg-surface">
-                <CameraIcon />
-              </Pressable>
-            </View>
-          </Animated.ScrollView>
-
-          <OnboardingFooter label="Continue" activeIndex={2} onPress={handleContinue} loading={checkingUsername} />
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <OnboardingScreen
+      progress={onboardingProgress("personal-info")}
+      title="Personal Info"
+      subtitle="Tell us a bit about yourself."
+      hero={
+        <Animated.View entering={ZoomIn.springify().damping(spring.press.damping).mass(spring.press.mass)} className="items-start">
+          <Image source={images.iconGorilla} resizeMode="cover" style={{ width: 84, height: 84, borderRadius: 42 }} />
+        </Animated.View>
+      }
+      footer={<PrimaryButton label="Continue" loading={checkingUsername} onPress={handleContinue} />}
+    >
+      <AuthField
+        label="Full Name"
+        placeholders={["Alex Johnson", "Sam Rivera", "Your name"]}
+        autoComplete="name"
+        value={fullName}
+        error={errors.fullName}
+        onChangeText={(text) => {
+          setFullName(text);
+          setErrors((prev) => ({ ...prev, fullName: undefined }));
+        }}
+      />
+      <AuthField
+        label="Username"
+        placeholders={["ironalex", "liftqueen_22", "pick a username"]}
+        autoCapitalize="none"
+        autoCorrect={false}
+        value={username}
+        error={errors.username}
+        onChangeText={(text) => {
+          setUsername(text.toLowerCase());
+          setErrors((prev) => ({ ...prev, username: undefined }));
+        }}
+      />
+    </OnboardingScreen>
   );
 }

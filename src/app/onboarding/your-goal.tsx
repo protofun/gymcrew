@@ -1,23 +1,25 @@
-import { useState } from "react";
-import { Pressable, SafeAreaView, Text, View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useState } from "react";
+import { View } from "react-native";
+import Animated, { FadeInUp } from "react-native-reanimated";
 import { usePostHog } from "posthog-react-native";
 
-import { OnboardingFooter } from "@/components/OnboardingFooter";
-import { OnboardingHeader } from "@/components/OnboardingHeader";
+import { OnboardingScreen } from "@/components/OnboardingScreen";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { SelectTile } from "@/components/SelectTile";
+import { navIcons, nutritionIcons } from "@/constants/images";
+import { onboardingProgress } from "@/lib/onboarding-steps";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors, spring } from "@/theme";
+import { spring } from "@/theme";
 
 const GOALS = [
-  { key: "build-muscle", label: "Build Muscle", icon: "dumbbell" },
-  { key: "lose-weight", label: "Lose Weight", icon: "fire" },
-  { key: "get-stronger", label: "Get Stronger", icon: "lightning-bolt-outline" },
-  { key: "improve-fitness", label: "Improve Fitness", icon: "heart-outline" },
-  { key: "stay-healthy", label: "Stay Healthy", icon: "leaf" },
-  { key: "other", label: "Other", icon: "dots-horizontal" },
-] as const satisfies readonly { key: string; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[];
+  { key: "build-muscle", label: "Build Muscle", image: navIcons.muscles },
+  { key: "lose-weight", label: "Lose Weight", image: navIcons.nutrition },
+  { key: "get-stronger", label: "Get Stronger", image: navIcons.prs },
+  { key: "improve-fitness", label: "Improve Fitness", image: navIcons.streak },
+  { key: "stay-healthy", label: "Stay Healthy", image: navIcons.bodyLog },
+  { key: "other", label: "Other", image: nutritionIcons.more },
+] as const;
 
 export default function YourGoalScreen() {
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
@@ -31,36 +33,14 @@ export default function YourGoalScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <View className="flex-1 px-6 pb-6 pt-4">
-        <OnboardingHeader title="Your Goal" subtitle="What do you want to achieve?" />
-
-        <Animated.ScrollView entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} className="flex-1" contentContainerClassName="flex-grow justify-center py-6" showsVerticalScrollIndicator={false}>
-          <View className="flex-row flex-wrap justify-between gap-y-4">
-            {GOALS.map((goal) => {
-              const active = selected === goal.key;
-              return (
-                <Pressable
-                  key={goal.key}
-                  onPress={() => setSelected(goal.key)}
-                  className={`w-[48%] items-center gap-3 rounded-xl border bg-surface py-6 ${
-                    active ? "border-brand-yellow" : "border-divider"
-                  }`}
-                >
-                  <MaterialCommunityIcons
-                    name={goal.icon}
-                    size={28}
-                    color={active ? colors.brand.yellow : colors.neutral.textPrimary}
-                  />
-                  <Text className="body-md text-text-primary">{goal.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </Animated.ScrollView>
-
-        <OnboardingFooter label="Continue" activeIndex={1} onPress={handleContinue} />
+    <OnboardingScreen progress={onboardingProgress("your-goal")} title="Your Goal" subtitle="What do you want to achieve?" footer={<PrimaryButton label="Continue" onPress={handleContinue} />}>
+      <View className="flex-row flex-wrap justify-between gap-y-3.5">
+        {GOALS.map((goal, index) => (
+          <Animated.View key={goal.key} entering={FadeInUp.delay(380 + index * 70).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)} style={{ width: "48%" }}>
+            <SelectTile selected={selected === goal.key} onPress={() => setSelected(goal.key)} title={goal.label} image={goal.image} />
+          </Animated.View>
+        ))}
       </View>
-    </SafeAreaView>
+    </OnboardingScreen>
   );
 }

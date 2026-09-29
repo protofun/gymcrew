@@ -81,6 +81,12 @@ type OnboardingStore = {
   crew: Partial<CrewData>;
   hasCompletedOnboarding: boolean;
   hasCompletedCrewSelection: boolean;
+  /** Set by `app/invite/[code].tsx` when a `gymcrew://invite/{code}` link is opened by someone not
+   * signed in yet — carried through the entire sign-up + wizard (persisted, since that can span app
+   * restarts) so `build-crew/_layout.tsx` can auto-join this crew once a session exists, instead of
+   * asking "create or join a crew" when they already answered that by tapping the link. `null` once
+   * consumed (joined) or abandoned (the code was bad, or they finished crew selection some other way). */
+  pendingInviteCode: string | null;
   /** A standalone app preference, not part of the onboarding wizard's own data — kept here since
    * this store already persists globally and every screen already reads profile info from it. */
   weightUnit: WeightUnit;
@@ -98,6 +104,7 @@ type OnboardingStore = {
   completeCrewSelection: () => void;
   /** Sends the user back through the crew choose/create/join flow — e.g. after leaving their crew. */
   resetCrewSelection: () => void;
+  setPendingInviteCode: (code: string | null) => void;
   setWeightUnit: (unit: WeightUnit) => void;
   /** Pulls the real backend profile once a backend is configured and reachable — both the "core"
    * columns (fast, queryable) and the complete onboarding-answers blob — merging in only the
@@ -136,6 +143,7 @@ const INITIAL_ONBOARDING_STATE = {
   crew: {},
   hasCompletedOnboarding: false,
   hasCompletedCrewSelection: false,
+  pendingInviteCode: null as string | null,
   weightUnit: "kg" as const,
 };
 
@@ -180,6 +188,7 @@ export const useOnboardingStore = create<OnboardingStore>()(
         void markClerkAccountCrewSelected();
       },
       resetCrewSelection: () => set({ hasCompletedCrewSelection: false }),
+      setPendingInviteCode: (code) => set({ pendingInviteCode: code }),
       setWeightUnit: (weightUnit) => {
         set({ weightUnit });
         pushOnboardingBlob(get);

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
+import { FieldLabel } from "@/components/OnboardingScreen";
 import { colors } from "@/theme";
 
 type SearchableSelectFieldProps = {
@@ -9,9 +10,12 @@ type SearchableSelectFieldProps = {
   value: string;
   options: readonly string[];
   onChange: (value: string) => void;
+  /** "wizard" is the look of the sign-up steps and crew setup: small caps label, rounder field, yellow chevron. */
+  variant?: "default" | "wizard";
 };
 
-export function SearchableSelectField({ label, value, options, onChange }: SearchableSelectFieldProps) {
+export function SearchableSelectField({ label, value, options, onChange, variant = "default" }: SearchableSelectFieldProps) {
+  const wizard = variant === "wizard";
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const filtered = options.filter((option) => option.toLowerCase().includes(query.toLowerCase()));
@@ -24,13 +28,15 @@ export function SearchableSelectField({ label, value, options, onChange }: Searc
 
   return (
     <View className="gap-2">
-      <Text className="body-md text-text-primary">{label}</Text>
+      {wizard ? <FieldLabel>{label}</FieldLabel> : <Text className="body-md text-text-primary">{label}</Text>}
       <Pressable
         onPress={() => setOpen(true)}
-        className="flex-row items-center justify-between rounded-xl border border-divider bg-surface px-4 py-4"
+        className={wizard ? "flex-row items-center justify-between rounded-2xl border-[1.5px] border-divider bg-surface px-4 py-4" : "flex-row items-center justify-between rounded-xl border border-divider bg-surface px-4 py-4"}
       >
-        <Text className="body-md text-text-primary">{value}</Text>
-        <MaterialCommunityIcons name="chevron-down" size={20} color={colors.neutral.textSecondary} />
+        <Text className={wizard ? "body-md flex-1 pr-2 font-body-semibold text-text-primary" : "body-md text-text-primary"} numberOfLines={1}>
+          {value}
+        </Text>
+        <MaterialCommunityIcons name="chevron-down" size={20} color={wizard ? colors.brand.yellow : colors.neutral.textSecondary} />
       </Pressable>
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>

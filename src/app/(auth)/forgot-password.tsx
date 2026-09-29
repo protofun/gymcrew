@@ -2,10 +2,12 @@ import { useSignIn } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { Pressable } from "react-native";
 
-import { AuthHeader } from "@/components/AuthHeader";
-import { FormField } from "@/components/FormField";
+import { AuthField, FormError } from "@/components/AuthField";
+import { AuthHero } from "@/components/AuthHero";
+import { OnboardingScreen } from "@/components/OnboardingScreen";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { VerificationCodeModal } from "@/components/VerificationCodeModal";
 import { waitForAuthToken } from "@/lib/api";
 import { getClerkErrorMessage } from "@/lib/clerk";
@@ -84,70 +86,33 @@ export default function ForgotPasswordScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerClassName="gap-6 px-6 pb-10 pt-4" keyboardShouldPersistTaps="handled">
-          {!resettingPassword ? (
-            <>
-              <AuthHeader title="Forgot password?" subtitle="We'll send you a reset code" />
-
-              <View className="-mt-8 gap-4">
-                <FormField
-                  label="Email"
-                  placeholder="alex@gmail.com"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                />
-                {formError && <Text className="body-sm text-error">{formError}</Text>}
-              </View>
-
-              <Pressable
-                onPress={handleSendCode}
-                disabled={submitting}
-                className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4"
-                style={({ pressed }) => ({ opacity: pressed || submitting ? 0.85 : 1 })}
-              >
-                <Text className="heading-4 text-brand-iron">{submitting ? "Sending..." : "Send Reset Code"}</Text>
-                <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
+    <>
+      {!resettingPassword ? (
+        <OnboardingScreen title="Forgot password?" subtitle="We'll send you a reset code" hero={<AuthHero />}>
+          <AuthField label="Email" placeholders={["alex@gmail.com", "you@gym.com"]} keyboardType="email-address" autoCapitalize="none" autoComplete="email" value={email} onChangeText={setEmail} />
+          <FormError message={formError} />
+          <PrimaryButton label="Send Reset Code" loading={submitting} onPress={handleSendCode} />
+        </OnboardingScreen>
+      ) : (
+        <OnboardingScreen title="Set a new password" subtitle="Choose a new password for your account" hero={<AuthHero />}>
+          <AuthField
+            label="New Password"
+            placeholders={["Enter your new password"]}
+            secureTextEntry={!showPassword}
+            value={newPassword}
+            onChangeText={setNewPassword}
+            right={
+              <Pressable onPress={() => setShowPassword((prev) => !prev)} hitSlop={8} accessibilityLabel={showPassword ? "Hide password" : "Show password"}>
+                <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={colors.brand.yellow} />
               </Pressable>
-            </>
-          ) : (
-            <>
-              <AuthHeader title="Set a new password" subtitle="Choose a new password for your account" />
-
-              <View className="-mt-8 gap-4">
-                <FormField
-                  label="New Password"
-                  placeholder="Enter your new password"
-                  secureTextEntry={!showPassword}
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  rightAdornment={
-                    <Pressable onPress={() => setShowPassword((prev) => !prev)} hitSlop={8}>
-                      <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={colors.brand.yellow} />
-                    </Pressable>
-                  }
-                />
-                {formError && <Text className="body-sm text-error">{formError}</Text>}
-              </View>
-
-              <Pressable
-                onPress={handleSetNewPassword}
-                disabled={submitting}
-                className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4"
-                style={({ pressed }) => ({ opacity: pressed || submitting ? 0.85 : 1 })}
-              >
-                <Text className="heading-4 text-brand-iron">{submitting ? "Saving..." : "Save New Password"}</Text>
-                <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
-              </Pressable>
-            </>
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+            }
+          />
+          <FormError message={formError} />
+          <PrimaryButton label="Save New Password" loading={submitting} onPress={handleSetNewPassword} />
+        </OnboardingScreen>
+      )}
 
       <VerificationCodeModal visible={verifying} email={email || "your email"} onClose={() => setVerifying(false)} onComplete={handleVerifyCode} />
-    </SafeAreaView>
+    </>
   );
 }

@@ -1,45 +1,37 @@
-import { useState } from "react";
-import { SafeAreaView, Text, View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useState } from "react";
+import { Text, View } from "react-native";
 import { usePostHog } from "posthog-react-native";
 
-import { OnboardingFooter } from "@/components/OnboardingFooter";
-import { OnboardingHeader } from "@/components/OnboardingHeader";
-import { Stepper } from "@/components/Stepper";
-import { UnitToggle } from "@/components/UnitToggle";
-import { useUnitToggle } from "@/hooks/use-unit-toggle";
+import { MetricRows } from "@/components/MetricRows";
+import { FieldLabel, OnboardingScreen } from "@/components/OnboardingScreen";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { ElasticSlider } from "@/components/ui/micro-interactions/elastic-slider";
+import { NumberFlow } from "@/components/ui/molecules/number-flow";
+import { exerciseImages } from "@/constants/images";
+import { onboardingProgress } from "@/lib/onboarding-steps";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors, spring } from "@/theme";
+import { colors, fontFamily } from "@/theme";
 
 const KG_TO_LB = 2.20462;
-
-function liftStepperProps(unit: string) {
-  return {
-    step: unit === "kg" ? 2.5 : 5,
-    min: 0,
-    max: unit === "kg" ? 300 : 660,
-    decimals: unit === "kg" ? 1 : 0,
-  };
-}
 
 export default function YourMetricsScreen() {
   const setOnboardingData = useOnboardingStore((state) => state.setOnboardingData);
   const posthog = usePostHog();
-  const benchPress = useUnitToggle({ initialValue: 80, units: ["kg", "lb"], factor: KG_TO_LB });
-  const squat = useUnitToggle({ initialValue: 100, units: ["kg", "lb"], factor: KG_TO_LB });
-  const deadlift = useUnitToggle({ initialValue: 120, units: ["kg", "lb"], factor: KG_TO_LB });
+  // The lifts are kept in kg and only shown in the chosen unit, so switching it never loses precision.
+  const [unit, setUnit] = useState<"kg" | "lb">("kg");
+  const [lifts, setLifts] = useState({ benchPress: 80, squat: 100, deadlift: 120 });
   const [bodyFat, setBodyFat] = useState(15);
 
-  function toKg(unitValue: { value: number; unit: string }) {
-    return unitValue.unit === "kg" ? unitValue.value : unitValue.value / KG_TO_LB;
-  }
+  const shown = (kg: number) => (unit === "kg" ? kg : Math.round(kg * KG_TO_LB));
+  const common = { unit, min: 0, max: unit === "kg" ? 300 : 660, step: unit === "kg" ? 2.5 : 5, decimals: unit === "kg" ? 1 : 0, unitOptions: ["kg", "lb"] as const, onUnitChange: (next: string) => setUnit(next === "lb" ? "lb" : "kg") };
 
   function handleContinue() {
     setOnboardingData({
-      benchPress1RM: toKg(benchPress),
-      squat1RM: toKg(squat),
-      deadlift1RM: toKg(deadlift),
+      benchPress1RM: lifts.benchPress,
+      squat1RM: lifts.squat,
+      deadlift1RM: lifts.deadlift,
       bodyFatPercent: bodyFat,
     });
     posthog.capture("onboarding_metrics_completed");
@@ -47,50 +39,36 @@ export default function YourMetricsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <View className="flex-1 px-6 pb-6 pt-4">
-        <OnboardingHeader title="Your Metrics" subtitle="Let's track your starting point." />
+    <OnboardingScreen progress={onboardingProgress("your-metrics")} title="Your Metrics" subtitle="Let's track your starting point — your best single rep on each lift." footer={<PrimaryButton label="Continue" onPress={handleContinue} />}>
+      <MetricRows
+        onChange={(key, value) => setLifts((prev) => ({ ...prev, [key]: unit === "kg" ? value : value / KG_TO_LB }))}
+        rows={[
+          { key: "benchPress", label: "Bench Press", value: shown(lifts.benchPress), image: exerciseImages.benchPress, ...common },
+          { key: "squat", label: "Squat", value: shown(lifts.squat), image: exerciseImages.squat, ...common },
+          { key: "deadlift", label: "Deadlift", value: shown(lifts.deadlift), image: exerciseImages.deadlift, ...common },
+        ]}
+      />
 
-        <Animated.ScrollView
-          entering={FadeInUp.delay(200).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-          className="flex-1"
-          contentContainerClassName="flex-grow justify-center gap-6 py-6"
-          showsVerticalScrollIndicator={false}
-        >
-          <Stepper
-            label="Bench Press (1RM)"
-            value={benchPress.value}
-            onChange={benchPress.setValue}
-            {...liftStepperProps(benchPress.unit)}
-            rightAdornment={<UnitToggle unit={benchPress.unit} onPress={benchPress.toggle} />}
-          />
-          <Stepper
-            label="Squat (1RM)"
-            value={squat.value}
-            onChange={squat.setValue}
-            {...liftStepperProps(squat.unit)}
-            rightAdornment={<UnitToggle unit={squat.unit} onPress={squat.toggle} />}
-          />
-          <Stepper
-            label="Deadlift (1RM)"
-            value={deadlift.value}
-            onChange={deadlift.setValue}
-            {...liftStepperProps(deadlift.unit)}
-            rightAdornment={<UnitToggle unit={deadlift.unit} onPress={deadlift.toggle} />}
-          />
-          <Stepper
-            label="Body Fat % (optional)"
-            value={bodyFat}
-            onChange={setBodyFat}
-            step={1}
-            min={3}
-            max={50}
-            rightAdornment={<Text className="body-md text-text-secondary">%</Text>}
-          />
-        </Animated.ScrollView>
-
-        <OnboardingFooter label="Continue" activeIndex={2} onPress={handleContinue} />
+      <View className="gap-3">
+        <View className="flex-row items-baseline justify-between">
+          <FieldLabel>Body fat (optional)</FieldLabel>
+          <View className="flex-row items-baseline gap-1">
+            <NumberFlow value={bodyFat} fontSize={26} color={colors.brand.yellow} fontWeight="800" />
+            <Text style={{ fontFamily: fontFamily.bodySemiBold, fontSize: 13, color: colors.neutral.textSecondary }}>%</Text>
+          </View>
+        </View>
+        <ElasticSlider.Root value={bodyFat} min={3} max={50} step={1} isStepped onValueChange={setBodyFat} style={{ width: "100%" }}>
+          <ElasticSlider.Leading>
+            <Ionicons name="remove" size={16} color={colors.neutral.textSecondary} />
+          </ElasticSlider.Leading>
+          <ElasticSlider.Track color={colors.neutral.divider}>
+            <ElasticSlider.Fill color={colors.brand.yellow} />
+          </ElasticSlider.Track>
+          <ElasticSlider.Trailing>
+            <Ionicons name="add" size={16} color={colors.neutral.textSecondary} />
+          </ElasticSlider.Trailing>
+        </ElasticSlider.Root>
       </View>
-    </SafeAreaView>
+    </OnboardingScreen>
   );
 }

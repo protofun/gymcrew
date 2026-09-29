@@ -1,53 +1,41 @@
-import { Text, SafeAreaView, View } from "react-native";
-import Animated, { FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
 import { router } from "expo-router";
+import { Image, View } from "react-native";
+import Animated, { ZoomIn } from "react-native-reanimated";
 import { usePostHog } from "posthog-react-native";
 
-import { OnboardingFooter } from "@/components/OnboardingFooter";
+import { OnboardingScreen } from "@/components/OnboardingScreen";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { images } from "@/constants/images";
-import { colors, spring } from "@/theme";
+import { onboardingProgress } from "@/lib/onboarding-steps";
+import { spring } from "@/theme";
 
 export default function OnboardingWelcomeScreen() {
   const posthog = usePostHog();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.neutral.background }}>
-      <View className="flex-1 px-6 pb-6 pt-4">
-        <View className="gap-2">
-          <Animated.Text
-            entering={FadeInDown.springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-            className="font-body-bold text-5xl leading-none"
-            style={{ fontStyle: "italic", transform: [{ skewX: "-10deg" }] }}
-          >
-            <Text className="text-text-primary">Welcome to{"\n"}</Text>
-            <Text className="text-brand-yellow">GymCrew</Text>
-          </Animated.Text>
-          <Animated.Text
-            entering={FadeInUp.delay(180).springify().damping(spring.entranceBouncy.damping).mass(spring.entranceBouncy.mass)}
-            className="font-body-medium text-xl leading-snug text-text-secondary"
-          >
-            Let&apos;s set up your profile and start your journey.
-          </Animated.Text>
-        </View>
-
-        <View className="flex-1 items-center justify-center">
-          <Animated.Image
-            entering={ZoomIn.delay(150).springify().damping(spring.press.damping).mass(spring.press.mass)}
-            source={images.mascotFlexing}
-            style={{ width: 382, height: 382 * (205 / 250) }}
-            resizeMode="contain"
-          />
-        </View>
-
-        <OnboardingFooter
+    <OnboardingScreen
+      hideBack
+      scroll={false}
+      centered
+      progress={onboardingProgress("welcome")}
+      title="Welcome to GymCrew"
+      subtitle="Let's set up your profile and start your journey."
+      hero={
+        <Animated.View entering={ZoomIn.delay(150).springify().damping(spring.press.damping).mass(spring.press.mass)} className="items-center">
+          <View style={{ width: 230, height: 230 }} className="items-center justify-end overflow-hidden">
+            <Image source={images.mascotFlexing} resizeMode="contain" style={{ width: 250, height: 250 * (205 / 250) }} />
+          </View>
+        </Animated.View>
+      }
+      footer={
+        <PrimaryButton
           label="Let's Go"
-          activeIndex={1}
           onPress={() => {
             posthog.capture("onboarding_welcome_completed");
             router.push("/onboarding/personal-info");
           }}
         />
-      </View>
-    </SafeAreaView>
+      }
+    />
   );
 }

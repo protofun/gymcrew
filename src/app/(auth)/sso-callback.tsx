@@ -1,8 +1,7 @@
 import { useEffect } from "react";
-import { ActivityIndicator, SafeAreaView } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 
-import { colors } from "@/theme";
+import { AuthStatus } from "@/components/AuthStatus";
 
 /**
  * Where Clerk's SSO flow (Google/Facebook/Apple) redirects after the OAuth provider hands control
@@ -17,9 +16,5 @@ export default function SSOCallbackScreen() {
     WebBrowser.maybeCompleteAuthSession();
   }, []);
 
-  return (
-    <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.neutral.background }}>
-      <ActivityIndicator size="large" color={colors.brand.yellow} />
-    </SafeAreaView>
-  );
+  return <AuthStatus busy />;
 }
