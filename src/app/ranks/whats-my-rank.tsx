@@ -1,20 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import * as Sharing from "expo-sharing";
-import { type RefObject, useMemo, useRef, useState } from "react";
-import { Platform, Pressable, ScrollView, Share, Text, TextInput, View } from "react-native";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Line, Path } from "react-native-svg";
-import { captureRef } from "react-native-view-shot";
 import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
 import { DatePickerModal } from "@/components/DatePickerModal";
 import { ExerciseInstructionsModal } from "@/components/ExerciseInstructionsModal";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
+import { buildNumberRange, NumberArcPickerModal } from "@/components/NumberArcPickerModal";
 import { RankBadge } from "@/components/RankBadge";
-import { RankRevealCard } from "@/components/RankRevealCard";
+import { RankUpReveal } from "@/components/RankUpReveal";
 import { TierPickerSheet } from "@/components/TierPickerSheet";
 import type { Exercise } from "@/data/exercises";
 import { useWeightUnit } from "@/hooks/use-weight-unit";
@@ -30,6 +29,7 @@ import {
   type HypotheticalRankResult,
   type SimulationPoint,
 } from "@/lib/rank-simulator";
+import { shareViewAsImage } from "@/lib/share-image";
 import { displayWeight, formatWeight, lbsToKg } from "@/lib/units";
 import { ensureExerciseTrackedOnRanksBoard } from "@/lib/workout-finish";
 import { estimateOneRepMax } from "@/lib/workout-metrics";
@@ -122,6 +122,36 @@ function LogStep({
   );
   const [repsInput, setRepsInput] = useState(lift.bestReps > 0 ? String(lift.bestReps) : "");
 
+  // Tapping either field opens the same Reacticx `arc-list` wheel picker `ExerciseSetRow` uses for
+  // logging a set mid-workout ("hier met whats my rank... de arc fan gebruiken net als bij het
+  // loggen van een exercise") — one shared component (`NumberArcPickerModal`), not a second
+  // lookalike. Typing directly is still fully available via each picker's own "Type manually" row.
+  const [weightPickerOpen, setWeightPickerOpen] = useState(false);
+  const [weightEditing, setWeightEditing] = useState(false);
+  const [weightRangeBase, setWeightRangeBase] = useState<number | null>(null);
+  const weightInputRef = useRef<TextInput>(null);
+  const [repsPickerOpen, setRepsPickerOpen] = useState(false);
+  const [repsEditing, setRepsEditing] = useState(false);
+  const [repsRangeBase, setRepsRangeBase] = useState<number | null>(null);
+  const repsInputRef = useRef<TextInput>(null);
+
+  const weightValues = useMemo(() => buildNumberRange(weightRangeBase ?? 60, 40, 60), [weightRangeBase]);
+  const weightIndex = Math.max(0, weightValues.indexOf(Math.round(weightRangeBase ?? 60)));
+  const repsValues = useMemo(() => buildNumberRange(repsRangeBase ?? 8, 8, 20), [repsRangeBase]);
+  const repsIndex = Math.max(0, repsValues.indexOf(Math.round(repsRangeBase ?? 8)));
+
+  function openWeightPicker() {
+    const current = parseFloat(weightInput.replace(",", "."));
+    setWeightRangeBase(Number.isFinite(current) ? current : 60);
+    setWeightPickerOpen(true);
+  }
+
+  function openRepsPicker() {
+    const current = parseInt(repsInput, 10);
+    setRepsRangeBase(Number.isFinite(current) ? current : 8);
+    setRepsPickerOpen(true);
+  }
+
   // Blank still parses to NaN (invalid) — only an explicit "0" (or the bodyweight default above)
   // counts as a real zero-weight entry. Entered in the user's chosen unit; converted to kg (the
   // canonical storage unit) before it ever reaches rank math or `onSubmit`.
@@ -149,25 +179,37 @@ function LogStep({
       <View className="flex-row gap-3">
         <View className="flex-1 gap-1.5">
           <Text className="caption font-body-semibold text-text-secondary">WEIGHT ({weightUnit.toUpperCase()})</Text>
-          <TextInput
-            value={weightInput}
-            onChangeText={setWeightInput}
-            keyboardType="decimal-pad"
-            placeholder="0"
-            placeholderTextColor={colors.neutral.textSecondary}
-            className="heading-4 rounded-2xl border border-divider bg-surface px-4 py-3 text-text-primary"
-          />
+          <View style={{ position: "relative" }}>
+            <TextInput
+              ref={weightInputRef}
+              value={weightInput}
+              onChangeText={setWeightInput}
+              onBlur={() => setWeightEditing(false)}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              placeholderTextColor={colors.neutral.textSecondary}
+              style={{ backgroundColor: colors.neutral.surfaceElevated, borderRadius: 16 }}
+              className="heading-4 px-4 py-3 text-text-primary"
+            />
+            {!weightEditing && <Pressable onPress={openWeightPicker} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />}
+          </View>
         </View>
         <View className="flex-1 gap-1.5">
           <Text className="caption font-body-semibold text-text-secondary">REPS</Text>
-          <TextInput
-            value={repsInput}
-            onChangeText={setRepsInput}
-            keyboardType="number-pad"
-            placeholder="0"
-            placeholderTextColor={colors.neutral.textSecondary}
-            className="heading-4 rounded-2xl border border-divider bg-surface px-4 py-3 text-text-primary"
-          />
+          <View style={{ position: "relative" }}>
+            <TextInput
+              ref={repsInputRef}
+              value={repsInput}
+              onChangeText={setRepsInput}
+              onBlur={() => setRepsEditing(false)}
+              keyboardType="number-pad"
+              placeholder="0"
+              placeholderTextColor={colors.neutral.textSecondary}
+              style={{ backgroundColor: colors.neutral.surfaceElevated, borderRadius: 16 }}
+              className="heading-4 px-4 py-3 text-text-primary"
+            />
+            {!repsEditing && <Pressable onPress={openRepsPicker} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />}
+          </View>
         </View>
       </View>
 
@@ -186,6 +228,34 @@ function LogStep({
       >
         <Text className="body-md font-body-semibold text-brand-iron">See My Rank</Text>
       </Pressable>
+
+      <NumberArcPickerModal
+        visible={weightPickerOpen}
+        title={`WEIGHT (${weightUnit.toUpperCase()})`}
+        values={weightValues}
+        initialIndex={weightIndex}
+        onChangeIndex={(i) => setWeightInput(weightValues[i].toString())}
+        onClose={() => setWeightPickerOpen(false)}
+        onOpenKeyboard={() => {
+          setWeightPickerOpen(false);
+          setWeightEditing(true);
+          setTimeout(() => weightInputRef.current?.focus(), 300);
+        }}
+      />
+
+      <NumberArcPickerModal
+        visible={repsPickerOpen}
+        title="REPS"
+        values={repsValues}
+        initialIndex={repsIndex}
+        onChangeIndex={(i) => setRepsInput(repsValues[i].toString())}
+        onClose={() => setRepsPickerOpen(false)}
+        onOpenKeyboard={() => {
+          setRepsPickerOpen(false);
+          setRepsEditing(true);
+          setTimeout(() => repsInputRef.current?.focus(), 300);
+        }}
+      />
     </View>
   );
 }
@@ -199,6 +269,7 @@ function RevealStep({
   decision,
   sharing,
   shareCardRef,
+  onBack,
   onLogAsPr,
   onViewOnly,
   onOpenSimulator,
@@ -214,6 +285,7 @@ function RevealStep({
   decision: Decision;
   sharing: boolean;
   shareCardRef: RefObject<View | null>;
+  onBack: () => void;
   onLogAsPr: () => void;
   onViewOnly: () => void;
   onOpenSimulator: () => void;
@@ -222,83 +294,88 @@ function RevealStep({
   onInfo: () => void;
 }) {
   const { tier, progressToNextTier } = rankAtWeight(lift, weightKg, reps, profile);
-  const topPercent = Math.max(1, 100 - Math.round(progressToNextTier * 100));
   const plausibility: PlausibilityResult = checkLiftPlausibility(lift.knownCard?.id ?? lift.exercise.id, weightKg, reps, profile);
+  const topPercent = Math.max(1, 100 - Math.round(progressToNextTier * 100));
 
+  // "IK ZEI DAT IK DE RANK UP VAN EEN EXERCISE NIET IN EEN CARD WIL HEBBEN... HET MOET ZIJN
+  // ZOALS DE LEVEL UP SCHERM" — then, once that was fixed once already, "ik wil niks meer
+  // hetzelfde als nu zien... volledig nieuwe pagina." Two real changes from the previous fix,
+  // not just decoration: (1) this is `RankUpReveal`, the ladder-based layout, not a second copy of
+  // the plain badge-on-a-glow composition `pr-celebration.tsx` already used; (2) it's rendered as
+  // its OWN full-screen takeover now (see `WhatsMyRankScreen`'s return below), not a step sharing
+  // the wizard's own "WHAT'S MY RANK?" header bar and `ScrollView` — a genuinely new page, the same
+  // way `pr-celebration.tsx` already is its own route rather than a tab inside `workout/summary.tsx`.
   return (
-    <View className="items-center gap-4 px-6 pt-6">
-      <View ref={shareCardRef} collapsable={false} className="w-full">
-        <RankRevealCard
-          id={`ranks.whatsMyRank.${lift.exercise.id}`}
-          name={lift.name}
-          tier={tier}
-          weightKg={displayWeight(weightKg, weightUnit)}
-          reps={reps}
-          unit={weightUnit}
-          topPercent={topPercent}
-          progressToNextTier={progressToNextTier}
-          triggerKey={`${lift.exercise.id}-${weightKg}-${reps}`}
-          headerRight={
-            <View className="flex-row items-center gap-3">
-              <Pressable onPress={onInfo} hitSlop={8}>
-                <Ionicons name="information-circle-outline" size={18} color={colors.neutral.textSecondary} />
-              </Pressable>
-              <Pressable onPress={onShare} hitSlop={8} disabled={sharing}>
-                <Ionicons name={sharing ? "hourglass-outline" : "share-outline"} size={18} color={colors.neutral.textSecondary} />
-              </Pressable>
-            </View>
-          }
-        />
-      </View>
-
-      {decision === "pending" && (
-        <View className="w-full gap-3">
-          {!plausibility.isPlausible && (
-            <View className="flex-row items-start gap-2 rounded-2xl border border-error/40 bg-error/10 p-3">
-              <Ionicons name="warning" size={16} color={colors.semantic.error} style={{ marginTop: 1 }} />
-              <Text className="body-sm flex-1 text-text-secondary">{plausibility.reason}</Text>
-            </View>
-          )}
-
-          <Pressable
-            onPress={onLogAsPr}
-            disabled={!plausibility.isPlausible}
-            style={({ pressed }) => ({ opacity: !plausibility.isPlausible ? 0.4 : pressed ? 0.75 : 1 })}
-            className="items-center rounded-full bg-brand-yellow py-4"
-          >
-            <Text className="body-md font-body-semibold text-brand-iron">Log as PR</Text>
-          </Pressable>
-          <Pressable onPress={onViewOnly} style={PRESSED_STYLE} className="items-center rounded-full border border-divider py-4">
-            <Text className="body-md font-body-semibold text-text-primary">View Only</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {decision !== "pending" && (
-        <View className="w-full gap-3">
-          <View
-            className={`flex-row items-center justify-center gap-2 rounded-2xl p-3 ${
-              decision === "logged" ? "border border-success/40 bg-success/10" : "border border-divider bg-surface"
-            }`}
-          >
-            <Ionicons
-              name={decision === "logged" ? "checkmark-circle" : "eye-outline"}
-              size={16}
-              color={decision === "logged" ? colors.semantic.success : colors.neutral.textSecondary}
-            />
-            <Text className="body-sm font-body-semibold text-text-primary">
-              {decision === "logged" ? "Logged as your new PR" : "Viewing only — nothing saved"}
-            </Text>
+    <View style={{ flex: 1 }}>
+      <RankUpReveal
+        tier={tier}
+        exerciseName={lift.name}
+        exerciseImageUrl={lift.exercise.imageUrl}
+        weightKg={displayWeight(weightKg, weightUnit)}
+        reps={reps}
+        unit={weightUnit}
+        topPercent={topPercent}
+        progressToNextTier={progressToNextTier}
+        triggerKey={`${lift.exercise.id}-${weightKg}-${reps}`}
+        shareRef={shareCardRef}
+        onBack={onBack}
+        headerRight={
+          <View className="flex-row items-center gap-3">
+            <Pressable onPress={onInfo} hitSlop={8}>
+              <Ionicons name="information-circle-outline" size={18} color={colors.brand.white} />
+            </Pressable>
+            <Pressable onPress={onShare} hitSlop={8} disabled={sharing}>
+              <Ionicons name={sharing ? "hourglass-outline" : "share-outline"} size={18} color={colors.brand.white} />
+            </Pressable>
           </View>
+        }
+        footer={
+          <View style={{ paddingBottom: 24 }} className="gap-3">
+            {decision === "pending" ? (
+              <>
+                {!plausibility.isPlausible && (
+                  <View className="flex-row items-start gap-2 rounded-2xl p-3" style={{ backgroundColor: "rgba(255,59,48,0.12)" }}>
+                    <Ionicons name="warning" size={16} color={colors.semantic.error} style={{ marginTop: 1 }} />
+                    <Text className="body-sm flex-1 text-text-secondary">{plausibility.reason}</Text>
+                  </View>
+                )}
 
-          <Pressable onPress={onOpenSimulator} style={PRESSED_STYLE} className="items-center rounded-full bg-brand-yellow py-4">
-            <Text className="body-md font-body-semibold text-brand-iron">Simulate My Progress</Text>
-          </Pressable>
-          <Pressable onPress={onDone} style={PRESSED_STYLE} className="items-center rounded-full border border-divider py-4">
-            <Text className="body-md font-body-semibold text-text-primary">Done</Text>
-          </Pressable>
-        </View>
-      )}
+                <Pressable
+                  onPress={onLogAsPr}
+                  disabled={!plausibility.isPlausible}
+                  style={({ pressed }) => ({ opacity: !plausibility.isPlausible ? 0.4 : pressed ? 0.75 : 1 })}
+                  className="items-center rounded-full bg-brand-yellow py-4"
+                >
+                  <Text className="body-md font-body-semibold text-brand-iron">Log as PR</Text>
+                </Pressable>
+                <Pressable onPress={onViewOnly} style={{ backgroundColor: "rgba(0,0,0,0.3)" }} className="items-center rounded-full py-4">
+                  <Text className="body-md font-body-semibold text-brand-white">View Only</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <View className="flex-row items-center justify-center gap-2 rounded-2xl p-3" style={{ backgroundColor: "rgba(0,0,0,0.3)" }}>
+                  <Ionicons
+                    name={decision === "logged" ? "checkmark-circle" : "eye-outline"}
+                    size={16}
+                    color={decision === "logged" ? colors.semantic.success : colors.brand.white}
+                  />
+                  <Text className="body-sm font-body-semibold text-brand-white">
+                    {decision === "logged" ? "Logged as your new PR" : "Viewing only — nothing saved"}
+                  </Text>
+                </View>
+
+                <Pressable onPress={onOpenSimulator} style={PRESSED_STYLE} className="items-center rounded-full bg-brand-yellow py-4">
+                  <Text className="body-md font-body-semibold text-brand-iron">Simulate My Progress</Text>
+                </Pressable>
+                <Pressable onPress={onDone} style={{ backgroundColor: "rgba(0,0,0,0.3)" }} className="items-center rounded-full py-4">
+                  <Text className="body-md font-body-semibold text-brand-white">Done</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        }
+      />
     </View>
   );
 }
@@ -389,12 +466,22 @@ function SimulatorStep({
   currentReps,
   weightUnit,
   profile,
+  onAnySheetOpenChange,
 }: {
   lift: WizardLift;
   currentWeightKg: number;
   currentReps: number;
   weightUnit: WeightUnit;
   profile: RankProfile;
+  /** Fires whenever `TierPickerSheet`/`DatePickerModal` opens or closes — lets the wizard's own
+   * outer `ScrollView` (this step renders inside it) turn its OWN scroll off while either sheet is
+   * up. Both are real bottom sheets that only cover part of the screen, unlike a full-bleed `Modal`
+   * (see the weight/reps arc-picker `NumberArcPickerModal` uses, which is a `Modal` covering the
+   * whole screen and doesn't have this problem) — with the outer `ScrollView` left scrollable
+   * underneath, a drag that starts inside the sheet's own list was being claimed by the WRONG
+   * scrollable (the page behind it, not the sheet's list), which is exactly the "ik kan niet
+   * scrollen in die lijst" bug: the list itself never moved, the page behind it did. */
+  onAnySheetOpenChange: (open: boolean) => void;
 }) {
   const today = useMemo(() => new Date(), []);
   const minDate = useMemo(() => {
@@ -414,6 +501,13 @@ function SimulatorStep({
   const [goalInput, setGoalInput] = useState(
     String(Math.round(displayWeight(currentWeightKg + Math.max(5, currentWeightKg * 0.08), weightUnit))),
   );
+  // Same tap-to-open `arc-list` wheel every other weight field in the app now uses ("ook hier met de
+  // kg de arc fan wordt gebruikt") — the goal-weight field is the one weight input in this whole
+  // wizard that had been left on a plain always-editable `TextInput`.
+  const [goalWeightPickerOpen, setGoalWeightPickerOpen] = useState(false);
+  const [goalWeightEditing, setGoalWeightEditing] = useState(false);
+  const [goalWeightRangeBase, setGoalWeightRangeBase] = useState<number | null>(null);
+  const goalInputRef = useRef<TextInput>(null);
   const [targetTier, setTargetTier] = useState<RankTier | null>(null);
   const [tierPickerVisible, setTierPickerVisible] = useState(false);
   // Same either/or as the goal above: by default the timeline is auto-estimated from the goal
@@ -423,11 +517,24 @@ function SimulatorStep({
   const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
 
+  useEffect(() => {
+    onAnySheetOpenChange(tierPickerVisible || datePickerVisible);
+  }, [tierPickerVisible, datePickerVisible, onAnySheetOpenChange]);
+
   // Entered in the user's chosen unit; converted to kg (the canonical unit every rank-math function
   // below expects) immediately, so nothing downstream needs to know a unit toggle exists.
   const enteredGoalWeight = parseFloat(goalInput.replace(",", "."));
   const goalWeightKg = Number.isFinite(enteredGoalWeight) ? (weightUnit === "lbs" ? lbsToKg(enteredGoalWeight) : enteredGoalWeight) : NaN;
   const validGoal = goalMode === "weight" ? Number.isFinite(goalWeightKg) && goalWeightKg > 0 : targetTier !== null;
+
+  const goalWeightValues = useMemo(() => buildNumberRange(goalWeightRangeBase ?? Number(goalInput) ?? 60, 40, 80), [goalWeightRangeBase, goalInput]);
+  const goalWeightIndex = Math.max(0, goalWeightValues.indexOf(Math.round(goalWeightRangeBase ?? Number(goalInput) ?? 60)));
+
+  function openGoalWeightPicker() {
+    const current = parseFloat(goalInput.replace(",", "."));
+    setGoalWeightRangeBase(Number.isFinite(current) ? current : 60);
+    setGoalWeightPickerOpen(true);
+  }
 
   // `lift` is the lift as picked in step 1 — if the logged set just became a new PR, its
   // tier/progress are stale (still anchored on the old bestWeightKg). Recompute both fresh so the
@@ -489,7 +596,7 @@ function SimulatorStep({
         <Text className="caption text-text-secondary">Set a goal and see how your rank could climb.</Text>
       </View>
 
-      <View className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface px-4 py-3">
+      <View style={{ backgroundColor: colors.neutral.surface, borderRadius: 20 }} className="flex-row items-center justify-between px-4 py-3">
         <View>
           <Text className="caption text-text-secondary">CURRENT</Text>
           <Text className="body-md font-body-bold text-text-primary">
@@ -501,7 +608,7 @@ function SimulatorStep({
 
       <View className="gap-2">
         <Text className="caption font-body-semibold text-text-secondary">GOAL</Text>
-        <View className="flex-row rounded-full border border-divider bg-surface p-1">
+        <View style={{ backgroundColor: colors.neutral.surface, borderRadius: 999 }} className="flex-row p-1">
           {(
             [
               { key: "weight", label: "Target Weight" },
@@ -522,24 +629,26 @@ function SimulatorStep({
         </View>
 
         {goalMode === "weight" ? (
-          <View className="flex-row items-center gap-2 rounded-2xl border-2 border-brand-yellow bg-brand-yellow/10 px-4 py-3">
+          <View style={{ backgroundColor: colors.neutral.surfaceElevated, borderRadius: 16, position: "relative" }} className="flex-row items-center gap-2 px-4 py-3">
             <TextInput
+              ref={goalInputRef}
               value={goalInput}
               onChangeText={setGoalInput}
+              onBlur={() => setGoalWeightEditing(false)}
               keyboardType="decimal-pad"
               placeholder="0"
               placeholderTextColor={colors.neutral.textSecondary}
-              autoFocus
               className="heading-4 flex-1 text-text-primary"
               style={{ minWidth: 0 }}
             />
             <Text className="body-md font-body-semibold text-text-secondary">{weightUnit} × {currentReps}</Text>
+            {!goalWeightEditing && <Pressable onPress={openGoalWeightPicker} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />}
           </View>
         ) : (
           <Pressable
             onPress={() => setTierPickerVisible(true)}
-            style={PRESSED_STYLE}
-            className="flex-row items-center justify-between rounded-2xl border-2 border-brand-yellow bg-brand-yellow/10 px-4 py-3"
+            style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, backgroundColor: colors.neutral.surfaceElevated, borderRadius: 16 })}
+            className="flex-row items-center justify-between px-4 py-3"
           >
             <View className="flex-row items-center gap-2.5">
               {targetTier ? (
@@ -547,7 +656,9 @@ function SimulatorStep({
               ) : (
                 <Ionicons name="trophy-outline" size={20} color={colors.neutral.textSecondary} />
               )}
-              <Text className="heading-4 text-text-primary">{targetTier ? formatRankTier(targetTier) : "Pick a rank"}</Text>
+              <Text className={targetTier ? "heading-4 text-text-primary" : "body-md font-body-semibold text-text-secondary"}>
+                {targetTier ? formatRankTier(targetTier) : "Pick a rank"}
+              </Text>
             </View>
             <Ionicons name="chevron-down" size={18} color={colors.neutral.textSecondary} />
           </Pressable>
@@ -556,7 +667,7 @@ function SimulatorStep({
 
       <View className="gap-2">
         <Text className="caption font-body-semibold text-text-secondary">TIMELINE</Text>
-        <View className="flex-row rounded-full border border-divider bg-surface p-1">
+        <View style={{ backgroundColor: colors.neutral.surface, borderRadius: 999 }} className="flex-row p-1">
           {(
             [
               { key: "auto", label: "Auto-Estimate" },
@@ -577,7 +688,7 @@ function SimulatorStep({
         </View>
 
         {timelineMode === "auto" ? (
-          <View className="gap-0.5 rounded-2xl border border-divider bg-surface p-3">
+          <View style={{ backgroundColor: colors.neutral.surface, borderRadius: 20 }} className="gap-0.5 p-3">
             <View className="flex-row items-center gap-1.5">
               <Ionicons name="calculator-outline" size={14} color={colors.neutral.textSecondary} />
               <Text className="body-sm font-body-semibold text-text-primary">
@@ -592,8 +703,8 @@ function SimulatorStep({
         ) : (
           <Pressable
             onPress={() => setDatePickerVisible(true)}
-            style={PRESSED_STYLE}
-            className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface px-4 py-3"
+            style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, backgroundColor: colors.neutral.surface, borderRadius: 20 })}
+            className="flex-row items-center justify-between px-4 py-3"
           >
             <View className="flex-row items-center gap-2">
               <Ionicons name="calendar-outline" size={16} color={colors.neutral.textSecondary} />
@@ -609,7 +720,7 @@ function SimulatorStep({
       </View>
 
       {goalMode === "rank" && targetTier && (
-        <View className="flex-row items-center gap-2 rounded-2xl border border-divider bg-surface p-3">
+        <View style={{ backgroundColor: colors.neutral.surface, borderRadius: 20 }} className="flex-row items-center gap-2 p-3">
           <Ionicons name="calculator-outline" size={14} color={colors.neutral.textSecondary} />
           <Text className="body-sm flex-1 text-text-secondary">
             That takes {formatWeight(effectiveGoalKg, weightUnit)} × {currentReps} on {lift.name}.
@@ -618,7 +729,7 @@ function SimulatorStep({
       )}
 
       {validGoal && points.length > 0 && (
-        <View className="gap-3 rounded-2xl border border-divider bg-surface p-4">
+        <View style={{ backgroundColor: colors.neutral.surface, borderRadius: 20 }} className="gap-3 p-4">
           <View className="flex-row items-center justify-between">
             <Text style={{ fontFamily: fontFamily.heading, fontSize: 16, fontStyle: "italic", transform: [{ skewX: "-8deg" }] }} className="text-text-primary">
               EXPECTED PROGRESSION
@@ -636,7 +747,7 @@ function SimulatorStep({
         </View>
       )}
 
-      <View className="flex-row items-start gap-2 rounded-2xl border border-divider bg-surface p-3">
+      <View style={{ backgroundColor: colors.neutral.surface, borderRadius: 20 }} className="flex-row items-start gap-2 p-3">
         <Ionicons name="flame" size={14} color={colors.semantic.streak} />
         <Text className="body-sm flex-1 text-text-secondary">Stay consistent and eat enough — sleep + food = results.</Text>
       </View>
@@ -661,6 +772,20 @@ function SimulatorStep({
         }}
         onClose={() => setTierPickerVisible(false)}
       />
+
+      <NumberArcPickerModal
+        visible={goalWeightPickerOpen}
+        title={`TARGET WEIGHT (${weightUnit.toUpperCase()})`}
+        values={goalWeightValues}
+        initialIndex={goalWeightIndex}
+        onChangeIndex={(i) => setGoalInput(goalWeightValues[i].toString())}
+        onClose={() => setGoalWeightPickerOpen(false)}
+        onOpenKeyboard={() => {
+          setGoalWeightPickerOpen(false);
+          setGoalWeightEditing(true);
+          setTimeout(() => goalInputRef.current?.focus(), 300);
+        }}
+      />
     </View>
   );
 }
@@ -676,6 +801,9 @@ export default function WhatsMyRankScreen() {
   const [decision, setDecision] = useState<Decision>("pending");
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef<View>(null);
+  // The wizard's own outer `ScrollView` (below) turns its scroll off while this is true — see
+  // `SimulatorStep`'s `onAnySheetOpenChange` doc comment for the actual bug this fixes.
+  const [simulatorSheetOpen, setSimulatorSheetOpen] = useState(false);
 
   const gender = useOnboardingStore((state) => state.onboarding.gender) ?? "male";
   const weightKg = useOnboardingStore((state) => state.onboarding.weightKg) ?? 85;
@@ -726,39 +854,48 @@ export default function WhatsMyRankScreen() {
     setStep("simulator");
   }
 
-  function shareAsText() {
-    if (!selectedLift) return;
-    const { tier } = rankAtWeight(selectedLift, loggedWeightKg, loggedReps, profile);
-    // Share.share returns a rejected promise on web when the browser has no native share sheet —
-    // .catch() it so that never surfaces as an unhandled rejection.
-    Share.share({
-      message: `I just hit ${formatRankTier(tier)} on ${selectedLift.name} (${formatWeight(loggedWeightKg, weightUnit)} × ${loggedReps}) on GymCrew 💪`,
-    })
-      .then(() => posthog.capture("rank_shared"))
-      .catch((error) => console.warn("Sharing is unavailable on this platform", error));
-  }
-
   async function handleShare() {
-    if (sharing || !shareCardRef.current) return;
-    if (Platform.OS === "web") {
-      shareAsText();
-      return;
-    }
+    if (sharing || !selectedLift) return;
     setSharing(true);
     try {
-      const uri = await captureRef(shareCardRef, { format: "png", quality: 1 });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: "image/png" });
-        posthog.capture("rank_shared");
-      } else {
-        shareAsText();
-      }
-    } catch (error) {
-      console.warn("Failed to capture rank reveal screenshot, falling back to text share", error);
-      shareAsText();
+      const { tier } = rankAtWeight(selectedLift, loggedWeightKg, loggedReps, profile);
+      const sharedImage = await shareViewAsImage({
+        ref: shareCardRef,
+        fileName: "gymcrew-rank.png",
+        dialogTitle: "Share your rank",
+        fallbackMessage: `I just hit ${formatRankTier(tier)} on ${selectedLift.name} (${formatWeight(loggedWeightKg, weightUnit)} × ${loggedReps}) on GymCrew 💪`,
+      });
+      if (sharedImage) posthog.capture("rank_shared");
     } finally {
       setSharing(false);
     }
+  }
+
+  // `reveal` is its own full-screen takeover now, not a step sharing this header/`ScrollView` with
+  // pick/log/simulator — see `RevealStep`'s own doc comment for why ("volledig nieuwe pagina").
+  if (step === "reveal" && selectedLift) {
+    return (
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        <RevealStep
+          lift={selectedLift}
+          weightKg={loggedWeightKg}
+          reps={loggedReps}
+          weightUnit={weightUnit}
+          profile={profile}
+          decision={decision}
+          sharing={sharing}
+          shareCardRef={shareCardRef}
+          onBack={handleBack}
+          onLogAsPr={handleLogAsPr}
+          onViewOnly={handleViewOnly}
+          onOpenSimulator={() => setStep("simulator")}
+          onDone={() => goBack("/(tabs)/ranks")}
+          onShare={handleShare}
+          onInfo={() => setInfoExercise(selectedLift.exercise)}
+        />
+        <ExerciseInstructionsModal exercise={infoExercise} onClose={() => setInfoExercise(null)} />
+      </View>
+    );
   }
 
   return (
@@ -780,29 +917,11 @@ export default function WhatsMyRankScreen() {
           contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={!simulatorSheetOpen}
         >
           <Animated.View key={step} entering={FadeInUp.springify().damping(16).mass(0.6)}>
             {step === "log" && (
               <LogStep lift={selectedLift} weightUnit={weightUnit} onSubmit={handleLogSubmit} onInfo={() => setInfoExercise(selectedLift.exercise)} />
-            )}
-
-            {step === "reveal" && (
-              <RevealStep
-                lift={selectedLift}
-                weightKg={loggedWeightKg}
-                reps={loggedReps}
-                weightUnit={weightUnit}
-                profile={profile}
-                decision={decision}
-                sharing={sharing}
-                shareCardRef={shareCardRef}
-                onLogAsPr={handleLogAsPr}
-                onViewOnly={handleViewOnly}
-                onOpenSimulator={() => setStep("simulator")}
-                onDone={() => goBack("/(tabs)/ranks")}
-                onShare={handleShare}
-                onInfo={() => setInfoExercise(selectedLift.exercise)}
-              />
             )}
 
             {step === "simulator" && (
@@ -812,6 +931,7 @@ export default function WhatsMyRankScreen() {
                 currentReps={loggedReps}
                 weightUnit={weightUnit}
                 profile={profile}
+                onAnySheetOpenChange={setSimulatorSheetOpen}
               />
             )}
           </Animated.View>

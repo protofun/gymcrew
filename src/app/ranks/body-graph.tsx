@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Image, Modal, Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
+import { BottomSheet } from "@/components/BottomSheet";
 import { EditableText } from "@/components/EditableText";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { MuscleRankRow } from "@/components/MuscleRankRow";
@@ -91,23 +92,21 @@ function GroupDetailSheet({
   myCards: LiftRankCard[];
   myProfile: RankProfile;
 }) {
-  const insets = useSafeAreaInsets();
   const estimatedWeeks = group && rank?.status === "ranked" && canLog ? estimateWeeksToNextTier(rank, myCards, myProfile) : null;
 
   return (
-    <Modal visible={group !== null} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1 }} onPress={onClose} className="justify-end bg-black/50">
-        <Pressable onPress={() => {}} style={{ paddingBottom: insets.bottom + 20 }} className="gap-4 rounded-t-3xl border-t border-divider bg-surface p-5">
-          {group && rank && (
-            <>
-              <View className="flex-row items-center justify-between">
-                <Text className="heading-4 text-text-primary">{formatMuscleLabel(group)}</Text>
-                <Pressable onPress={onClose} hitSlop={8}>
-                  <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
-                </Pressable>
-              </View>
+    <BottomSheet visible={group !== null} onClose={onClose} maxDynamicContentSize={620}>
+      <View className="gap-4 p-5">
+        {group && rank && (
+          <>
+            <View className="flex-row items-center justify-between">
+              <Text className="heading-4 text-text-primary">{formatMuscleLabel(group)}</Text>
+              <Pressable onPress={onClose} hitSlop={8}>
+                <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
+              </Pressable>
+            </View>
 
-              <Image
+            <Image
                 source={muscleGroupImages[group]}
                 resizeMode="cover"
                 style={{ width: "100%", height: 160, borderRadius: 16 }}
@@ -203,10 +202,9 @@ function GroupDetailSheet({
                 </>
               )}
             </>
-          )}
-        </Pressable>
-      </Pressable>
-    </Modal>
+        )}
+      </View>
+    </BottomSheet>
   );
 }
 
@@ -275,13 +273,14 @@ export default function MuscleRankScreen() {
       >
         <Animated.View
           entering={FadeInUp.springify().damping(16).mass(0.6)}
-          className="gap-4 rounded-2xl border border-divider bg-surface p-4"
+          style={{ backgroundColor: colors.neutral.surface, borderRadius: 20 }}
+          className="gap-4 p-4"
         >
           <View className="flex-row items-center justify-between">
             <Text className="caption font-body-semibold text-text-secondary" style={{ letterSpacing: 1 }}>
               {viewedMember ? `${viewedMember.name.toUpperCase()}'S OVERVIEW` : "BODY OVERVIEW"}
             </Text>
-            <View className="rounded-full border border-divider px-2.5 py-1">
+            <View style={{ backgroundColor: colors.neutral.surfaceElevated }} className="rounded-full px-2.5 py-1">
               <EditableText id="ranks.bodyGraph.rankedCount" className="caption font-body-bold text-text-primary">
                 {`${rankedCount}/${ALL_MUSCLE_GROUPS.length} RANKED`}
               </EditableText>
@@ -320,7 +319,8 @@ export default function MuscleRankScreen() {
         {!viewingOtherMember && (
           <Animated.View
             entering={FadeInUp.delay(50).springify().damping(16).mass(0.6)}
-            className="gap-3 rounded-2xl border border-divider bg-surface p-4"
+            style={{ backgroundColor: colors.neutral.surface, borderRadius: 20 }}
+            className="gap-3 p-4"
           >
             <View className="flex-row items-center justify-between">
               <View className="flex-1 pr-3">

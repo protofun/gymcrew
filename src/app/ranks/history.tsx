@@ -124,8 +124,8 @@ export default function RankHistoryScreen() {
       <View className="px-4 pt-4">
         <Pressable
           onPress={() => setPickerOpen(true)}
-          style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-          className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface px-4 py-3.5"
+          style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1, backgroundColor: colors.neutral.surface })}
+          className="flex-row items-center justify-between rounded-2xl px-4 py-3.5"
         >
           <View className="flex-row items-center gap-2.5">
             <RankBadge tier={lift.tier} size={26} />
@@ -147,7 +147,7 @@ export default function RankHistoryScreen() {
             <ActivityIndicator color={colors.brand.yellow} />
           </View>
         ) : history.length === 0 ? (
-          <View className="items-center gap-2 rounded-2xl border border-dashed border-divider px-6 py-10">
+          <View style={{ backgroundColor: colors.neutral.surface }} className="items-center gap-2 rounded-2xl px-6 py-10">
             <Ionicons name="time-outline" size={22} color={colors.neutral.textSecondary} />
             <Text className="body-sm text-center text-text-secondary">No PR logged yet for {lift.name}.</Text>
           </View>

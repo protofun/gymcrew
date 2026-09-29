@@ -1,17 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import * as Sharing from "expo-sharing";
 import { useRef, useState } from "react";
-import { Platform, Pressable, Share, Text, View } from "react-native";
-import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
+import { Pressable, Text, View } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { captureRef } from "react-native-view-shot";
 
-import { RankRevealCard } from "@/components/RankRevealCard";
+import { RankUpReveal } from "@/components/RankUpReveal";
 import { EXERCISE_BY_ID } from "@/data/exercises";
 import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { genericExerciseRankDetail } from "@/lib/generic-lift-rank";
 import type { RankProfile } from "@/lib/rank";
+import { shareViewAsImage } from "@/lib/share-image";
 import { formatTimeSince } from "@/lib/time-since";
 import { displayWeight, formatWeight } from "@/lib/units";
 import { useCustomExercisesStore } from "@/store/custom-exercises-store";
@@ -56,37 +55,18 @@ export default function PrCelebrationScreen() {
     pr.previousBestKg && pr.previousBestKg > 0 ? ((pr.weightKg - pr.previousBestKg) / pr.previousBestKg) * 100 : null;
   const timeSince = pr.previousAchievedAt ? formatTimeSince(pr.previousAchievedAt, Date.now()) : null;
 
-  function shareAsText() {
-    // Share.share returns a rejected promise on web when the browser has no native share sheet
-    // (e.g. non-HTTPS or headless contexts) — .catch() it so that never surfaces as an unhandled
-    // rejection (a plain try/catch around the call wouldn't catch an async rejection like this).
-    Share.share({
-      message: `New PR on ${pr!.exerciseName}: ${formatWeight(pr!.weightKg, weightUnit)} × ${pr!.reps} reps${
-        percentIncrease !== null ? ` (+${percentIncrease.toFixed(1)}%)` : ""
-      } on GymCrew! 💪`,
-    }).catch((error) => console.warn("Sharing is unavailable on this platform", error));
-  }
-
   async function handleShare() {
-    if (sharing || !shareCardRef.current) return;
-    // react-native-view-shot has no web implementation (it throws immediately there), and a real
-    // capture can fail on-device too (permissions, low memory) — always fall back to a text share
-    // rather than let either case surface as an uncaught error.
-    if (Platform.OS === "web") {
-      shareAsText();
-      return;
-    }
+    if (sharing) return;
     setSharing(true);
     try {
-      const uri = await captureRef(shareCardRef, { format: "png", quality: 1 });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: "image/png" });
-      } else {
-        shareAsText();
-      }
-    } catch (error) {
-      console.warn("Failed to capture PR celebration screenshot, falling back to text share", error);
-      shareAsText();
+      await shareViewAsImage({
+        ref: shareCardRef,
+        fileName: "gymcrew-pr.png",
+        dialogTitle: "Share your PR",
+        fallbackMessage: `New PR on ${pr!.exerciseName}: ${formatWeight(pr!.weightKg, weightUnit)} × ${pr!.reps} reps${
+          percentIncrease !== null ? ` (+${percentIncrease.toFixed(1)}%)` : ""
+        } on GymCrew! 💪`,
+      });
     } finally {
       setSharing(false);
     }
@@ -100,70 +80,54 @@ export default function PrCelebrationScreen() {
     }
   }
 
+  const revealWeightKg = displayWeight(pr.weightKg, weightUnit);
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#000000", paddingTop: insets.top }}>
-      {/* Everything the shared screenshot should include — the label, card, and PR details, not
-          the Next/Back navigation controls below. Kept as its own flex:1 wrapper so it still
-          centers in the available space exactly as before. The card itself is `RankRevealCard` —
-          the same canonical medal-reveal card "What's my rank?" uses — with only the screen-
-          specific extras (the "NEW PERSONAL RECORD" label, the %-increase, time-since-last-PR)
-          added around it, so this never grows its own, different-looking version of that card. */}
-      <View ref={shareCardRef} collapsable={false} style={{ flex: 1 }} className="items-center justify-center gap-4 px-6">
-        <Animated.View key={`label-${pr.exerciseId}`} entering={FadeInDown.delay(100).duration(350)} className="items-center gap-1">
-          <Text className="body-md font-body-semibold tracking-wide text-brand-yellow">NEW PERSONAL RECORD</Text>
-        </Animated.View>
+    <View style={{ flex: 1, paddingTop: insets.top }}>
+      {/* The whole reveal (ladder, medal, stat dock) is now `RankUpReveal` — a genuinely different
+          layout from the old single-badge-on-a-glow version this screen and `whats-my-rank.tsx`
+          BOTH used to render separately ("ik wil niks meer hetzelfde als nu zien" — see that
+          component's own doc comment for why a second coat of the same composition wasn't the
+          fix). This screen's own job is just the PR-specific framing around it: the extra
+          percent-increase/time-since line, and the Next/pagination footer. */}
+      <RankUpReveal
+        tier={rankTier}
+        exerciseName={pr.exerciseName}
+        exerciseImageUrl={exercise?.imageUrl}
+        weightKg={revealWeightKg}
+        reps={pr.reps}
+        unit={weightUnit}
+        topPercent={topPercent}
+        progressToNextTier={rankDetail?.progressToNextTier ?? null}
+        triggerKey={pr.exerciseId}
+        shareRef={shareCardRef}
+        headerRight={
+          <Pressable onPress={handleShare} hitSlop={10} disabled={sharing}>
+            <Ionicons name={sharing ? "hourglass-outline" : "share-outline"} size={18} color={colors.brand.white} />
+          </Pressable>
+        }
+        footer={
+          <Animated.View entering={FadeIn.delay(1150).duration(400)} style={{ gap: 12, paddingBottom: insets.bottom + 8 }}>
+            {percentIncrease !== null && (
+              <Text className="body-md text-center font-body-semibold text-success">+{percentIncrease.toFixed(1)}% from last time</Text>
+            )}
+            <Text className="body-sm text-center text-text-secondary">{timeSince ? `${timeSince} since your last PR` : "First time logging this lift"}</Text>
 
-        <Animated.View key={`card-${pr.exerciseId}`} entering={FadeInUp.delay(250).springify().damping(16)} className="w-full">
-          <RankRevealCard
-            id={`workout.prCelebration.${pr.exerciseId}`}
-            name={pr.exerciseName}
-            tier={rankTier}
-            weightKg={displayWeight(pr.weightKg, weightUnit)}
-            reps={pr.reps}
-            unit={weightUnit}
-            topPercent={topPercent}
-            progressToNextTier={rankDetail?.progressToNextTier ?? null}
-            triggerKey={pr.exerciseId}
-            headerRight={
-              <Pressable onPress={handleShare} hitSlop={10} disabled={sharing}>
-                <Ionicons name={sharing ? "hourglass-outline" : "share-outline"} size={18} color={colors.neutral.textSecondary} />
-              </Pressable>
-            }
-          />
-        </Animated.View>
+            {workout.prs.length > 1 && (
+              <View className="flex-row items-center justify-center gap-2">
+                {workout.prs.map((p, i) => (
+                  <View key={p.exerciseId} className={`h-1.5 rounded-full ${i === index ? "w-6 bg-brand-yellow" : "w-1.5 bg-divider"}`} />
+                ))}
+              </View>
+            )}
 
-        <Animated.View key={`details-${pr.exerciseId}`} entering={FadeIn.delay(900).duration(350)} className="items-center gap-1">
-          {percentIncrease !== null && (
-            <Text className="body-lg font-body-semibold text-success">+{percentIncrease.toFixed(1)}% from last time</Text>
-          )}
-          <Text className="body-sm text-text-secondary">{timeSince ? `${timeSince} since your last PR` : "First time logging this lift"}</Text>
-        </Animated.View>
-      </View>
-
-      <Animated.View
-        key={`footer-${pr.exerciseId}`}
-        entering={FadeInUp.delay(1150).duration(400)}
-        style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 24, gap: 16 }}
-      >
-        {workout.prs.length > 1 && (
-          <View className="flex-row items-center justify-center gap-2">
-            {workout.prs.map((p, i) => (
-              <View
-                key={p.exerciseId}
-                className={`h-1.5 rounded-full ${i === index ? "w-6 bg-brand-yellow" : "w-1.5 bg-divider"}`}
-              />
-            ))}
-          </View>
-        )}
-
-        <Pressable
-          onPress={handleNext}
-          className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4"
-        >
-          <Text className="body-lg font-body-semibold text-brand-iron">{isLast ? "Back to Summary" : "Next"}</Text>
-          <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
-        </Pressable>
-      </Animated.View>
+            <Pressable onPress={handleNext} className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4">
+              <Text className="body-lg font-body-semibold text-brand-iron">{isLast ? "Back to Summary" : "Next"}</Text>
+              <Ionicons name="arrow-forward" size={18} color={colors.brand.iron} />
+            </Pressable>
+          </Animated.View>
+        }
+      />
     </View>
   );
 }

@@ -2,14 +2,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, Modal, Platform, Pressable, ScrollView, Share, Text, View, type LayoutChangeEvent } from "react-native";
+import { Image, Platform, Pressable, ScrollView, Share, Text, View, type LayoutChangeEvent } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { captureRef } from "react-native-view-shot";
 import { usePostHog } from "posthog-react-native";
 import { AttachStep } from "react-native-spotlight-tour";
 
 import { ATTACH_INDEXES } from "@/components/AppTourOverlay";
+import { BottomSheet } from "@/components/BottomSheet";
+import { BrandBeamFrame } from "@/components/BrandBeamFrame";
+import { EditableNumberFlow } from "@/components/EditableAnimated";
 import { EditableText } from "@/components/EditableText";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -59,7 +61,6 @@ const sectionHeaderStyle = {
   transform: [{ skewX: "-8deg" }],
 };
 
-const PRESSED_STYLE = ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.7 : 1 });
 
 const SCOPES: { key: RankScope; label: string }[] = [
   { key: "gym", label: "MY GYM" },
@@ -83,7 +84,10 @@ type RanksBannerProps = {
 function RanksBanner({ power, tier, scope, onChangeScope, onShare, onOpenHistory, onOpenMuscleRank, onOpenBuildYourGraph, sharing }: RanksBannerProps) {
   return (
     <AttachStep index={ATTACH_INDEXES.ranks} fill>
-      <View className="gap-4 rounded-3xl border border-divider bg-surface p-5">
+      {/* Flat `colors.neutral.surface` fill, no border — the same "Home card" language this whole
+          screen picked up this round, replacing the old bordered `bg-surface` box every section here
+          used to share. */}
+      <View style={{ borderRadius: 28, backgroundColor: colors.neutral.surface }} className="gap-4 p-5">
       <View className="flex-row items-start justify-between">
         <View className="flex-1 gap-3 pr-3">
           <Text className="caption font-body-semibold text-text-secondary" style={{ letterSpacing: 1.5 }}>
@@ -97,13 +101,7 @@ function RanksBanner({ power, tier, scope, onChangeScope, onShare, onOpenHistory
           <View className="flex-row items-center gap-3">
             <RankBadge tier={tier} size={48} />
             <View>
-              <EditableText
-                id="ranks.hero.powerScore"
-                style={{ fontFamily: fontFamily.heading, fontSize: 26, lineHeight: 28 }}
-                className="text-text-primary"
-              >
-                {power.toLocaleString("en-US")}
-              </EditableText>
+              <EditableNumberFlow id="ranks.hero.powerScore" value={power} fontSize={26} color={colors.brand.white} fontWeight="800" />
               <Text className="caption font-body-semibold text-text-secondary">
                 POWER SCORE · {formatRankTier(tier).toUpperCase()}
               </Text>
@@ -116,8 +114,8 @@ function RanksBanner({ power, tier, scope, onChangeScope, onShare, onOpenHistory
             <Pressable
               onPress={onOpenMuscleRank}
               hitSlop={8}
-              style={PRESSED_STYLE}
-              className="h-8 w-8 items-center justify-center rounded-full border border-divider"
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, backgroundColor: colors.neutral.surfaceElevated })}
+              className="h-8 w-8 items-center justify-center rounded-full"
             >
               <Ionicons name="body-outline" size={14} color={colors.neutral.textSecondary} />
             </Pressable>
@@ -126,8 +124,8 @@ function RanksBanner({ power, tier, scope, onChangeScope, onShare, onOpenHistory
               <Pressable
                 onPress={onOpenBuildYourGraph}
                 hitSlop={8}
-                style={PRESSED_STYLE}
-                className="h-8 w-8 items-center justify-center rounded-full border border-brand-yellow"
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, backgroundColor: colors.neutral.surfaceElevated })}
+                className="h-8 w-8 items-center justify-center rounded-full"
               >
                 <Ionicons name="color-palette-outline" size={14} color={colors.brand.yellow} />
               </Pressable>
@@ -136,8 +134,8 @@ function RanksBanner({ power, tier, scope, onChangeScope, onShare, onOpenHistory
             <Pressable
               onPress={onOpenHistory}
               hitSlop={8}
-              style={PRESSED_STYLE}
-              className="h-8 w-8 items-center justify-center rounded-full border border-divider"
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, backgroundColor: colors.neutral.surfaceElevated })}
+              className="h-8 w-8 items-center justify-center rounded-full"
             >
               <Ionicons name="time-outline" size={14} color={colors.neutral.textSecondary} />
             </Pressable>
@@ -146,8 +144,8 @@ function RanksBanner({ power, tier, scope, onChangeScope, onShare, onOpenHistory
               onPress={onShare}
               disabled={sharing}
               hitSlop={8}
-              style={PRESSED_STYLE}
-              className="h-8 w-8 items-center justify-center rounded-full border border-divider"
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, backgroundColor: colors.neutral.surfaceElevated })}
+              className="h-8 w-8 items-center justify-center rounded-full"
             >
               <Ionicons name={sharing ? "hourglass-outline" : "share-outline"} size={14} color={colors.neutral.textSecondary} />
             </Pressable>
@@ -194,8 +192,13 @@ function LiftCard({ card, width, index, editMode, scope, weightUnit, onPress, on
     >
       <Pressable
         onPress={editMode ? onRemove : onPress}
-        style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.8 : 1 })}
-        className={`gap-2 rounded-2xl border p-3 ${card.isWeakPoint ? "border-error bg-error/5" : "border-divider bg-surface"}`}
+        style={({ pressed }) => ({
+          flex: 1,
+          opacity: pressed ? 0.8 : 1,
+          backgroundColor: card.isWeakPoint ? "rgba(255,59,48,0.08)" : colors.neutral.surface,
+          borderRadius: 16,
+        })}
+        className="gap-2 p-3"
       >
         <View className="flex-row items-center justify-between">
           <RankBadge tier={card.tier} size={36} />
@@ -262,8 +265,8 @@ function AddLiftTile({ width, index, onPress }: { width: number; index: number; 
     >
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.7 : 1 })}
-        className="items-center justify-center gap-2 rounded-2xl border border-dashed border-divider bg-surface/40 p-3"
+        style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.7 : 1, backgroundColor: colors.neutral.surface, borderRadius: 16 })}
+        className="items-center justify-center gap-2 p-3"
       >
         <Ionicons name="add-circle-outline" size={22} color={colors.neutral.textSecondary} />
         <Text className="caption text-center font-body-semibold text-text-secondary">Add more</Text>
@@ -280,39 +283,29 @@ type SortMenuProps = {
 };
 
 function SortMenu({ visible, sortKey, onChange, onClose }: SortMenuProps) {
-  const insets = useSafeAreaInsets();
-
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1 }} onPress={onClose} className="justify-end bg-black/50">
-        {/* Swallows taps so they don't bubble to the backdrop Pressable and close the sheet. */}
-        <Pressable onPress={() => {}}>
-          <Animated.View
-            entering={FadeInUp.springify().damping(18).mass(0.7)}
-            style={{ paddingBottom: insets.bottom + 16 }}
-            className="gap-1 rounded-t-3xl border-t border-divider bg-surface p-4"
-          >
-            <Text className="heading-4 mb-2 text-text-primary">Sort lifts by</Text>
-            {LIFT_CARD_SORT_OPTIONS.map((option) => {
-              const active = option.key === sortKey;
-              return (
-                <Pressable
-                  key={option.key}
-                  onPress={() => {
-                    onChange(option.key);
-                    onClose();
-                  }}
-                  className="flex-row items-center justify-between rounded-xl px-2 py-3"
-                >
-                  <Text className={active ? "body-md font-body-semibold text-brand-yellow" : "body-md text-text-primary"}>{option.label}</Text>
-                  {active && <Ionicons name="checkmark" size={18} color={colors.brand.yellow} />}
-                </Pressable>
-              );
-            })}
-          </Animated.View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <BottomSheet visible={visible} onClose={onClose} maxDynamicContentSize={360}>
+      <View className="gap-1 p-4">
+        <Text className="heading-4 mb-2 text-text-primary">Sort lifts by</Text>
+        {LIFT_CARD_SORT_OPTIONS.map((option) => {
+          const active = option.key === sortKey;
+          return (
+            <Pressable
+              key={option.key}
+              onPress={() => {
+                onChange(option.key);
+                onClose();
+              }}
+              style={{ backgroundColor: active ? colors.neutral.surfaceElevated : "transparent", borderRadius: 14 }}
+              className="flex-row items-center justify-between px-3 py-3"
+            >
+              <Text className={active ? "body-md font-body-semibold text-brand-yellow" : "body-md text-text-primary"}>{option.label}</Text>
+              {active && <Ionicons name="checkmark" size={18} color={colors.brand.yellow} />}
+            </Pressable>
+          );
+        })}
+      </View>
+    </BottomSheet>
   );
 }
 
@@ -328,6 +321,50 @@ function sortDisplayCards(cards: DisplayLiftCard[], sortKey: LiftCardSortKey): D
     case "alphabetical":
       return sorted.sort((a, b) => a.name.localeCompare(b.name));
   }
+}
+
+/** A real, full regroup by tier — not just chunking whatever happens to be adjacent. An earlier
+ * version only merged ADJACENT same-tier cards, on the assumption that score-sorting ("strongest"/
+ * "weakest") keeps every card of a given tier contiguous — wrong: each lift's `score` is on its OWN
+ * scale (different movements score differently), so a card can rank between two cards of a
+ * different, unrelated tier. That showed up as the exact bug reported: the same tier (e.g. Legend)
+ * appearing as TWO separate section headers, non-adjacent in the list — "ik zie 2 tabs met legend
+ * dat kan niet kloppen." This collects every card into its real tier bucket first, so each tier that
+ * has any cards gets exactly ONE header, however its cards happened to interleave in the score
+ * order. Groups are then ordered by tier rank (not by wherever their first card landed in the score
+ * sort) — descending for "strongest" (your best tier first), ascending for "weakest" (your worst
+ * tier first, matching what that sort is FOR). Cards within a group keep their existing relative
+ * order (still score-sorted), since a `Map` preserves insertion order. */
+function groupByTier(cards: DisplayLiftCard[], direction: "descending" | "ascending"): { tier: RankTier; cards: DisplayLiftCard[] }[] {
+  const byTier = new Map<RankTier, DisplayLiftCard[]>();
+  for (const card of cards) {
+    const bucket = byTier.get(card.tier);
+    if (bucket) bucket.push(card);
+    else byTier.set(card.tier, [card]);
+  }
+  const groups = [...byTier.entries()].map(([tier, tierCards]) => ({ tier, cards: tierCards }));
+  const sign = direction === "descending" ? -1 : 1;
+  return groups.sort((a, b) => sign * (RANK_TIERS.indexOf(a.tier) - RANK_TIERS.indexOf(b.tier)));
+}
+
+const tierGroupHeaderStyle = { fontFamily: fontFamily.bodyBold, fontSize: 13, letterSpacing: 1.2 };
+
+/** A full-width divider row breaking the grid into tiers as you scroll — "het is niet heel duidelijk
+ * als je scrolled door alle ranks": with a dozen-plus lift tiles in a row-by-row 3-column grid and
+ * no labels, there was nothing telling you WHICH tier's cards you were currently looking at, or
+ * where one tier's group ended and the next began. `w-full` inside the grid's own `flex-row
+ * flex-wrap` forces a fresh row before and after it, the same trick `TierGroupHeader`'s sibling
+ * cards rely on to stay a clean 3-across grid within each tier's own block. */
+function TierGroupHeader({ tier, count }: { tier: RankTier; count: number }) {
+  const tint = RANK_TIER_COLOR[tier];
+  return (
+    <View className="w-full flex-row items-center gap-2 pb-1 pt-3">
+      <RankBadge tier={tier} size={22} />
+      <Text style={[tierGroupHeaderStyle, { color: tint }]}>{formatRankTier(tier).toUpperCase()}</Text>
+      <Text style={{ fontFamily: fontFamily.bodySemiBold, fontSize: 12, color: colors.neutral.textSecondary }}>{`· ${count}`}</Text>
+      <View className="h-px flex-1" style={{ backgroundColor: colors.neutral.divider }} />
+    </View>
+  );
 }
 
 function highestDisplayTier(cards: DisplayLiftCard[]): RankTier {
@@ -406,6 +443,14 @@ export default function RanksScreen() {
   );
 
   const sortedCards = useMemo(() => sortDisplayCards(cards, sortKey), [cards, sortKey]);
+  // A real regroup-by-tier (see `groupByTier`'s own comment on why this isn't just chunking
+  // adjacent cards), so this works correctly for every sort — "weakest" lists worst tier first,
+  // every other sort lists best tier first, and within each tier group the cards keep whatever
+  // order the active sort already put them in.
+  const tierGroups = useMemo(() => groupByTier(sortedCards, sortKey === "weakest" ? "ascending" : "descending"), [sortedCards, sortKey]);
+  // A single group (everything the same tier) would just be a redundant header repeating what the
+  // hero banner's own tier badge already says.
+  const showTierGroups = tierGroups.length > 1;
   const power = ranksBoardPowerScore(cards);
   const topTier = highestDisplayTier(cards);
   const sortLabel = LIFT_CARD_SORT_OPTIONS.find((option) => option.key === sortKey)?.label ?? "Strongest";
@@ -486,11 +531,17 @@ export default function RanksScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.delay(90).springify().damping(16).mass(0.6)}>
-          <Pressable onPress={() => router.push("/ranks/whats-my-rank")} style={PRESSED_STYLE} className="mx-4 mt-4 flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4">
-            <Ionicons name="sparkles" size={18} color={colors.brand.iron} />
-            <Text className="body-lg font-body-semibold text-brand-iron">What&apos;s my rank?</Text>
-          </Pressable>
+        {/* The flagship interactive tool on this tab gets the same running-gold treatment the app
+            reserves for its few genuinely special CTAs (Home's Start Workout, a live Crew War) —
+            "maak het gebruik van de pagina dus ook makkelijk... fancy" applies most to the one thing
+            here that's an actual guided flow, not the static grid below it. */}
+        <Animated.View entering={FadeInUp.delay(90).springify().damping(16).mass(0.6)} className="mx-4 mt-4">
+          <BrandBeamFrame borderRadius={28}>
+            <Pressable onPress={() => router.push("/ranks/whats-my-rank")} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, backgroundColor: colors.neutral.background })} className="flex-row items-center justify-center gap-2 py-4">
+              <Ionicons name="sparkles" size={18} color={colors.brand.yellow} />
+              <Text className="body-lg font-body-semibold text-brand-yellow">What&apos;s my rank?</Text>
+            </Pressable>
+          </BrandBeamFrame>
         </Animated.View>
 
         <Animated.View entering={FadeInUp.delay(150).springify().damping(16).mass(0.6)} className="mx-4 mt-6 gap-3">
@@ -500,13 +551,13 @@ export default function RanksScreen() {
             </Text>
 
             <View className="flex-row items-center gap-2">
-              <Pressable onPress={() => setSortMenuOpen(true)} style={PRESSED_STYLE} className="flex-row items-center gap-1 rounded-full border border-divider bg-surface px-3 py-1.5">
+              <Pressable onPress={() => setSortMenuOpen(true)} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, backgroundColor: colors.neutral.surface })} className="flex-row items-center gap-1 rounded-full px-3 py-1.5">
                 <Text className="caption font-body-semibold text-text-secondary">Sort: {sortLabel}</Text>
                 <Ionicons name="chevron-down" size={12} color={colors.neutral.textSecondary} />
               </Pressable>
 
               {snapshotAsOfMs == null && (
-                <Pressable onPress={() => setEditMode((current) => !current)} style={PRESSED_STYLE} className={`rounded-full border px-3 py-1.5 ${editMode ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"}`}>
+                <Pressable onPress={() => setEditMode((current) => !current)} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, backgroundColor: editMode ? colors.brand.yellow : colors.neutral.surface })} className="rounded-full px-3 py-1.5">
                   <Text className={`caption font-body-semibold ${editMode ? "text-brand-iron" : "text-text-secondary"}`}>{editMode ? "Done" : "Edit"}</Text>
                 </Pressable>
               )}
@@ -514,7 +565,29 @@ export default function RanksScreen() {
           </View>
 
           <View className="flex-row flex-wrap" style={{ gap: GRID_GAP }} onLayout={handleGridLayout}>
-            {cardWidth > 0 && sortedCards.map((card, index) => <LiftCard key={card.id} card={card} width={cardWidth} index={index} editMode={editMode} scope={scope} weightUnit={weightUnit} onPress={() => handleCardPress(card)} onRemove={() => handleRemoveCard(card)} />)}
+            {cardWidth > 0 && showTierGroups
+              ? tierGroups.map((group) => (
+                  <View key={group.tier} className="w-full flex-row flex-wrap" style={{ gap: GRID_GAP }}>
+                    <TierGroupHeader tier={group.tier} count={group.cards.length} />
+                    {group.cards.map((card) => (
+                      <LiftCard
+                        key={card.id}
+                        card={card}
+                        width={cardWidth}
+                        index={sortedCards.indexOf(card)}
+                        editMode={editMode}
+                        scope={scope}
+                        weightUnit={weightUnit}
+                        onPress={() => handleCardPress(card)}
+                        onRemove={() => handleRemoveCard(card)}
+                      />
+                    ))}
+                  </View>
+                ))
+              : cardWidth > 0 &&
+                sortedCards.map((card, index) => (
+                  <LiftCard key={card.id} card={card} width={cardWidth} index={index} editMode={editMode} scope={scope} weightUnit={weightUnit} onPress={() => handleCardPress(card)} onRemove={() => handleRemoveCard(card)} />
+                ))}
             {cardWidth > 0 && snapshotAsOfMs == null && <AddLiftTile width={cardWidth} index={sortedCards.length} onPress={() => setAddModalVisible(true)} />}
           </View>
         </Animated.View>

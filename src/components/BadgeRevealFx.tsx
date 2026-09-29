@@ -1,16 +1,17 @@
-import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect } from "react";
 import { Image, Platform, View } from "react-native";
 import Animated, {
   Easing,
+  Extrapolation,
+  interpolate,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
   withSequence,
   withSpring,
   withTiming,
-  ZoomIn,
 } from "react-native-reanimated";
 import { PIConfetti } from "react-native-fast-confetti";
 import Svg, { Line } from "react-native-svg";
@@ -181,26 +182,52 @@ function ConfettiBurst({ tint, size }: { tint: string; size: number }) {
   );
 }
 
-const SPARKLE_SPOTS: { style: object; offset: number }[] = [
-  { style: { top: -6, left: -18 }, offset: 100 },
-  { style: { top: 4, right: -22 }, offset: 170 },
-  { style: { bottom: 6, left: -8 }, offset: 240 },
-  { style: { bottom: -4, right: 4 }, offset: 200 },
-];
+// A brief white flash right as the medal lands — stacked with `ShockwaveRing`'s own tinted ring, it
+// sells "impact" (light actually catching the medal) instead of decoration tacked on afterward.
+function ImpactFlash({ size }: { size: number }) {
+  const opacity = useSharedValue(0);
 
-function Sparkles() {
+  useEffect(() => {
+    opacity.value = withDelay(IMPACT_DELAY, withSequence(withTiming(0.55, { duration: 1 }), withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return <Animated.View pointerEvents="none" style={[{ position: "absolute", width: size, height: size, borderRadius: size / 2, backgroundColor: colors.brand.white }, style]} />;
+}
+
+const SHINE_DELAY = IMPACT_DELAY + 120;
+const SHINE_DURATION = 620;
+
+/** A diagonal band of light sweeping once across the medal's own artwork right after it lands — the
+ * "real reveal" replacement for the old four static `Ionicons name="sparkles"` glyphs popping in at
+ * the corners ("niet via die AI sterren op het laatst, doe een echte reveal"). Four identical ✨ icons
+ * fading in reads as generic decoration bolted on afterward, the same visual cliché "AI slop" mockups
+ * reach for to signify "something magic happened" — this instead animates the medal's OWN surface
+ * (a bright, narrow, rotated gradient band translating across its actual bounds, clipped to them),
+ * the same "light catching a premium object" device real game reward screens use for a rare-item
+ * reveal. Genuinely tied to the medal's own geometry, not four fixed points floating near it. */
+function MedalShineSweep({ size, medalHeight }: { size: number; medalHeight: number }) {
+  const progress = useSharedValue(0);
+  const bandWidth = size * 0.4;
+
+  useEffect(() => {
+    progress.value = withDelay(SHINE_DELAY, withTiming(1, { duration: SHINE_DURATION, easing: Easing.out(Easing.cubic) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: interpolate(progress.value, [0, 1], [-bandWidth * 1.6, size + bandWidth * 0.6]) }, { rotate: "18deg" }],
+    opacity: interpolate(progress.value, [0, 0.08, 0.75, 1], [0, 0.9, 0.9, 0], Extrapolation.CLAMP),
+  }));
+
   return (
-    <>
-      {SPARKLE_SPOTS.map((spot, i) => (
-        <Animated.View
-          key={i}
-          entering={ZoomIn.delay(IMPACT_DELAY + spot.offset).duration(280).springify().damping(9)}
-          style={[{ position: "absolute" }, spot.style]}
-        >
-          <Ionicons name="sparkles" size={16} color={colors.brand.yellow} />
-        </Animated.View>
-      ))}
-    </>
+    <View pointerEvents="none" style={{ position: "absolute", width: size, height: medalHeight, overflow: "hidden" }}>
+      <Animated.View style={[{ position: "absolute", top: -medalHeight * 0.6, width: bandWidth, height: medalHeight * 2.2 }, style]}>
+        <LinearGradient colors={["transparent", "rgba(255,255,255,0.9)", "transparent"]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1 }} />
+      </Animated.View>
+    </View>
   );
 }
 
@@ -215,12 +242,14 @@ type BadgeRevealFxProps = {
 };
 
 /** The full "rank/PR reveal" effect: a building charge-up pulse, a sunburst backdrop, the medal
- * turning to face the viewer as it pops in, an impact ring + confetti burst as it lands, and
- * sparkles settling on top. The flat yellow glow that used to live here is gone — every screen
- * that renders this now sits on a `TierGradientBackground` tinted to the actual tier color, which
- * does that job better (and correctly, per-tier) than a fixed-color glow behind just the medal
- * could. Shared by the PR celebration screen, the PR share card, and the "What's my rank?" tool so
- * all three get the same payoff. */
+ * turning to face the viewer as it pops in, a white impact flash + tinted shockwave ring + confetti
+ * burst as it lands, and a light sweep crossing the medal's own surface right after (see
+ * `MedalShineSweep`'s own comment — replaced four static `Ionicons` sparkle glyphs that read as
+ * generic decoration rather than a real reveal). The flat yellow glow that used to live here is
+ * gone — every screen that renders this now sits on a `TierGradientBackground` tinted to the actual
+ * tier color, which does that job better (and correctly, per-tier) than a fixed-color glow behind
+ * just the medal could. Shared by the PR celebration screen, the PR share card, and the "What's my
+ * rank?" tool so all three get the same payoff. */
 export function BadgeRevealFx({ tier, triggerKey, size = 180 }: BadgeRevealFxProps) {
   const medalHeight = size / MEDAL_ASPECT_RATIO;
   const ringSize = size * 1.15;
@@ -241,10 +270,11 @@ export function BadgeRevealFx({ tier, triggerKey, size = 180 }: BadgeRevealFxPro
     <View className="items-center justify-center" style={{ width: size, height: medalHeight }}>
       <AnticipationPulse key={`charge-${triggerKey}`} tint={tint} size={ringSize * 0.7} />
       <Sunburst key={`sunburst-${triggerKey}`} tint={tint} size={ringSize * 1.4} />
+      <ImpactFlash key={`flash-${triggerKey}`} size={ringSize * 0.85} />
       <ShockwaveRing key={`ring-${triggerKey}`} triggerKey={triggerKey} size={ringSize} />
       <ConfettiBurst key={`confetti-${triggerKey}`} tint={tint} size={size * 1.8} />
       <MedalFlipIn key={`medal-${triggerKey}`} tier={tier} size={size} medalHeight={medalHeight} />
-      <Sparkles key={`sparkles-${triggerKey}`} />
+      <MedalShineSweep key={`shine-${triggerKey}`} size={size} medalHeight={medalHeight} />
     </View>
   );
 }
