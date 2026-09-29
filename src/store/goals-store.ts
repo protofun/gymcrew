@@ -6,7 +6,9 @@ import { pullState, pushState } from "@/lib/backend-sync";
 import { colors } from "@/theme";
 
 export type TrackingMode = "auto" | "manual";
-export type GoalMetric = "volume" | "strength" | "endurance" | "weight" | "custom";
+/** What a goal measures. Every metric but "custom" can be worked out by the app itself (see lib/goal-progress.ts): from your
+ * workouts (volume, strength, endurance, workouts, streak), your body log (weight) or your food log (protein, calories, logging). */
+export type GoalMetric = "volume" | "strength" | "endurance" | "workouts" | "streak" | "weight" | "protein" | "calories" | "logging" | "custom";
 
 export type Goal = {
   id: string;
