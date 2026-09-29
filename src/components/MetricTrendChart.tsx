@@ -81,7 +81,7 @@ export function MetricTrendChart({ points, emptyLabel, formatValue }: MetricTren
       {chartWidth > 0 && (
         <LineChart
           data={data}
-          width={chartWidth}
+          width={chartWidth - Y_AXIS_WIDTH}
           spacing={POINT_SPACING}
           initialSpacing={16}
           endSpacing={16}

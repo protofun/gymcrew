@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
+import { BrandBeamFrame } from "@/components/BrandBeamFrame";
 import { api, isApiConfigured, type ApiBanner, type BannerKind } from "@/lib/api";
 import { copyPromoCode, formatTimeLeft, openBannerLink } from "@/lib/banner-actions";
 import { trackBannerViewOnce, useBannerStore } from "@/store/banner-store";
-import { colors } from "@/theme";
+import { colors, spring } from "@/theme";
 
 /** Per-kind look — mirrored in the admin panel's BannerPreview.tsx, keep the two in sync. */
 export const BANNER_KIND_STYLES: Record<BannerKind, { color: string; icon: keyof typeof Ionicons.glyphMap }> = {
@@ -76,8 +78,8 @@ function Banner({ banner }: { banner: ApiBanner }) {
     trackBannerViewOnce(banner.id);
   }, [banner.id]);
 
-  return (
-    <View className="rounded-2xl border bg-surface p-4" style={{ borderColor: `${style.color}66` }}>
+  const card = (
+    <View className="rounded-2xl border bg-surface p-4" style={{ borderColor: banner.kind === "deal" ? "transparent" : `${style.color}66`, borderRadius: 22 }}>
       <View className={banner.dismissible ? "pr-6" : ""}>
         <BannerContent banner={banner} />
       </View>
@@ -87,6 +89,13 @@ function Banner({ banner }: { banner: ApiBanner }) {
         </Pressable>
       )}
     </View>
+  );
+
+  // A deal is time-limited and worth acting on, so it gets the running golden light; a plain notice doesn't.
+  return (
+    <Animated.View entering={FadeInDown.springify().damping(spring.entrance.damping).mass(spring.entrance.mass)}>
+      {banner.kind === "deal" ? <BrandBeamFrame borderRadius={22}>{card}</BrandBeamFrame> : card}
+    </Animated.View>
   );
 }
 

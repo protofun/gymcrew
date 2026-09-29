@@ -5,6 +5,7 @@ import { Image, Pressable, Text, View, type ImageSourcePropType } from "react-na
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NotificationsDropdown } from "@/components/NotificationsDropdown";
+import { NumberFlow } from "@/components/ui/molecules/number-flow";
 import { navIcons } from "@/constants/images";
 import type { AppNotification } from "@/data/notifications";
 import { useNotificationsStore } from "@/store/notifications-store";
@@ -71,7 +72,7 @@ export function TopBar({ avatarSource, streakDays, notifications }: TopBarProps)
         <View className="flex-row items-center gap-3">
           <View className="flex-row items-center gap-1">
             <Ionicons name="flame" size={18} color={colors.semantic.streak} />
-            <Text className="body-md text-text-primary">{streakDays}</Text>
+            <NumberFlow value={streakDays} fontSize={16} color={colors.neutral.textPrimary} fontWeight="700" />
           </View>
 
           <Pressable

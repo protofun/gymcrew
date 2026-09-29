@@ -58,13 +58,16 @@ const LEG_PLAN: ExercisePlan[] = [
   { exerciseId: "Crunches", startWeightKg: 0, endWeightKg: 0, startReps: 15, endReps: 30, sets: 3 },
 ];
 
-const SPLIT: { name: string; plan: ExercisePlan[] }[] = [
+/** Exported for `lib/dev-tools.ts`'s configurable multi-year Training Consistency seeder — the same
+ * realistic PPL rotation and progressive-overload math this file's own single fixed year uses,
+ * rather than a second, different-looking fake dataset. */
+export const SPLIT: { name: string; plan: ExercisePlan[] }[] = [
   { name: "Push Day", plan: PUSH_PLAN },
   { name: "Pull Day", plan: PULL_PLAN },
   { name: "Leg Day", plan: LEG_PLAN },
 ];
 
-function hashString(value: string): number {
+export function hashString(value: string): number {
   let hash = 0;
   for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
   return hash;
@@ -74,7 +77,7 @@ function roundToHalf(value: number): number {
   return Math.round(value * 2) / 2;
 }
 
-function buildExercise(plan: ExercisePlan, progress: number, seed: string): LoggedExercise {
+export function buildExercise(plan: ExercisePlan, progress: number, seed: string): LoggedExercise {
   const exercise = EXERCISE_BY_ID[plan.exerciseId];
   const isReallyBodyweight = plan.endWeightKg === 0;
   const jitter = ((hashString(seed) % 7) - 3) / 100; // ±3%, session-to-session variation
@@ -101,7 +104,7 @@ function buildExercise(plan: ExercisePlan, progress: number, seed: string): Logg
   };
 }
 
-function heaviestSet(exercise: LoggedExercise): { weightKg: number; reps: number } | null {
+export function heaviestSet(exercise: LoggedExercise): { weightKg: number; reps: number } | null {
   return exercise.sets.reduce<{ weightKg: number; reps: number } | null>((best, set) => {
     if (set.weightKg === null) return best;
     return !best || set.weightKg > best.weightKg ? { weightKg: set.weightKg, reps: set.reps ?? 0 } : best;

@@ -35,7 +35,23 @@ type BottomSheetProps = {
  * 2. Even a *legitimate* `.dismiss()` leaves the sheet unable to `.present()` again on web (a
  *    stale-closure-style issue inside the library's own modal-status machine). Forcing a fresh
  *    `BottomSheetModal` instance (via `key`) on every open sidesteps it entirely — each `present()`
- *    always targets a brand-new instance that's never been dismissed. */
+ *    always targets a brand-new instance that's never been dismissed.
+ *
+ * Known, deliberately NOT fixed here: mouse-WHEEL scrolling inside a sheet's `BottomSheetScrollView`
+ * does nothing on web — only a real pointer/touch drag scrolls it (confirmed empirically: a real
+ * synthetic touch-drag sequence dispatched at the DOM level scrolls a long list correctly; a `wheel`
+ * event over the exact same list, at the exact same point, does not, even once the drag itself was
+ * proven to work). A genuine attempt was made to bridge this — translating wheel ticks into a
+ * synthetic `pointerdown`/`pointermove`/`pointerup` sequence, the same shape a real drag produces —
+ * and it did NOT work: `react-native-gesture-handler`'s web `PointerEventManager` fired for the
+ * synthetic events, but the underlying scroll never moved, most likely because its gesture state
+ * machine also validates the pointer's position against `isPointerInBounds(this.view, ...)` against
+ * whichever specific nested element the library's own gesture instance is bound to — not necessarily
+ * the element `document.elementFromPoint` resolves to — and getting that right would mean reverse-
+ * engineering `@gorhom/bottom-sheet`'s internal DOM structure rather than a surface-level fix. Real
+ * touch/drag already works correctly in every sheet in the app (this component, and by extension
+ * every screen that uses it), which is what actually matters on the native app and on a real phone's
+ * mobile browser; this is specifically a desktop-mouse-on-web gap. */
 export function BottomSheet({ visible, onClose, children, snapPoints, maxDynamicContentSize, keyboardAware }: BottomSheetProps) {
   const ref = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();

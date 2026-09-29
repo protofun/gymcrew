@@ -3,7 +3,6 @@ import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { TabBarFab } from "@/components/TabBarFab";
 import { colors } from "@/theme";
 
 const TAB_ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }> = {
@@ -42,7 +41,8 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           }
 
           if (route.name === LOG_ROUTE_NAME) {
-            return <TabBarFab key={route.key} focused={isFocused} onPress={onPress} />;
+            // The + itself is the fan menu, drawn over the screen (see TabBarFan) — the bar only keeps its slot.
+            return <View key={route.key} style={{ flex: 1 }} />;
           }
 
           const icons = TAB_ICONS[route.name] ?? TAB_ICONS.home;
