@@ -4,7 +4,9 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
+import { CrewSwitcher } from "@/components/CrewSwitcher";
 import { DivisionBadge } from "@/components/DivisionBadge";
+import { HOME_ROW_DETAIL, HOME_ROW_TITLE } from "@/components/homeStyle";
 import { DIVISIONS, DIVISION_XP_REQUIRED, PLAYER_DIVISION_MIN_POWER, divisionForPlayerPower, divisionIndex } from "@/lib/division";
 import type { RankProfile } from "@/lib/rank";
 import { userOverallPowerScore } from "@/lib/ranks-board";
@@ -16,6 +18,7 @@ import { colors } from "@/theme";
 
 const SCOPES = ["Crews", "Players"] as const;
 type Scope = (typeof SCOPES)[number];
+const SCOPE_LABEL: Record<Scope, string> = { Crews: "CREWS", Players: "PLAYERS" };
 
 export default function AllDivisionsScreen() {
   const insets = useSafeAreaInsets();
@@ -57,19 +60,8 @@ export default function AllDivisionsScreen() {
         <Text className="heading-4 text-text-primary">Divisions</Text>
       </View>
 
-      <View className="mx-4 mt-4 flex-row rounded-full border border-divider bg-surface p-1">
-        {SCOPES.map((s) => {
-          const active = s === scope;
-          return (
-            <Pressable
-              key={s}
-              onPress={() => setScope(s)}
-              className={`flex-1 items-center rounded-full py-2 ${active ? "bg-brand-yellow" : ""}`}
-            >
-              <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{s.toUpperCase()}</Text>
-            </Pressable>
-          );
-        })}
+      <View className="mx-4 mt-4">
+        <CrewSwitcher options={[...SCOPES]} labels={SCOPE_LABEL} value={scope} onChange={setScope} />
       </View>
 
       <Text className="body-sm mx-4 mt-3 text-text-secondary">
@@ -78,10 +70,10 @@ export default function AllDivisionsScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: insets.bottom + 24, gap: 8 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 24 }}
         showsVerticalScrollIndicator={false}
       >
-        {steps.map((step) => {
+        {steps.map((step, index) => {
           const stepIndex = divisionIndex(step);
           const isCurrent = stepIndex === currentIndex;
           const isAchieved = stepIndex <= currentIndex;
@@ -93,21 +85,14 @@ export default function AllDivisionsScreen() {
               : `${PLAYER_DIVISION_MIN_POWER[step].toLocaleString("en-US")} power to enter`;
 
           return (
-            <View
-              key={step}
-              className={`flex-row items-center gap-3 rounded-2xl border p-3 ${
-                isCurrent ? "border-brand-yellow bg-brand-yellow/10" : "border-divider bg-surface"
-              }`}
-            >
+            <View key={step} className={`flex-row items-center gap-3 py-3 ${index === steps.length - 1 ? "" : "border-b border-divider"}`}>
               <DivisionBadge division={step} size={40} dimmed={!isAchieved} />
 
               <View className="flex-1">
-                <Text
-                  className={`body-md font-body-semibold ${isCurrent ? "text-brand-yellow" : isAchieved ? "text-text-primary" : "text-text-secondary"}`}
-                >
-                  {step}
+                <Text style={[HOME_ROW_TITLE, { fontSize: 16, lineHeight: 18, color: isCurrent ? colors.brand.yellow : isAchieved ? colors.brand.white : colors.neutral.textSecondary }]}>
+                  {step.toUpperCase()}
                 </Text>
-                <Text className="caption text-text-secondary">{pointsLabel}</Text>
+                <Text style={HOME_ROW_DETAIL}>{pointsLabel}</Text>
               </View>
 
               {isCurrent ? (

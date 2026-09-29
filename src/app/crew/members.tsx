@@ -9,8 +9,9 @@ import { goBack } from "@/lib/navigation";
 import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { type DuelMetric, DuelChallengeSheet } from "@/components/DuelChallengeSheet";
 import { EditableText } from "@/components/EditableText";
+import { HOME_ROW_DETAIL } from "@/components/homeStyle";
 import { InviteMembersModal } from "@/components/InviteMembersModal";
-import { MemberActionsSheet } from "@/components/MemberActionsSheet";
+import { ContextMenu } from "@/components/ui/molecules/context-menu";
 import { FLEX_TAGS } from "@/data/flex-tags";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
 import { toDateKey } from "@/lib/date";
@@ -32,40 +33,37 @@ const ROLE_LABEL: Record<CrewMember["role"], string | null> = {
   member: null,
 };
 
-function MemberRow({
+function MemberRowContent({
   member,
   division,
   flexTagEmoji,
   trainingLabel,
-  canManage,
   canChallenge,
-  onManage,
+  canManage,
   onChallenge,
-  onPress,
+  isLast,
 }: {
   member: CrewMember;
   division: Division;
   flexTagEmoji?: string;
   trainingLabel: string | null;
-  canManage: boolean;
   canChallenge: boolean;
-  onManage: () => void;
+  canManage: boolean;
   onChallenge: () => void;
-  onPress: () => void;
+  isLast: boolean;
 }) {
   const roleLabel = ROLE_LABEL[member.role];
 
+  // A plain View, not a Pressable — the tap (and, for canManage rows, the long-press) live on the
+  // ONE Pressable wrapping this in `MemberRow`, not a second one nested in here (see the GymCrew
+  // patch note on `ContextMenu.Trigger`'s `onPress` for why that doubles up).
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-      className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3"
-    >
+    <View className={`flex-row items-center gap-3 py-3.5 ${isLast ? "" : "border-b border-divider"}`}>
       <View>
         <DivisionAvatarFrame source={{ uri: member.avatarUrl }} division={division} size={44} />
         {member.isOnline && (
           <View
-            className="absolute rounded-full border-2 border-surface bg-success"
+            className="absolute rounded-full border-2 border-background bg-success"
             style={{ right: -1, bottom: -1, width: 12, height: 12 }}
           />
         )}
@@ -78,12 +76,12 @@ function MemberRow({
           </EditableText>
           {flexTagEmoji && <Text style={{ fontSize: 13 }}>{flexTagEmoji}</Text>}
           {roleLabel && (
-            <View className="rounded-full bg-background px-2 py-0.5">
-              <Text className="caption text-text-secondary">{roleLabel}</Text>
+            <View className="rounded-full bg-surface px-2 py-0.5">
+              <Text style={HOME_ROW_DETAIL}>{roleLabel}</Text>
             </View>
           )}
         </View>
-        <EditableText id={`crew.members.${member.id}.username`} className="caption text-text-secondary">
+        <EditableText id={`crew.members.${member.id}.username`} style={HOME_ROW_DETAIL}>
           {`@${member.username}`}
         </EditableText>
         {trainingLabel ? (
@@ -94,7 +92,7 @@ function MemberRow({
             </EditableText>
           </View>
         ) : (
-          <Text className="caption mt-0.5 text-text-secondary">Resting today</Text>
+          <Text style={[HOME_ROW_DETAIL, { marginTop: 2 }]}>Resting today</Text>
         )}
       </View>
 
@@ -108,12 +106,98 @@ function MemberRow({
         </Pressable>
       )}
 
-      {canManage && (
-        <Pressable onPress={onManage} hitSlop={8} className="pl-1">
-          <Ionicons name="ellipsis-vertical" size={16} color={colors.neutral.textSecondary} />
-        </Pressable>
-      )}
-    </Pressable>
+      {/* Not a separate button — canManage rows open their actions with a long-press anywhere on the
+          row (Reacticx `context-menu`, the same gesture Files/Photos use); this dot is just the hint. */}
+      {canManage && <Ionicons name="ellipsis-vertical" size={16} color={colors.neutral.textSecondary} style={{ opacity: 0.5 }} />}
+    </View>
+  );
+}
+
+function MemberRow({
+  member,
+  division,
+  flexTagEmoji,
+  trainingLabel,
+  canManage,
+  canChallenge,
+  onPromote,
+  onDemote,
+  onToggleAdmin,
+  onRemove,
+  onChallenge,
+  onPress,
+  isLast,
+}: {
+  member: CrewMember;
+  division: Division;
+  flexTagEmoji?: string;
+  trainingLabel: string | null;
+  canManage: boolean;
+  canChallenge: boolean;
+  onPromote: () => void;
+  onDemote: () => void;
+  onToggleAdmin: () => void;
+  onRemove: () => void;
+  onChallenge: () => void;
+  onPress: () => void;
+  isLast: boolean;
+}) {
+  const content = (
+    <MemberRowContent
+      member={member}
+      division={division}
+      flexTagEmoji={flexTagEmoji}
+      trainingLabel={trainingLabel}
+      canChallenge={canChallenge}
+      canManage={canManage}
+      onChallenge={onChallenge}
+      isLast={isLast}
+    />
+  );
+
+  if (!canManage) {
+    return (
+      <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
+        {content}
+      </Pressable>
+    );
+  }
+
+  return (
+    <ContextMenu theme="dark">
+      <ContextMenu.Trigger onPress={onPress}>{content}</ContextMenu.Trigger>
+      <ContextMenu.Content>
+        {member.role === "member" && (
+          <ContextMenu.Item onPress={onPromote}>
+            <ContextMenu.Item.Icon>
+              <Ionicons name="arrow-up-circle-outline" size={20} color={colors.brand.white} />
+            </ContextMenu.Item.Icon>
+            <ContextMenu.Item.Label>Promote to Co-Leader</ContextMenu.Item.Label>
+          </ContextMenu.Item>
+        )}
+        {member.role === "co-leader" && (
+          <ContextMenu.Item onPress={onDemote}>
+            <ContextMenu.Item.Icon>
+              <Ionicons name="arrow-down-circle-outline" size={20} color={colors.brand.white} />
+            </ContextMenu.Item.Icon>
+            <ContextMenu.Item.Label>Demote to Member</ContextMenu.Item.Label>
+          </ContextMenu.Item>
+        )}
+        <ContextMenu.Item onPress={onToggleAdmin}>
+          <ContextMenu.Item.Icon>
+            <Ionicons name={member.isAdmin ? "shield-outline" : "shield-checkmark-outline"} size={20} color={colors.brand.white} />
+          </ContextMenu.Item.Icon>
+          <ContextMenu.Item.Label>{member.isAdmin ? "Remove Admin" : "Make Admin"}</ContextMenu.Item.Label>
+        </ContextMenu.Item>
+        <ContextMenu.Separator />
+        <ContextMenu.Item destructive onPress={onRemove}>
+          <ContextMenu.Item.Icon>
+            <Ionicons name="exit-outline" size={20} color={colors.semantic.error} />
+          </ContextMenu.Item.Icon>
+          <ContextMenu.Item.Label>Remove from Crew</ContextMenu.Item.Label>
+        </ContextMenu.Item>
+      </ContextMenu.Content>
+    </ContextMenu>
   );
 }
 
@@ -132,7 +216,6 @@ export default function CrewMembersScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [managingId, setManagingId] = useState<string | null>(null);
   const [challengingId, setChallengingId] = useState<string | null>(null);
 
   const myDivision = useProfileLevelStore((state) => state.division);
@@ -140,7 +223,6 @@ export default function CrewMembersScreen() {
   const equippedFlexTag = FLEX_TAGS.find((tag) => tag.id === equippedTagId);
   const me = members.find((member) => member.id === CURRENT_MEMBER_ID);
   const iAmAdmin = me?.isAdmin ?? false;
-  const managingMember = members.find((member) => member.id === managingId) ?? null;
   const challengingMember = members.find((member) => member.id === challengingId) ?? null;
   const proposeDuel = useCrewDuelStore((state) => state.propose);
 
@@ -226,14 +308,14 @@ export default function CrewMembersScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: insets.bottom + 16, gap: 10 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 16 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         {filteredMembers.length === 0 ? (
           <Text className="body-md py-10 text-center text-text-secondary">No members match.</Text>
         ) : (
-          filteredMembers.map((member) => (
+          filteredMembers.map((member, index) => (
             <MemberRow
               key={member.id}
               member={member}
@@ -242,9 +324,25 @@ export default function CrewMembersScreen() {
               trainingLabel={trainingLabelFor(member)}
               canManage={iAmAdmin && member.id !== CURRENT_MEMBER_ID && member.role !== "leader"}
               canChallenge={member.id !== CURRENT_MEMBER_ID}
-              onManage={() => setManagingId(member.id)}
+              onPromote={() => {
+                setMemberRole(member.id, "co-leader");
+                posthog.capture("crew_member_role_changed", { newRole: "co-leader" });
+              }}
+              onDemote={() => {
+                setMemberRole(member.id, "member");
+                posthog.capture("crew_member_role_changed", { newRole: "member" });
+              }}
+              onToggleAdmin={() => {
+                toggleMemberAdmin(member.id);
+                posthog.capture("crew_member_admin_toggled");
+              }}
+              onRemove={() => {
+                removeMember(member.id);
+                posthog.capture("crew_member_removed");
+              }}
               onChallenge={() => setChallengingId(member.id)}
               onPress={() => router.push(`/crew/member/${member.id}`)}
+              isLast={index === filteredMembers.length - 1}
             />
           ))
         )}
@@ -265,34 +363,6 @@ export default function CrewMembersScreen() {
         onClose={() => setInviteOpen(false)}
         crewName={crewName}
         inviteCode={inviteCode}
-      />
-
-      <MemberActionsSheet
-        visible={managingId !== null}
-        member={managingMember}
-        onClose={() => setManagingId(null)}
-        onPromote={() => {
-          if (!managingId) return;
-          setMemberRole(managingId, "co-leader");
-          posthog.capture("crew_member_role_changed", { newRole: "co-leader" });
-        }}
-        onDemote={() => {
-          if (!managingId) return;
-          setMemberRole(managingId, "member");
-          posthog.capture("crew_member_role_changed", { newRole: "member" });
-        }}
-        onToggleAdmin={() => {
-          if (!managingId) return;
-          toggleMemberAdmin(managingId);
-          posthog.capture("crew_member_admin_toggled");
-        }}
-        onRemove={() => {
-          if (managingId) {
-            removeMember(managingId);
-            posthog.capture("crew_member_removed");
-          }
-          setManagingId(null);
-        }}
       />
 
       <DuelChallengeSheet

@@ -7,8 +7,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CrewEventReactionBar } from "@/components/CrewEventReactionBar";
 import { DivisionBadge } from "@/components/DivisionBadge";
-import { FilterPickerSheet, type FilterOption } from "@/components/FilterPickerSheet";
+import { HOME_ROW_DETAIL } from "@/components/homeStyle";
+import { HomeRowLead } from "@/components/HomeRowLead";
 import { RankBadge } from "@/components/RankBadge";
+import { ContextMenu } from "@/components/ui/molecules/context-menu";
 import { api, waitForAuthToken, type ApiCrewActivityEvent, type CrewActivityEventType, type CrewActivityReactionEmoji } from "@/lib/api";
 import { describeEvent, divisionFromEvent, EVENT_ICON, EVENT_TINT, EVENT_TYPE_LABEL, tierForPrEvent, toggleReactionOptimistic } from "@/lib/crew-feed";
 import { useBlockedUsersStore } from "@/store/blocked-users-store";
@@ -17,7 +19,7 @@ import { useCustomExercisesStore } from "@/store/custom-exercises-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { colors } from "@/theme";
 
-const PRESSED_STYLE = ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.75 : 1 });
+type FilterOption<T extends string> = { key: T; label: string };
 
 const TYPE_OPTIONS: FilterOption<CrewActivityEventType | "all">[] = [
   { key: "all", label: "All" },
@@ -28,12 +30,32 @@ function formatFullDate(ms: number): string {
   return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function FilterTrigger({ label, onPress }: { label: string; onPress: () => void }) {
+// A tap-open dropdown (Reacticx `context-menu`, its `onPress` — see the GymCrew patch on
+// `ContextMenu.Trigger` — rather than its native long-press) instead of the app's usual
+// trigger-pill-plus-bottom-sheet: the option list is short enough that a menu anchored right under
+// the pill reads faster than a sheet sliding up from the bottom of the screen.
+function FilterMenu<T extends string>({ label, options, selected, onSelect }: { label: string; options: FilterOption<T>[]; selected: T; onSelect: (key: T) => void }) {
   return (
-    <Pressable onPress={onPress} style={PRESSED_STYLE} className="flex-row items-center gap-1 rounded-full border border-divider bg-surface px-3 py-1.5">
-      <Text className="caption font-body-semibold text-text-secondary">{label}</Text>
-      <Ionicons name="chevron-down" size={12} color={colors.neutral.textSecondary} />
-    </Pressable>
+    <ContextMenu theme="dark">
+      <ContextMenu.Trigger openTrigger="press">
+        <View className="flex-row items-center gap-1 rounded-full border border-divider bg-surface px-3 py-1.5">
+          <Text className="caption font-body-semibold text-text-secondary">{label}</Text>
+          <Ionicons name="chevron-down" size={12} color={colors.neutral.textSecondary} />
+        </View>
+      </ContextMenu.Trigger>
+      <ContextMenu.Content>
+        {options.map((option) => (
+          <ContextMenu.Item key={option.key} onPress={() => onSelect(option.key)}>
+            {option.key === selected && (
+              <ContextMenu.Item.Icon>
+                <Ionicons name="checkmark" size={18} color={colors.brand.yellow} />
+              </ContextMenu.Item.Icon>
+            )}
+            <ContextMenu.Item.Label>{option.label}</ContextMenu.Item.Label>
+          </ContextMenu.Item>
+        ))}
+      </ContextMenu.Content>
+    </ContextMenu>
   );
 }
 
@@ -52,8 +74,6 @@ export default function CrewActivityScreen() {
   const blockedUserIds = useBlockedUsersStore((state) => state.blockedUserIds);
   const [typeFilter, setTypeFilter] = useState<CrewActivityEventType | "all">("all");
   const [personFilter, setPersonFilter] = useState<string | "all">("all");
-  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
-  const [personMenuOpen, setPersonMenuOpen] = useState(false);
 
   useEffect(() => {
     // A hard refresh landing directly on this screen can fire before Clerk's session/token has
@@ -123,9 +143,6 @@ export default function CrewActivityScreen() {
       .sort((a, b) => b.createdAt - a.createdAt);
   }, [events, typeFilter, personFilter, blockedUserIds]);
 
-  const typeLabel = TYPE_OPTIONS.find((option) => option.key === typeFilter)?.label ?? "All";
-  const personLabel = personOptions.find((option) => option.key === personFilter)?.label ?? "Everyone";
-
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
@@ -136,13 +153,15 @@ export default function CrewActivityScreen() {
       </View>
 
       <View className="flex-row items-center gap-2 px-4 py-3">
-        <FilterTrigger label={`Type: ${typeLabel}`} onPress={() => setTypeMenuOpen(true)} />
-        {people.length > 1 && <FilterTrigger label={`Who: ${personLabel}`} onPress={() => setPersonMenuOpen(true)} />}
+        <FilterMenu label={`Type: ${TYPE_OPTIONS.find((o) => o.key === typeFilter)?.label ?? "All"}`} options={TYPE_OPTIONS} selected={typeFilter} onSelect={setTypeFilter} />
+        {people.length > 1 && (
+          <FilterMenu label={`Who: ${personOptions.find((o) => o.key === personFilter)?.label ?? "Everyone"}`} options={personOptions} selected={personFilter} onSelect={setPersonFilter} />
+        )}
       </View>
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24, gap: 10 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
         showsVerticalScrollIndicator={false}
       >
         {events === null ? (
@@ -150,12 +169,12 @@ export default function CrewActivityScreen() {
             <ActivityIndicator color={colors.brand.yellow} />
           </View>
         ) : filtered.length === 0 ? (
-          <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-14">
+          <View className="items-center gap-2 py-14">
             <Ionicons name="pulse-outline" size={28} color={colors.neutral.textSecondary} />
             <Text className="body-md text-text-secondary">No activity yet.</Text>
           </View>
         ) : (
-          filtered.map((event) => {
+          filtered.map((event, index) => {
             const isMe = event.userId === user?.id;
             const division = divisionFromEvent(event);
             const prTier = tierForPrEvent(
@@ -166,26 +185,23 @@ export default function CrewActivityScreen() {
               customExercises,
             );
             return (
-              <View key={event.id} className="gap-3 rounded-2xl border border-divider bg-surface p-3.5">
+              <View key={event.id} className={`gap-3 py-3.5 ${index === filtered.length - 1 ? "" : "border-b border-divider"}`}>
                 <View className="flex-row items-center gap-3">
                   {division ? (
                     <DivisionBadge division={division} size={40} />
                   ) : prTier ? (
                     <RankBadge tier={prTier} size={40} />
                   ) : (
-                    <View
-                      className="h-10 w-10 items-center justify-center rounded-full"
-                      style={{ backgroundColor: `${EVENT_TINT[event.eventType]}26` }}
-                    >
+                    <HomeRowLead kind="flat">
                       <Ionicons name={EVENT_ICON[event.eventType]} size={18} color={EVENT_TINT[event.eventType]} />
-                    </View>
+                    </HomeRowLead>
                   )}
                   <View className="flex-1 gap-0.5">
                     <Text className="body-sm text-text-primary">{describeEvent(event, isMe)}</Text>
-                    <Text className="caption text-text-secondary">{formatFullDate(event.createdAt)}</Text>
+                    <Text style={HOME_ROW_DETAIL}>{formatFullDate(event.createdAt)}</Text>
                   </View>
                 </View>
-                <View className="pl-[52px]">
+                <View className="pl-[56px]">
                   <CrewEventReactionBar reactions={event.reactions} onReact={(emoji) => handleReact(event.id, emoji)} />
                 </View>
               </View>
@@ -193,23 +209,6 @@ export default function CrewActivityScreen() {
           })
         )}
       </ScrollView>
-
-      <FilterPickerSheet
-        visible={typeMenuOpen}
-        title="Filter by type"
-        options={TYPE_OPTIONS}
-        selected={typeFilter}
-        onSelect={setTypeFilter}
-        onClose={() => setTypeMenuOpen(false)}
-      />
-      <FilterPickerSheet
-        visible={personMenuOpen}
-        title="Filter by person"
-        options={personOptions}
-        selected={personFilter}
-        onSelect={setPersonFilter}
-        onClose={() => setPersonMenuOpen(false)}
-      />
     </View>
   );
 }

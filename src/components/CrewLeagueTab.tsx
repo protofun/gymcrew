@@ -4,6 +4,7 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { EditableText } from "@/components/EditableText";
+import { HOME_EYEBROW, HOME_ROW_DETAIL, HOME_ROW_TITLE, HOME_SECTION_TITLE } from "@/components/homeStyle";
 import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
 import {
   computeCrewWeeklyPower,
@@ -23,16 +24,6 @@ import { colors, fontFamily } from "@/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native when
-// combined with a sibling className (see TopBar's wordmarkStyle for the same constraint).
-const headerStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 30,
-  lineHeight: 32,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
-
 function daysLeftInWeek(): number {
   const { endKey } = weekKeyRange(currentWeekKey());
   const endsAt = fromDateKey(endKey).getTime() + DAY_MS - 1;
@@ -44,6 +35,18 @@ const OUTCOME_META: Record<LeagueWeekResult["outcome"], { label: string; icon: k
   relegated: { label: "Relegated", icon: "arrow-down-circle", color: colors.semantic.error },
   held: { label: "Held", icon: "remove-circle", color: colors.neutral.textSecondary },
 };
+
+/** The rank number doubles as the zone indicator — a colored ring for the promotion/relegation zones
+ * instead of the boxed row's old left-edge color bar, the same "the leading circle carries the
+ * meaning" idea `HomeRowLead` uses everywhere else. */
+function RankBubble({ rank, zone }: { rank: number; zone: "promotion" | "relegation" | null }) {
+  const color = zone === "promotion" ? colors.semantic.success : zone === "relegation" ? colors.semantic.error : colors.neutral.divider;
+  return (
+    <View style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, borderColor: color }} className="items-center justify-center">
+      <Text style={{ fontFamily: fontFamily.bodyBold, fontSize: 12, color: zone ? color : colors.neutral.textSecondary }}>{rank}</Text>
+    </View>
+  );
+}
 
 function StandingIcon({ isMine, myCrewIcon, rivalIcon, rivalTint }: { isMine: boolean; myCrewIcon: string; rivalIcon?: string; rivalTint?: string }) {
   if (isMine) return <CrewIconBadge iconKey={myCrewIcon} size={32} />;
@@ -64,6 +67,7 @@ function StandingRow({
   weeklyPower,
   isMine,
   zone,
+  isLast,
 }: {
   id: string;
   rank: number;
@@ -74,54 +78,43 @@ function StandingRow({
   weeklyPower: number;
   isMine: boolean;
   zone: "promotion" | "relegation" | null;
+  isLast: boolean;
 }) {
-  const zoneColor = zone === "promotion" ? colors.semantic.success : zone === "relegation" ? colors.semantic.error : "transparent";
-
   return (
-    <View
-      className={`flex-row items-stretch overflow-hidden rounded-2xl border ${
-        isMine ? "border-brand-yellow/30 bg-brand-yellow/5" : "border-divider bg-surface"
-      }`}
-    >
-      <View style={{ width: 4, backgroundColor: zoneColor }} />
-      <View className="flex-1 flex-row items-center gap-3 p-3">
-        <Text className="body-sm w-5 text-center font-body-semibold text-text-secondary">{rank}</Text>
-        <StandingIcon isMine={isMine} myCrewIcon={myCrewIcon} rivalIcon={rivalIcon} rivalTint={rivalTint} />
-        <EditableText
-          id={`crew.league.${id}.name`}
-          className={`body-sm flex-1 font-body-semibold ${isMine ? "text-brand-yellow" : "text-text-primary"}`}
-          numberOfLines={1}
-        >
-          {isMine ? "Your Crew" : name}
-        </EditableText>
-        <EditableText id={`crew.league.${id}.power`} className="body-sm font-body-bold text-text-primary">
-          {weeklyPower.toLocaleString("en-US")}
-        </EditableText>
-      </View>
+    <View className={`flex-row items-center gap-3 py-3 ${isLast ? "" : "border-b border-divider"}`}>
+      <RankBubble rank={rank} zone={zone} />
+      <StandingIcon isMine={isMine} myCrewIcon={myCrewIcon} rivalIcon={rivalIcon} rivalTint={rivalTint} />
+      <EditableText id={`crew.league.${id}.name`} style={[HOME_ROW_TITLE, { fontSize: 16, lineHeight: 18, color: isMine ? colors.brand.yellow : colors.brand.white }]} numberOfLines={1} className="flex-1">
+        {isMine ? "Your Crew" : name}
+      </EditableText>
+      <EditableText id={`crew.league.${id}.power`} style={{ fontFamily: fontFamily.bodyBold, fontSize: 14, color: colors.brand.white }}>
+        {weeklyPower.toLocaleString("en-US")}
+      </EditableText>
     </View>
   );
 }
 
-function HistoryRow({ result }: { result: LeagueWeekResult }) {
+function HistoryRow({ result, isLast }: { result: LeagueWeekResult; isLast: boolean }) {
   const meta = OUTCOME_META[result.outcome];
   const weekLabel = fromDateKey(result.weekKey).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
   return (
-    <View className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3">
-      <Ionicons name={meta.icon} size={20} color={meta.color} />
-      <View className="flex-1 gap-0.5">
-        <Text className="body-sm font-body-semibold text-text-primary">Week of {weekLabel}</Text>
-        <Text className="caption text-text-secondary">
-          #{result.myRank} of {result.totalCrews} in {result.division}
-        </Text>
+    <View className={`flex-row items-center gap-3 py-3 ${isLast ? "" : "border-b border-divider"}`}>
+      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.neutral.surface }} className="items-center justify-center">
+        <Ionicons name={meta.icon} size={18} color={meta.color} />
       </View>
-      <Text className="caption font-body-bold" style={{ color: meta.color }}>
-        {meta.label.toUpperCase()}
-      </Text>
+      <View className="flex-1 gap-0.5">
+        <Text style={[HOME_ROW_TITLE, { fontSize: 15, lineHeight: 17 }]}>{`WEEK OF ${weekLabel.toUpperCase()}`}</Text>
+        <Text style={HOME_ROW_DETAIL}>{`#${result.myRank} of ${result.totalCrews} · ${result.division}`}</Text>
+      </View>
+      <Text style={{ fontFamily: fontFamily.heading, fontSize: 12, letterSpacing: 1, color: meta.color }}>{meta.label.toUpperCase()}</Text>
     </View>
   );
 }
 
+/** The Crew League tab — same flowing, no-boxed-cards system as the rest of Crew: `RankBubble`'s
+ * ringed number carries the promotion/relegation zone instead of the old boxed row's left-edge color
+ * bar, and the standings/history lists are hairline-divided rows, not stacked cards. */
 export function CrewLeagueTab() {
   const crewName = useCrewStore((state) => state.name);
   const crewIcon = useCrewStore((state) => state.icon);
@@ -141,43 +134,35 @@ export function CrewLeagueTab() {
   const zoneSize = leagueZoneSize(total);
 
   return (
-    <View className="mx-4 mt-4 gap-4">
+    <View className="mx-4 mt-4 gap-5">
       <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-1">
-        <EditableText id="crew.league.headline" style={headerStyle} className="text-brand-white">
-          WEEKLY LEAGUE
-        </EditableText>
+        <Text style={HOME_SECTION_TITLE}>WEEKLY LEAGUE</Text>
         <View className="flex-row items-center gap-1.5">
           <Ionicons name="shield" size={13} color={DIVISION_COLOR[crewDivision]} />
           <Text className="caption font-body-semibold text-text-secondary">
-            Top {zoneSize} promote, bottom {zoneSize} drop — resets every Monday.
+            {`Top ${zoneSize} promote, bottom ${zoneSize} drop — resets every Monday.`}
           </Text>
         </View>
       </Animated.View>
 
-      <Animated.View
-        entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)}
-        className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface px-4 py-3"
-      >
+      <Animated.View entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)} className="flex-row items-center justify-between border-y border-divider py-3">
         <View className="flex-row items-center gap-2">
           <Ionicons name="shield-outline" size={16} color={colors.neutral.textSecondary} />
-          <Text className="body-sm font-body-semibold text-text-primary">{crewDivision} Division</Text>
+          <Text style={[HOME_ROW_TITLE, { fontSize: 15, lineHeight: 17 }]}>{`${crewDivision.toUpperCase()} DIVISION`}</Text>
         </View>
         <View className="flex-row items-center gap-2">
           <Ionicons name="time-outline" size={16} color={colors.semantic.streak} />
-          <Text className="body-sm font-body-semibold text-text-secondary">{daysLeftInWeek()} days left</Text>
+          <Text style={HOME_ROW_DETAIL}>{`${daysLeftInWeek()} days left`}</Text>
         </View>
       </Animated.View>
 
       {total < 3 ? (
-        <Animated.View
-          entering={FadeInUp.delay(140).springify().damping(16).mass(0.6)}
-          className="items-center gap-2 rounded-2xl border border-dashed border-divider px-6 py-10"
-        >
+        <Animated.View entering={FadeInUp.delay(140).springify().damping(16).mass(0.6)} className="items-center gap-2 py-10">
           <Ionicons name="hourglass-outline" size={26} color={colors.neutral.textSecondary} />
-          <Text className="body-sm text-center text-text-secondary">Not enough crews in {crewDivision} yet for a full bracket.</Text>
+          <Text style={[HOME_ROW_DETAIL, { textAlign: "center" }]}>{`Not enough crews in ${crewDivision} yet for a full bracket.`}</Text>
         </Animated.View>
       ) : (
-        <View className="gap-2.5">
+        <View>
           {standings.map((standing, index) => {
             const rank = index + 1;
             const zone = rank <= zoneSize ? "promotion" : rank > total - zoneSize ? "relegation" : null;
@@ -193,15 +178,13 @@ export function CrewLeagueTab() {
                   weeklyPower={standing.weeklyPower}
                   isMine={standing.isMine}
                   zone={zone}
+                  isLast={index === standings.length - 1}
                 />
               </Animated.View>
             );
           })}
 
-          <Animated.View
-            entering={FadeInUp.delay(140 + standings.length * 50).springify().damping(16).mass(0.6)}
-            className="flex-row items-center gap-1.5 px-1 pt-1"
-          >
+          <Animated.View entering={FadeInUp.delay(140 + standings.length * 50).springify().damping(16).mass(0.6)} className="mt-3 flex-row items-center gap-1.5">
             <Ionicons
               name={outcome === "promoted" ? "trending-up" : outcome === "relegated" ? "trending-down" : "remove"}
               size={13}
@@ -217,13 +200,13 @@ export function CrewLeagueTab() {
       )}
 
       {history.length > 0 && (
-        <View className="mt-2 gap-2.5">
-          <Text className="caption font-body-semibold text-text-secondary" style={{ letterSpacing: 1 }}>
-            PAST WEEKS
-          </Text>
-          {history.map((result) => (
-            <HistoryRow key={result.weekKey} result={result} />
-          ))}
+        <View className="gap-2 border-t border-divider pt-4">
+          <Text style={HOME_EYEBROW}>PAST WEEKS</Text>
+          <View>
+            {history.map((result, index) => (
+              <HistoryRow key={result.weekKey} result={result} isLast={index === history.length - 1} />
+            ))}
+          </View>
         </View>
       )}
     </View>

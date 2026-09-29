@@ -3,6 +3,8 @@ import { useState } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
+import { HomeRowLead } from "@/components/HomeRowLead";
+import { PillRow } from "@/components/PillRow";
 import { CHALLENGE_TEMPLATES, type ChallengeTemplate } from "@/data/challenges";
 import type { RivalCrewInput } from "@/lib/crew-league";
 import { colors } from "@/theme";
@@ -46,27 +48,28 @@ export function CreateChallengeModal({ visible, rivalCrews, onClose, onCreate }:
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            <View className="gap-4">
+            <View className="gap-5">
               <View className="gap-2">
                 <Text className="body-sm text-text-secondary">Challenge Type</Text>
-                <View className="gap-2">
-                  {CHALLENGE_TEMPLATES.map((option) => {
+                <View>
+                  {CHALLENGE_TEMPLATES.map((option, index) => {
                     const selected = option.id === template.id;
                     return (
                       <Pressable
                         key={option.id}
                         onPress={() => setTemplate(option)}
-                        className={`flex-row items-center gap-3 rounded-xl border p-3 ${selected ? "border-brand-yellow bg-brand-yellow/10" : "border-divider bg-background"}`}
+                        className={`flex-row items-center gap-3 py-3 active:opacity-70 ${index === CHALLENGE_TEMPLATES.length - 1 ? "" : "border-b border-divider"}`}
                       >
-                        <Ionicons name={option.icon} size={18} color={selected ? colors.brand.yellow : colors.neutral.textSecondary} />
+                        <HomeRowLead kind="flat">
+                          <Ionicons name={option.icon} size={18} color={selected ? colors.brand.yellow : colors.neutral.textSecondary} />
+                        </HomeRowLead>
                         <View className="flex-1 gap-0.5">
-                          <Text className={`body-sm font-body-semibold ${selected ? "text-brand-yellow" : "text-text-primary"}`}>
-                            {option.name}
-                          </Text>
+                          <Text className={`body-sm font-body-semibold ${selected ? "text-brand-yellow" : "text-text-primary"}`}>{option.name}</Text>
                           <Text className="caption text-text-secondary" numberOfLines={1}>
                             {option.description}
                           </Text>
                         </View>
+                        {selected && <Ionicons name="checkmark-circle" size={20} color={colors.brand.yellow} />}
                       </Pressable>
                     );
                   })}
@@ -78,43 +81,19 @@ export function CreateChallengeModal({ visible, rivalCrews, onClose, onCreate }:
                 {rivalCrews.length === 0 ? (
                   <Text className="caption text-text-secondary">No rival crews in your division yet — check back after this week&apos;s league.</Text>
                 ) : (
-                  <View className="flex-row flex-wrap gap-2">
-                    {rivalCrews.map((crew) => {
-                      const selected = crew.name === opponentCrewName;
-                      return (
-                        <Pressable
-                          key={crew.name}
-                          onPress={() => setOpponentCrewName(crew.name)}
-                          className={`rounded-full border px-3 py-2 ${selected ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-background"}`}
-                        >
-                          <Text className={`caption font-body-semibold ${selected ? "text-brand-iron" : "text-text-secondary"}`}>
-                            {crew.name}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
+                  <PillRow options={rivalCrews.map((crew) => ({ key: crew.name, label: crew.name }))} value={opponentCrewName ?? null} onChange={setOpponentCrewName} wrap bleed={0} />
                 )}
               </View>
 
               <View className="gap-2">
                 <Text className="body-sm text-text-secondary">Duration</Text>
-                <View className="flex-row gap-2">
-                  {DURATION_OPTIONS.map((days) => {
-                    const selected = days === durationDays;
-                    return (
-                      <Pressable
-                        key={days}
-                        onPress={() => setDurationDays(days)}
-                        className={`flex-1 items-center rounded-xl border py-2.5 ${selected ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-background"}`}
-                      >
-                        <Text className={`body-sm font-body-semibold ${selected ? "text-brand-iron" : "text-text-secondary"}`}>
-                          {days} days
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                <PillRow
+                  options={DURATION_OPTIONS.map((days) => ({ key: String(days), label: `${days} days` }))}
+                  value={String(durationDays)}
+                  onChange={(key) => setDurationDays(Number(key) as (typeof DURATION_OPTIONS)[number])}
+                  wrap
+                  bleed={0}
+                />
               </View>
             </View>
           </ScrollView>

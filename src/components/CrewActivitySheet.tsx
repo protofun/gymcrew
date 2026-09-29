@@ -2,6 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
 
 import { BottomSheet } from "@/components/BottomSheet";
+import { HOME_EYEBROW, HOME_ROW_DETAIL } from "@/components/homeStyle";
+import { HomeRowLead } from "@/components/HomeRowLead";
 import type { ApiCrewLiveSession } from "@/lib/api";
 import { colors } from "@/theme";
 
@@ -32,12 +34,16 @@ function ActionRow({
 }) {
   return (
     <Pressable onPress={onPress} className="flex-row items-center gap-3 py-3.5" style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
-      <View className="h-9 w-9 items-center justify-center rounded-full bg-background">
+      <HomeRowLead kind="flat">
         <Ionicons name={icon} size={18} color={colors.brand.yellow} />
-      </View>
+      </HomeRowLead>
       <View className="flex-1 gap-0.5">
-        <Text className="body-lg text-text-primary">{label}</Text>
-        {detail && <Text className="caption text-text-secondary">{detail}</Text>}
+        <Text className="body-lg font-body-semibold text-text-primary">{label}</Text>
+        {detail && (
+          <Text style={HOME_ROW_DETAIL} numberOfLines={1}>
+            {detail}
+          </Text>
+        )}
       </View>
       <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
     </Pressable>
@@ -63,7 +69,7 @@ export function CrewActivitySheet({
   return (
     <BottomSheet visible={visible} onClose={onClose}>
       <View className="gap-1 px-5 pb-2 pt-4">
-        <Text className="body-sm mb-2 text-text-secondary">Crew Activities</Text>
+        <Text style={[HOME_EYEBROW, { marginBottom: 8 }]}>CREW ACTIVITIES</Text>
 
         {canContinue && (
           <>

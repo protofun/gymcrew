@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
+import { HOME_ROW_DETAIL, HOME_ROW_TITLE } from "@/components/homeStyle";
 import { EXERCISE_BY_ID } from "@/data/exercises";
 import { waitForAuthToken } from "@/lib/api";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
@@ -128,19 +129,22 @@ export default function JoinWorkoutScreen() {
               ? "Nothing logged yet — join now and you'll both add exercises as you go."
               : `${session.exercises.length} exercise${session.exercises.length === 1 ? "" : "s"} so far — you'll start from here and log your own reps & sets`}
           </Text>
-          <View className="gap-3">
+          <View>
             {session.exercises.map((exercise, index) => (
-              <View key={`${exercise.exerciseId}-${index}`} className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3">
+              <View
+                key={`${exercise.exerciseId}-${index}`}
+                className={`flex-row items-center gap-3 py-3 ${index === session.exercises.length - 1 ? "" : "border-b border-divider"}`}
+              >
                 {exercise.imageUrl ? (
-                  <Image source={{ uri: exercise.imageUrl }} className="h-12 w-12 rounded-xl bg-background" />
+                  <Image source={{ uri: exercise.imageUrl }} className="h-11 w-11 rounded-full bg-surface" />
                 ) : (
-                  <View className="h-12 w-12 items-center justify-center rounded-xl bg-background">
-                    <Ionicons name="barbell-outline" size={20} color={colors.neutral.textSecondary} />
+                  <View className="h-11 w-11 items-center justify-center rounded-full bg-surface">
+                    <Ionicons name="barbell-outline" size={18} color={colors.neutral.textSecondary} />
                   </View>
                 )}
                 <View className="flex-1 gap-0.5">
-                  <Text className="body-md font-body-semibold text-text-primary">{exercise.name}</Text>
-                  {!!exercise.primaryMuscle && <Text className="caption text-brand-yellow">{exercise.primaryMuscle}</Text>}
+                  <Text style={[HOME_ROW_TITLE, { fontSize: 15, lineHeight: 17 }]}>{exercise.name.toUpperCase()}</Text>
+                  {!!exercise.primaryMuscle && <Text style={[HOME_ROW_DETAIL, { color: colors.brand.yellow }]}>{exercise.primaryMuscle}</Text>}
                 </View>
               </View>
             ))}

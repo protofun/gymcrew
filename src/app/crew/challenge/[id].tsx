@@ -1,13 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
+import { useEffect } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Easing, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
 import { ContributorsList } from "@/components/ContributorsList";
 import { EditableText } from "@/components/EditableText";
-import { ProgressBar } from "@/components/ProgressBar";
+import { HOME_EYEBROW, HOME_ROW_DETAIL, HOME_ROW_TITLE } from "@/components/homeStyle";
+import { HomeRowLead } from "@/components/HomeRowLead";
+import { HomeRowPair } from "@/components/HomeRowPair";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
+import AnimatedText from "@/components/ui/organisms/animated-text";
+import { CircularProgress } from "@/components/ui/organisms/circular-progress";
+import { NumberFlow } from "@/components/ui/molecules/number-flow";
+import { AnimatedProgressBar } from "@/components/ui/organisms/progress";
 import { CHALLENGE_TEMPLATES, CHALLENGE_XP_REWARD, type ChallengeMetric } from "@/data/challenges";
 import {
   challengeFeed,
@@ -28,16 +36,6 @@ import { useCrewStore } from "@/store/crew-store";
 import { colors, fontFamily } from "@/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-// Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native when
-// combined with a sibling className (see TopBar's wordmarkStyle for the same constraint).
-const titleStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 34,
-  lineHeight: 36,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
 
 function parseWeeklyInstanceId(instanceId: string): { templateId: string; weekKey: string } | null {
   const parts = instanceId.split("-");
@@ -74,23 +72,13 @@ export default function ChallengeDetailScreen() {
   const admin = !custom && id?.startsWith("admin-challenge-") ? adminChallenges.find((challenge) => challenge.id === id) : undefined;
   const weekly = !custom && !admin && id ? parseWeeklyInstanceId(id) : null;
   const template = weekly ? CHALLENGE_TEMPLATES.find((item) => item.id === weekly.templateId) : null;
+  const found = !!custom || !!admin || !!(weekly && template);
 
-  if (!custom && !admin && !(weekly && template)) {
-    return (
-      <View style={{ flex: 1, paddingTop: insets.top }} className="items-center justify-center bg-background px-6">
-        <Text className="body-md text-text-secondary">This challenge could not be found.</Text>
-        <Pressable onPress={() => goBack("/(tabs)/crew")} className="mt-4">
-          <Text className="body-md font-body-semibold text-brand-yellow">Go back</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  const name = custom ? custom.name : admin ? admin.name : template!.name;
+  const name = custom ? custom.name : admin ? admin.name : template?.name ?? "";
   const description = custom ? custom.description : admin ? admin.description : template!.description;
-  const rawUnit = custom ? custom.unit : admin ? admin.unit : template!.unit;
-  const metric: ChallengeMetric = custom ? custom.metric : admin ? admin.metric : template!.metric;
-  const rawTarget = custom ? custom.target : admin ? admin.perMemberTarget * members.length : template!.perMemberTarget * members.length;
+  const rawUnit = custom ? custom.unit : admin ? admin.unit : (template?.unit ?? "kg");
+  const metric: ChallengeMetric = custom ? custom.metric : admin ? admin.metric : (template?.metric ?? { type: "totalVolume" });
+  const rawTarget = custom ? custom.target : admin ? admin.perMemberTarget * members.length : (template?.perMemberTarget ?? 0) * members.length;
 
   // Only a "kg" challenge is a real stored weight — reps/sets/workouts pass through untouched, or
   // converting them would turn "10,000 reps" into nonsense.
@@ -112,14 +100,20 @@ export default function ChallengeDetailScreen() {
     startKey = toDateKey(new Date(admin.createdAt));
     endKey = toDateKey(new Date());
     endsAt = Number.POSITIVE_INFINITY;
-  } else {
-    const range = weekKeyRange(weekly!.weekKey);
+  } else if (weekly) {
+    const range = weekKeyRange(weekly.weekKey);
     startKey = range.startKey;
     endKey = range.endKey;
     endsAt = fromDateKey(range.endKey).getTime() + DAY_MS - 1;
+  } else {
+    // Nothing resolved (bad/unknown id) — the not-found screen renders below; these just need to
+    // not throw before every hook above it has run (see member/[id].tsx for the same ordering).
+    startKey = toDateKey(new Date());
+    endKey = startKey;
+    endsAt = Date.now();
   }
 
-  const myContribution = progressMap[id!] ?? 0;
+  const myContribution = progressMap[id ?? ""] ?? 0;
   const progress = toDisplay(crewChallengeProgress(metric, members, myContribution, startKey, endKey, memberActivityLookup));
   const isComplete = progress >= target || Date.now() > endsAt;
   const percent = Math.min(100, Math.round((progress / Math.max(1, target)) * 100));
@@ -143,170 +137,184 @@ export default function ChallengeDetailScreen() {
       }
     : null;
 
+  const ringColor = isComplete ? colors.semantic.success : colors.brand.yellow;
+  const ringProgress = useSharedValue(0);
+  useEffect(() => {
+    ringProgress.value = withTiming(Math.min(percent, 100), { duration: 900, easing: Easing.out(Easing.cubic) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [percent]);
+
+  if (!found) {
+    return (
+      <View style={{ flex: 1, paddingTop: insets.top }} className="items-center justify-center bg-background px-6">
+        <Text className="body-md text-text-secondary">This challenge could not be found.</Text>
+        <Pressable onPress={() => goBack("/(tabs)/crew")} className="mt-4">
+          <Text className="body-md font-body-semibold text-brand-yellow">Go back</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
-    <View style={{ flex: 1 }} className="bg-background">
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
-        <View style={{ height: 260 }}>
-          <Image source={challengeHeroImage(metric)} resizeMode="cover" style={{ width: "100%", height: "100%" }} />
-          <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(13,17,23,0.55)" }} />
-          <View
-            style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 140, backgroundColor: colors.neutral.background, opacity: 0.92 }}
+    <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
+      <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
+        <Pressable onPress={() => goBack("/(tabs)/crew")} hitSlop={8} style={{ position: "absolute", left: 16 }}>
+          <Ionicons name="chevron-back" size={24} color={colors.neutral.textPrimary} />
+        </Pressable>
+        <Text className="heading-4 text-text-primary">Challenge</Text>
+      </View>
+
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 28, paddingBottom: insets.bottom + 32, gap: 28 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="items-center gap-3">
+          <Image source={challengeHeroImage(metric)} resizeMode="cover" style={{ width: 116, height: 116, borderRadius: 58 }} />
+          {isComplete ? (
+            <View className="flex-row items-center gap-1.5 self-center rounded-full bg-success px-2.5 py-1">
+              <Ionicons name="trophy" size={12} color={colors.brand.iron} />
+              <Text className="caption font-body-bold text-brand-iron">CRUSHED</Text>
+            </View>
+          ) : (
+            <View className="flex-row items-center gap-1.5 self-center rounded-full bg-brand-yellow px-2.5 py-1">
+              <Ionicons name="flame" size={12} color={colors.brand.iron} />
+              <Text className="caption font-body-bold text-brand-iron">CREW CHALLENGE</Text>
+            </View>
+          )}
+          <AnimatedText
+            text={name.toUpperCase()}
+            animationConfig={{ characterDelay: 14 }}
+            enterFrom={{ translateY: 16, scale: 0.7 }}
+            style={{ fontFamily: fontFamily.heading, fontSize: 26, lineHeight: 28, letterSpacing: 1, color: colors.brand.white, textAlign: "center" }}
           />
+          <EditableText id={`crew.challenge.${id}.description`} style={[HOME_ROW_DETAIL, { textAlign: "center" }]}>
+            {description}
+          </EditableText>
+        </View>
 
-          <View style={{ paddingTop: insets.top + 8 }} className="absolute left-0 right-0 top-0 flex-row items-center px-4">
-            <Pressable onPress={() => goBack("/(tabs)/crew")} hitSlop={8} className="h-9 w-9 items-center justify-center rounded-full bg-background/60">
-              <Ionicons name="chevron-back" size={22} color={colors.brand.white} />
-            </Pressable>
-          </View>
-
-          <View className="absolute bottom-4 left-4 right-4 gap-1">
-            {isComplete ? (
-              <View className="mb-1 flex-row items-center gap-1.5 self-start rounded-full bg-success px-2.5 py-1">
-                <Ionicons name="trophy" size={12} color={colors.brand.iron} />
-                <Text className="caption font-body-bold text-brand-iron">CRUSHED</Text>
-              </View>
-            ) : (
-              <View className="mb-1 flex-row items-center gap-1.5 self-start rounded-full bg-brand-yellow px-2.5 py-1">
-                <Ionicons name="flame" size={12} color={colors.brand.iron} />
-                <Text className="caption font-body-bold text-brand-iron">CREW CHALLENGE</Text>
+        <View className="items-center gap-2">
+          <CircularProgress
+            progress={ringProgress}
+            size={140}
+            strokeWidth={10}
+            gap={0}
+            outerCircleColor={colors.neutral.divider}
+            progressCircleColor={ringColor}
+            backgroundColor="transparent"
+            renderIcon={() => (
+              <View className="flex-row items-baseline">
+                <NumberFlow value={percent} fontSize={32} color={ringColor} fontWeight="800" />
+                <Text style={{ fontFamily: fontFamily.bodySemiBold, fontSize: 15, color: ringColor }}>%</Text>
               </View>
             )}
-            <EditableText id={`crew.challenge.${id}.name`} style={titleStyle} className="text-brand-white">
-              {name.toUpperCase()}
-            </EditableText>
-            <EditableText id={`crew.challenge.${id}.description`} className="body-md text-text-secondary">
-              {description}
-            </EditableText>
-          </View>
+          />
+          <EditableText id={`crew.challenge.${id}.progressValue`} className="body-md font-body-semibold text-text-primary">
+            {`${progress.toLocaleString("en-US")} / ${target.toLocaleString("en-US")} ${unit}`}
+          </EditableText>
         </View>
 
-        <View className="gap-4 px-4 pt-5">
-          <View className={`gap-2 rounded-2xl border p-4 ${isComplete ? "border-success bg-success/10" : "border-brand-yellow/30 bg-brand-yellow/5"}`}>
-            <View className="flex-row items-end justify-between">
-              <View>
-                <Text className="caption font-body-bold text-text-secondary" style={{ letterSpacing: 1 }}>
-                  CREW PROGRESS
-                </Text>
-                <EditableText
-                  id={`crew.challenge.${id}.percent`}
-                  style={{ fontFamily: fontFamily.heading, fontSize: 40, lineHeight: 42 }}
-                  className={isComplete ? "text-success" : "text-brand-yellow"}
-                >
-                  {`${percent}%`}
-                </EditableText>
-              </View>
-              <EditableText id={`crew.challenge.${id}.progressValue`} className="body-md font-body-semibold text-text-primary">
-                {`${progress.toLocaleString("en-US")} / ${target.toLocaleString("en-US")} ${unit}`}
-              </EditableText>
-            </View>
-            <ProgressBar ratio={target > 0 ? progress / target : 0} color={isComplete ? colors.semantic.success : colors.brand.yellow} height={12} />
-          </View>
-
-          <View className="flex-row gap-3">
-            <View className="flex-1 flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4">
-              <View className="h-10 w-10 items-center justify-center rounded-full bg-streak/15">
+        <HomeRowPair
+          left={
+            <View className="flex-row items-center gap-3">
+              <HomeRowLead kind="flat">
                 <Ionicons name="time" size={18} color={colors.semantic.streak} />
-              </View>
+              </HomeRowLead>
               <View>
-                <Text className="caption font-body-semibold text-text-secondary">TIME LEFT</Text>
-                <Text className="body-lg font-body-bold text-text-primary">{formatTimeLeft(endsAt, isComplete)}</Text>
+                <Text style={HOME_EYEBROW}>TIME LEFT</Text>
+                <Text style={[HOME_ROW_TITLE, { fontSize: 16, lineHeight: 18 }]}>{formatTimeLeft(endsAt, isComplete)}</Text>
               </View>
             </View>
-
-            <View className="flex-1 flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4">
-              <View className="h-10 w-10 items-center justify-center rounded-full bg-brand-yellow/15">
+          }
+          right={
+            <View className="flex-row items-center gap-3">
+              <HomeRowLead kind="flat">
                 <Ionicons name="flash" size={18} color={colors.brand.yellow} />
-              </View>
+              </HomeRowLead>
               <View>
-                <Text className="caption font-body-semibold text-text-secondary">XP REWARD</Text>
-                <Text className="body-lg font-body-bold text-brand-yellow">+{CHALLENGE_XP_REWARD.toLocaleString("en-US")}</Text>
-              </View>
-            </View>
-          </View>
-
-          {opponent && (
-            <View className="gap-3 rounded-2xl border border-divider bg-surface p-4">
-              <View className="flex-row items-center justify-between">
-                <Text className="body-sm font-body-bold text-text-primary" style={{ letterSpacing: 1 }}>
-                  VS {opponent.name.toUpperCase()}
+                <Text style={HOME_EYEBROW}>XP REWARD</Text>
+                <Text style={[HOME_ROW_TITLE, { fontSize: 16, lineHeight: 18, color: colors.brand.yellow }]}>
+                  {`+${CHALLENGE_XP_REWARD.toLocaleString("en-US")}`}
                 </Text>
-                {(() => {
-                  const winning = progress >= opponent.progress;
-                  return (
-                    <View className="flex-row items-center gap-1">
-                      <Ionicons
-                        name={winning ? "trending-up" : "trending-down"}
-                        size={13}
-                        color={winning ? colors.semantic.success : colors.semantic.error}
-                      />
-                      <Text
-                        className="caption font-body-bold"
-                        style={{ color: winning ? colors.semantic.success : colors.semantic.error }}
-                      >
-                        {winning ? "Ahead" : "Behind"}
-                      </Text>
-                    </View>
-                  );
-                })()}
-              </View>
-
-              <View className="gap-1.5">
-                <View className="flex-row items-center justify-between">
-                  <Text className="caption text-text-secondary">Your Crew</Text>
-                  <Text className="caption font-body-semibold text-text-primary">
-                    {progress.toLocaleString("en-US")} {unit}
-                  </Text>
-                </View>
-                <ProgressBar ratio={target > 0 ? progress / target : 0} color={colors.brand.yellow} height={8} />
-              </View>
-
-              <View className="gap-1.5">
-                <View className="flex-row items-center justify-between">
-                  <Text className="caption text-text-secondary">{opponent.name}</Text>
-                  <Text className="caption font-body-semibold text-text-primary">
-                    {Math.min(opponent.progress, target).toLocaleString("en-US")} {unit}
-                  </Text>
-                </View>
-                <ProgressBar ratio={target > 0 ? opponent.progress / target : 0} color={colors.neutral.textSecondary} height={8} />
               </View>
             </View>
-          )}
+          }
+        />
 
-          {trend.length > 1 && (
-            <View className="rounded-2xl border border-divider bg-surface p-4">
-              <StrengthProgressChart exerciseName={name} points={trend} title="Crew Progress" unit={unit} />
-            </View>
-          )}
-
+        {opponent && (
           <View className="gap-3">
-            <Text style={{ fontFamily: fontFamily.heading, fontSize: 20 }} className="text-text-primary">
-              TOP CONTRIBUTORS
-            </Text>
-            <ContributorsList contributors={contributors} unit={unit} />
-          </View>
-
-          {feed.length > 0 && (
-            <View className="gap-3">
-              <Text style={{ fontFamily: fontFamily.heading, fontSize: 20 }} className="text-text-primary">
-                CHALLENGE FEED
-              </Text>
-              <View className="gap-2.5">
-                {feed.map((entry) => (
-                  <View key={entry.id} className="flex-row items-center gap-3">
-                    <Image source={{ uri: entry.avatarUrl }} className="rounded-full bg-divider" style={{ width: 28, height: 28 }} />
-                    <Text className="body-sm flex-1 text-text-secondary">
-                      <Text className="font-body-semibold text-text-primary">{entry.memberName}</Text> logged{" "}
-                      {entry.amount.toLocaleString("en-US")} {entry.unit}
-                    </Text>
-                    <Text className="caption text-text-secondary">
-                      {Math.max(1, Math.round((Date.now() - entry.timestamp) / (60 * 60 * 1000)))}h ago
+            <View className="flex-row items-center justify-between">
+              <Text style={HOME_EYEBROW}>VS {opponent.name.toUpperCase()}</Text>
+              {(() => {
+                const winning = progress >= opponent.progress;
+                return (
+                  <View className="flex-row items-center gap-1">
+                    <Ionicons
+                      name={winning ? "trending-up" : "trending-down"}
+                      size={13}
+                      color={winning ? colors.semantic.success : colors.semantic.error}
+                    />
+                    <Text className="caption font-body-bold" style={{ color: winning ? colors.semantic.success : colors.semantic.error }}>
+                      {winning ? "Ahead" : "Behind"}
                     </Text>
                   </View>
-                ))}
-              </View>
+                );
+              })()}
             </View>
-          )}
-        </View>
+
+            <View className="gap-1.5">
+              <View className="flex-row items-center justify-between">
+                <Text className="caption text-text-secondary">Your Crew</Text>
+                <Text className="caption font-body-semibold text-text-primary">
+                  {progress.toLocaleString("en-US")} {unit}
+                </Text>
+              </View>
+              <AnimatedProgressBar progress={target > 0 ? progress / target : 0} height={8} borderRadius={4} progressColor={colors.brand.yellow} trackColor={colors.neutral.divider} animationDuration={800} />
+            </View>
+
+            <View className="gap-1.5">
+              <View className="flex-row items-center justify-between">
+                <Text className="caption text-text-secondary">{opponent.name}</Text>
+                <Text className="caption font-body-semibold text-text-primary">
+                  {Math.min(opponent.progress, target).toLocaleString("en-US")} {unit}
+                </Text>
+              </View>
+              <AnimatedProgressBar progress={target > 0 ? opponent.progress / target : 0} height={8} borderRadius={4} progressColor={colors.neutral.textSecondary} trackColor={colors.neutral.divider} animationDuration={800} />
+            </View>
+          </View>
+        )}
+
+        {trend.length > 1 && (
+          <View className="gap-3">
+            <Text style={HOME_EYEBROW}>PROGRESS OVER TIME</Text>
+            <StrengthProgressChart exerciseName={name} points={trend} title="Crew Progress" unit={unit} />
+          </View>
+        )}
+
+        {contributors.length > 0 && (
+          <View className="gap-3">
+            <Text style={HOME_EYEBROW}>TOP CONTRIBUTORS</Text>
+            <ContributorsList contributors={contributors} unit={unit} />
+          </View>
+        )}
+
+        {feed.length > 0 && (
+          <View className="gap-3">
+            <Text style={HOME_EYEBROW}>CHALLENGE FEED</Text>
+            <View className="gap-3">
+              {feed.map((entry) => (
+                <View key={entry.id} className="flex-row items-center gap-3">
+                  <HomeRowLead kind="image" source={{ uri: entry.avatarUrl }} />
+                  <Text className="body-sm flex-1 text-text-secondary">
+                    <Text className="font-body-semibold text-text-primary">{entry.memberName}</Text> logged {entry.amount.toLocaleString("en-US")}{" "}
+                    {entry.unit}
+                  </Text>
+                  <Text style={HOME_ROW_DETAIL}>{Math.max(1, Math.round((Date.now() - entry.timestamp) / (60 * 60 * 1000)))}h ago</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
       </ScrollView>
     </View>
   );

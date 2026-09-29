@@ -1,25 +1,28 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { useState, type ReactNode } from "react";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, { FadeInUp } from "react-native-reanimated";
 import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
 import { AvatarActionSheet } from "@/components/AvatarActionSheet";
+import { BottomSheet } from "@/components/BottomSheet";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { CrewAvatarGeneratorModal } from "@/components/CrewAvatarGeneratorModal";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { EditableText } from "@/components/EditableText";
+import { HOME_EYEBROW, HOME_ROW_DETAIL, HOME_ROW_TITLE } from "@/components/homeStyle";
+import { HomeRowLead } from "@/components/HomeRowLead";
 import { InviteMembersModal } from "@/components/InviteMembersModal";
 import { ReportModal } from "@/components/ReportModal";
 import { SearchableSelectField } from "@/components/SearchableSelectField";
+import { ToggleRow } from "@/components/ToggleRow";
 import { CREW_TRAINING_TYPES } from "@/data/crew-training-types";
 import { useCrewStore, type CrewPrivacy } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, fontFamily } from "@/theme";
 
 const PRIVACY_LABEL: Record<CrewPrivacy, string> = {
   "invite-only": "Invite Only",
@@ -34,42 +37,65 @@ const PRIVACY_DESCRIPTION: Record<CrewPrivacy, string> = {
 };
 
 const ROLE_PERMISSIONS = [
-  { role: "Leader", description: "Full control — edit crew info, manage members, transfer leadership, disband the crew." },
-  { role: "Co-Leader", description: "Can invite and remove members, manage roles, and edit crew info." },
-  { role: "Member", description: "Can train, log workouts, and take part in crew challenges." },
+  { role: "Leader", icon: "star" as const, description: "Full control — edit crew info, manage members, transfer leadership, disband the crew." },
+  { role: "Co-Leader", icon: "shield" as const, description: "Can invite and remove members, manage roles, and edit crew info." },
+  { role: "Member", icon: "person" as const, description: "Can train, log workouts, and take part in crew challenges." },
 ] as const;
 
-function SheetModal({ visible, onClose, title, children }: { visible: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
+/** Every settings sheet's shell — the same Reacticx `BottomSheet` (drag-to-dismiss, real keyboard avoidance)
+ * every other sheet in the app uses now, not a plain centered `Modal` card. */
+function SettingsSheet({ visible, onClose, title, children, keyboardAware }: { visible: boolean; onClose: () => void; title: string; children: ReactNode; keyboardAware?: boolean }) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.7)", paddingHorizontal: 24 }}>
-        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.7)} className="w-full gap-4 rounded-3xl border border-divider bg-surface p-5">
-          <View className="flex-row items-center justify-between">
-            <Text className="heading-4 text-text-primary">{title}</Text>
-            <Pressable onPress={onClose} hitSlop={12}>
-              <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
-            </Pressable>
-          </View>
-          {children}
-        </Animated.View>
+    <BottomSheet visible={visible} onClose={onClose} keyboardAware={keyboardAware}>
+      <View className="gap-4 px-4 pb-4 pt-2">
+        <Text className="heading-4 text-text-primary">{title}</Text>
+        {children}
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
-function SettingsRow({ label, value, danger, isLast, onPress }: { label: string; value?: string; danger?: boolean; isLast?: boolean; onPress: () => void }) {
+/** One row of the settings list — the same flowing, icon-led shape every other Crew screen uses now
+ * (`HomeRowLead`, hairline divider, no bordered box around the row or the list). */
+function SettingsLink({
+  icon,
+  label,
+  value,
+  danger,
+  isLast,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value?: string;
+  danger?: boolean;
+  isLast?: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      className={`flex-row items-center justify-between px-4 py-4 ${!isLast ? "border-b border-divider" : ""}`}
+      className={`flex-row items-center gap-3 py-3.5 ${!isLast ? "border-b border-divider" : ""}`}
     >
-      <Text className={`body-md font-body-semibold ${danger ? "text-error" : "text-text-primary"}`}>{label}</Text>
-      <View className="flex-row items-center gap-1.5">
-        {value && <Text className="body-sm text-text-secondary">{value}</Text>}
-        <Ionicons name="chevron-forward" size={16} color={danger ? colors.semantic.error : colors.neutral.textSecondary} />
-      </View>
+      <HomeRowLead kind="flat">
+        <Ionicons name={icon} size={17} color={danger ? colors.semantic.error : colors.brand.yellow} />
+      </HomeRowLead>
+      <Text style={[HOME_ROW_TITLE, { fontSize: 15, lineHeight: 17, flex: 1, color: danger ? colors.semantic.error : colors.brand.white }]}>{label}</Text>
+      {!!value && <Text style={HOME_ROW_DETAIL}>{value}</Text>}
+      <Ionicons name="chevron-forward" size={16} color={danger ? colors.semantic.error : colors.neutral.textSecondary} />
     </Pressable>
+  );
+}
+
+/** A settings section — an eyebrow, then its rows, a top hairline separating it from the section above
+ * (the `border-t` sits on the section, not each row, so the FIRST row in a section doesn't also draw one). */
+function SettingsSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View className="gap-2 border-t border-divider pt-4">
+      <Text style={HOME_EYEBROW}>{title}</Text>
+      <View>{children}</View>
+    </View>
   );
 }
 
@@ -208,48 +234,61 @@ export default function CrewSettingsScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: insets.bottom + 24, gap: 20 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: insets.bottom + 24, gap: 4 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="flex-row items-center gap-3">
+        <View className="flex-row items-center gap-3 pb-2">
           <Pressable onPress={() => setIconPickerOpen(true)} disabled={uploadingIcon} style={{ opacity: uploadingIcon ? 0.5 : 1 }}>
-            <CrewIconBadge iconKey={icon} size={56} />
+            <CrewIconBadge iconKey={icon} size={64} />
+            <View
+              className="absolute bottom-0 right-0 items-center justify-center rounded-full border-2 border-background bg-brand-yellow"
+              style={{ width: 24, height: 24 }}
+            >
+              {uploadingIcon ? <ActivityIndicator size="small" color={colors.brand.iron} /> : <Ionicons name="camera" size={12} color={colors.brand.iron} />}
+            </View>
           </Pressable>
           <View className="flex-1 gap-0.5">
-            <EditableText id="crew.settings.name" className="body-lg font-body-bold text-text-primary">
+            <EditableText id="crew.settings.name" style={[HOME_ROW_TITLE, { fontSize: 18, lineHeight: 20 }]}>
               {name.toUpperCase()}
             </EditableText>
-            <EditableText id="crew.settings.establishedDate" className="caption text-text-secondary">
+            <EditableText id="crew.settings.establishedDate" style={HOME_ROW_DETAIL}>
               {`Est. ${new Date(createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`}
             </EditableText>
           </View>
-          <Pressable onPress={() => setIconPickerOpen(true)} disabled={uploadingIcon} hitSlop={8}>
-            <Text className="body-sm font-body-bold text-brand-yellow">{uploadingIcon ? "Uploading…" : "Change"}</Text>
+        </View>
+
+        <SettingsSection title="CREW INFO">
+          <SettingsLink icon="information-circle" label="Crew Info" onPress={openEdit} />
+          <SettingsLink icon="options" label="Crew Preferences" isLast onPress={() => setPreferencesOpen(true)} />
+        </SettingsSection>
+
+        <SettingsSection title="ACCESS & COMPETITION">
+          <SettingsLink icon="lock-closed" label="Privacy" value={PRIVACY_LABEL[privacy]} onPress={() => setPrivacyOpen(true)} />
+          <SettingsLink icon="person-add" label="Join Requests" value={joinRequestsEnabled ? "On" : "Off"} onPress={() => setJoinRequestsOpen(true)} />
+          <SettingsLink icon="flash" label="Crew War Auto-Match" value={warAutoMatchEnabled ? "On" : "Off"} onPress={() => setWarAutoMatchOpen(true)} />
+          <SettingsLink icon="notifications" label="Notifications" isLast onPress={() => setNotificationsOpen(true)} />
+        </SettingsSection>
+
+        <SettingsSection title="PEOPLE">
+          <SettingsLink icon="people" label="Manage Members" onPress={() => router.push("/crew/members")} />
+          <SettingsLink icon="mail" label="Invite Members" onPress={() => setInviteOpen(true)} />
+          <SettingsLink icon="shield-checkmark" label="Roles & Permissions" isLast onPress={() => setRolesOpen(true)} />
+        </SettingsSection>
+
+        <SettingsSection title="MORE">
+          <SettingsLink icon="flag" label="Report Crew" isLast onPress={() => setReportOpen(true)} />
+        </SettingsSection>
+
+        <View className="border-t border-divider pt-6">
+          <Pressable onPress={handleLeaveCrew} className="items-center rounded-full border border-error py-4">
+            <Text className="body-md font-body-bold" style={{ color: colors.semantic.error }}>
+              Leave Crew
+            </Text>
           </Pressable>
         </View>
-
-        <View className="overflow-hidden rounded-2xl border border-divider bg-surface">
-          <SettingsRow label="Crew Info" onPress={openEdit} />
-          <SettingsRow label="Crew Preferences" onPress={() => setPreferencesOpen(true)} />
-          <SettingsRow label="Privacy" value={PRIVACY_LABEL[privacy]} onPress={() => setPrivacyOpen(true)} />
-          <SettingsRow label="Join Requests" value={joinRequestsEnabled ? "On" : "Off"} onPress={() => setJoinRequestsOpen(true)} />
-          <SettingsRow label="Crew War Auto-Match" value={warAutoMatchEnabled ? "On" : "Off"} onPress={() => setWarAutoMatchOpen(true)} />
-          <SettingsRow label="Notifications" onPress={() => setNotificationsOpen(true)} />
-          <SettingsRow label="Manage Members" onPress={() => router.push("/crew/members")} />
-          <SettingsRow label="Invite Members" onPress={() => setInviteOpen(true)} />
-          <SettingsRow label="Roles & Permissions" onPress={() => setRolesOpen(true)} />
-          <SettingsRow label="Report Crew" onPress={() => setReportOpen(true)} />
-          <SettingsRow label="Danger Zone" danger isLast onPress={handleLeaveCrew} />
-        </View>
-
-        <Pressable onPress={handleLeaveCrew} className="items-center rounded-full border border-error py-4">
-          <Text className="body-md font-body-bold" style={{ color: colors.semantic.error }}>
-            Leave Crew
-          </Text>
-        </Pressable>
       </ScrollView>
 
-      <SheetModal visible={editOpen} onClose={() => setEditOpen(false)} title="Crew Info">
+      <SettingsSheet visible={editOpen} onClose={() => setEditOpen(false)} title="Crew Info" keyboardAware>
         <View className="gap-3">
           <View className="gap-1.5">
             <Text className="body-sm text-text-secondary">Crew Name</Text>
@@ -281,7 +320,7 @@ export default function CrewSettingsScreen() {
             <Text className="body-md font-body-bold text-brand-iron">{saving ? "Saving…" : "Save Changes"}</Text>
           </Pressable>
         </View>
-      </SheetModal>
+      </SettingsSheet>
 
       <AvatarActionSheet
         visible={iconPickerOpen}
@@ -298,7 +337,7 @@ export default function CrewSettingsScreen() {
 
       <CrewAvatarGeneratorModal visible={generatorOpen} onClose={() => setGeneratorOpen(false)} onPick={setIcon} />
 
-      <SheetModal visible={preferencesOpen} onClose={() => setPreferencesOpen(false)} title="Crew Preferences">
+      <SettingsSheet visible={preferencesOpen} onClose={() => setPreferencesOpen(false)} title="Crew Preferences">
         <View className="gap-4">
           <SearchableSelectField label="Training Focus" value={trainingType} options={CREW_TRAINING_TYPES} onChange={setTrainingType} />
           <StepperField
@@ -308,7 +347,7 @@ export default function CrewSettingsScreen() {
             onIncrement={() => setMaxMembers(Math.min(20, maxMembers + 1))}
           />
         </View>
-      </SheetModal>
+      </SettingsSheet>
 
       <InviteMembersModal visible={inviteOpen} onClose={() => setInviteOpen(false)} crewName={name} inviteCode={inviteCode} />
 
@@ -324,83 +363,50 @@ export default function CrewSettingsScreen() {
         onCancel={() => setLeaveConfirmVisible(false)}
       />
 
-      <SheetModal visible={joinRequestsOpen} onClose={() => setJoinRequestsOpen(false)} title="Join Requests">
-        <View className="flex-row items-center justify-between rounded-xl border border-divider bg-background px-4 py-3.5">
-          <View className="flex-1 pr-3">
-            <Text className="body-md text-text-primary">Require approval</Text>
-            <Text className="body-sm text-text-secondary">Review new join requests before they&apos;re added to the crew</Text>
-          </View>
-          <Switch
-            value={joinRequestsEnabled}
-            onValueChange={toggleJoinRequests}
-            trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
-            thumbColor={colors.brand.white}
+      <SettingsSheet visible={joinRequestsOpen} onClose={() => setJoinRequestsOpen(false)} title="Join Requests">
+        <ToggleRow
+          title="Require approval"
+          subtitle="Review new join requests before they're added to the crew"
+          value={joinRequestsEnabled}
+          onValueChange={toggleJoinRequests}
+        />
+      </SettingsSheet>
+
+      <SettingsSheet visible={warAutoMatchOpen} onClose={() => setWarAutoMatchOpen(false)} title="Crew War Auto-Match">
+        <ToggleRow
+          title="Auto-match into a War"
+          subtitle="On (default): your crew always has an active War, matched automatically. Off: your crew only enters one when a leader or co-leader starts it from the War tab."
+          value={warAutoMatchEnabled}
+          onValueChange={toggleWarAutoMatch}
+        />
+      </SettingsSheet>
+
+      <SettingsSheet visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} title="Notifications">
+        <View>
+          <ToggleRow
+            title="Workout Reminders"
+            subtitle="Get nudged when the crew is training"
+            value={notifications.workoutReminders}
+            onValueChange={() => toggleNotification("workoutReminders")}
+          />
+          <ToggleRow
+            title="PR Alerts"
+            subtitle="Know when a crew member hits a personal record"
+            value={notifications.prAlerts}
+            onValueChange={() => toggleNotification("prAlerts")}
+          />
+          <ToggleRow
+            title="Challenge Updates"
+            subtitle="New challenges and progress milestones"
+            value={notifications.challengeUpdates}
+            onValueChange={() => toggleNotification("challengeUpdates")}
           />
         </View>
-      </SheetModal>
+      </SettingsSheet>
 
-      <SheetModal visible={warAutoMatchOpen} onClose={() => setWarAutoMatchOpen(false)} title="Crew War Auto-Match">
-        <View className="flex-row items-center justify-between rounded-xl border border-divider bg-background px-4 py-3.5">
-          <View className="flex-1 pr-3">
-            <Text className="body-md text-text-primary">Auto-match into a War</Text>
-            <Text className="body-sm text-text-secondary">
-              On (default): your crew always has an active War, matched automatically. Off: your crew only enters one when a leader or
-              co-leader starts it from the War tab.
-            </Text>
-          </View>
-          <Switch
-            value={warAutoMatchEnabled}
-            onValueChange={toggleWarAutoMatch}
-            trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
-            thumbColor={colors.brand.white}
-          />
-        </View>
-      </SheetModal>
-
-      <SheetModal visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} title="Notifications">
-        <View className="gap-3">
-          <View className="flex-row items-center justify-between rounded-xl border border-divider bg-background px-4 py-3.5">
-            <View className="flex-1 pr-3">
-              <Text className="body-md text-text-primary">Workout Reminders</Text>
-              <Text className="body-sm text-text-secondary">Get nudged when the crew is training</Text>
-            </View>
-            <Switch
-              value={notifications.workoutReminders}
-              onValueChange={() => toggleNotification("workoutReminders")}
-              trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
-              thumbColor={colors.brand.white}
-            />
-          </View>
-          <View className="flex-row items-center justify-between rounded-xl border border-divider bg-background px-4 py-3.5">
-            <View className="flex-1 pr-3">
-              <Text className="body-md text-text-primary">PR Alerts</Text>
-              <Text className="body-sm text-text-secondary">Know when a crew member hits a personal record</Text>
-            </View>
-            <Switch
-              value={notifications.prAlerts}
-              onValueChange={() => toggleNotification("prAlerts")}
-              trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
-              thumbColor={colors.brand.white}
-            />
-          </View>
-          <View className="flex-row items-center justify-between rounded-xl border border-divider bg-background px-4 py-3.5">
-            <View className="flex-1 pr-3">
-              <Text className="body-md text-text-primary">Challenge Updates</Text>
-              <Text className="body-sm text-text-secondary">New challenges and progress milestones</Text>
-            </View>
-            <Switch
-              value={notifications.challengeUpdates}
-              onValueChange={() => toggleNotification("challengeUpdates")}
-              trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
-              thumbColor={colors.brand.white}
-            />
-          </View>
-        </View>
-      </SheetModal>
-
-      <SheetModal visible={privacyOpen} onClose={() => setPrivacyOpen(false)} title="Crew Privacy">
-        <View className="gap-2.5">
-          {(Object.keys(PRIVACY_LABEL) as CrewPrivacy[]).map((key) => {
+      <SettingsSheet visible={privacyOpen} onClose={() => setPrivacyOpen(false)} title="Crew Privacy">
+        <View>
+          {(Object.keys(PRIVACY_LABEL) as CrewPrivacy[]).map((key, index, all) => {
             const active = key === privacy;
             return (
               <Pressable
@@ -410,29 +416,36 @@ export default function CrewSettingsScreen() {
                   posthog.capture("crew_privacy_changed", { privacy: key });
                   setPrivacyOpen(false);
                 }}
-                className={`flex-row items-center gap-3 rounded-xl border p-4 ${active ? "border-brand-yellow bg-brand-yellow/10" : "border-divider bg-background"}`}
+                className={`flex-row items-center gap-3 py-3.5 ${index === all.length - 1 ? "" : "border-b border-divider"}`}
               >
+                <HomeRowLead kind="flat">
+                  <Ionicons name={active ? "checkmark-circle" : "ellipse-outline"} size={18} color={active ? colors.brand.yellow : colors.neutral.textSecondary} />
+                </HomeRowLead>
                 <View className="flex-1 gap-0.5">
-                  <Text className="body-md font-body-semibold text-text-primary">{PRIVACY_LABEL[key]}</Text>
-                  <Text className="body-sm text-text-secondary">{PRIVACY_DESCRIPTION[key]}</Text>
+                  <Text style={[HOME_ROW_TITLE, { fontSize: 15, lineHeight: 17, color: active ? colors.brand.yellow : colors.brand.white }]}>{PRIVACY_LABEL[key]}</Text>
+                  <Text style={HOME_ROW_DETAIL}>{PRIVACY_DESCRIPTION[key]}</Text>
                 </View>
-                {active && <Ionicons name="checkmark-circle" size={20} color={colors.brand.yellow} />}
               </Pressable>
             );
           })}
         </View>
-      </SheetModal>
+      </SettingsSheet>
 
-      <SheetModal visible={rolesOpen} onClose={() => setRolesOpen(false)} title="Roles & Permissions">
-        <View className="gap-3">
-          {ROLE_PERMISSIONS.map((entry) => (
-            <View key={entry.role} className="gap-1 rounded-xl border border-divider bg-background p-3.5">
-              <Text className="body-md font-body-bold text-brand-yellow">{entry.role}</Text>
-              <Text className="body-sm text-text-secondary">{entry.description}</Text>
+      <SettingsSheet visible={rolesOpen} onClose={() => setRolesOpen(false)} title="Roles & Permissions">
+        <View>
+          {ROLE_PERMISSIONS.map((entry, index) => (
+            <View key={entry.role} className={`flex-row items-center gap-3 py-3.5 ${index === ROLE_PERMISSIONS.length - 1 ? "" : "border-b border-divider"}`}>
+              <HomeRowLead kind="flat">
+                <Ionicons name={entry.icon} size={17} color={colors.brand.yellow} />
+              </HomeRowLead>
+              <View className="flex-1 gap-0.5">
+                <Text style={{ fontFamily: fontFamily.heading, fontSize: 15, letterSpacing: 0.5, color: colors.brand.yellow }}>{entry.role}</Text>
+                <Text style={HOME_ROW_DETAIL}>{entry.description}</Text>
+              </View>
             </View>
           ))}
         </View>
-      </SheetModal>
+      </SettingsSheet>
     </View>
   );
 }

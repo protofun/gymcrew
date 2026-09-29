@@ -8,11 +8,13 @@ import { goBack } from "@/lib/navigation";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { EditableText } from "@/components/EditableText";
+import { HOME_EYEBROW, HOME_SECTION_TITLE } from "@/components/homeStyle";
+import SegmentedControl from "@/components/ui/organisms/segmented-control";
 import { api, isApiConfigured, type ApiCrewLeaderboardEntry, type ApiPlayerLeaderboardEntry } from "@/lib/api";
 import { DIVISION_COLOR, type Division } from "@/lib/division";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors, fontFamily } from "@/theme";
+import { colors } from "@/theme";
 
 const SCOPES = ["Global", "Gym", "Crews"] as const;
 type Scope = (typeof SCOPES)[number];
@@ -23,15 +25,41 @@ type Avatar = { type: "image"; uri: string } | { type: "crewIcon"; iconKey: stri
 
 type Entry = { id: string; name: string; score: number; avatar: Avatar; isMe: boolean };
 
-// Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native when
-// combined with a sibling className (see TopBar's wordmarkStyle for the same constraint).
-const headerStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 28,
-  lineHeight: 30,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
+function ScopeLabel({ scope, selected }: { scope: Scope; selected: boolean }) {
+  return (
+    <Text className="caption font-body-semibold" style={{ color: selected ? colors.brand.iron : colors.neutral.textSecondary }}>
+      {scope.toUpperCase()}
+    </Text>
+  );
+}
+
+/** The Global / Gym / Crews switcher — three equal, fixed segments, exactly the shape Reacticx's
+ * `segmented-control` is built for (unlike Crew Overview's 7-tab bar, which needs to scroll — see
+ * that screen's own note on why it stays a custom pill row). */
+function ScopeSwitcher({ scope, onChange }: { scope: Scope; onChange: (scope: Scope) => void }) {
+  const [width, setWidth] = useState(0);
+  return (
+    <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} className="mx-4 mt-4">
+      {width > 0 && (
+        <SegmentedControl
+          currentIndex={SCOPES.indexOf(scope)}
+          onChange={(index) => onChange(SCOPES[index])}
+          width={width}
+          borderRadius={22}
+          paddingVertical={9}
+          segmentedControlBackgroundColor={colors.neutral.surface}
+          activeSegmentBackgroundColor={colors.brand.yellow}
+          dividerColor="transparent"
+          disableScaleEffect
+        >
+          {SCOPES.map((s) => (
+            <ScopeLabel key={s} scope={s} selected={s === scope} />
+          ))}
+        </SegmentedControl>
+      )}
+    </View>
+  );
+}
 
 function EntryAvatar({ avatar, size }: { avatar: Avatar; size: number }) {
   if (avatar.type === "image") {
@@ -40,22 +68,20 @@ function EntryAvatar({ avatar, size }: { avatar: Avatar; size: number }) {
   return <CrewIconBadge iconKey={avatar.iconKey} size={size} />;
 }
 
-// Matches ContributorsList's row styling (trophy medal for the top 3, yellow-tinted highlight card)
-// so the leaderboard reads as one family with the Challenges/Stats tabs, not a one-off design.
-function LeaderboardRow({ rank, entry }: { rank: number; entry: Entry }) {
+// A flowing row, not a bordered card — a trophy (top 3) or plain rank number leads, same shape as
+// every other ranked list in the app now. The medal color and "you" highlight are enough to pick
+// the rows that matter out of the list without boxing them off from the rest.
+function LeaderboardRow({ rank, entry, isLast }: { rank: number; entry: Entry; isLast: boolean }) {
   const medal = MEDAL_COLOR[rank - 1];
-  const highlighted = Boolean(medal) || entry.isMe;
 
   return (
-    <View
-      className={`flex-row items-center gap-3 rounded-2xl border p-3 ${
-        highlighted ? "border-brand-yellow/30 bg-brand-yellow/5" : "border-divider bg-surface"
-      }`}
-    >
+    <View className={`flex-row items-center gap-3 py-3 ${isLast ? "" : "border-b border-divider"}`}>
       {medal ? (
-        <Ionicons name="trophy" size={18} color={medal} style={{ width: 20 }} />
+        <Ionicons name="trophy" size={18} color={medal} style={{ width: 24 }} />
       ) : (
-        <Text className="body-sm w-5 text-center font-body-semibold text-text-secondary">{rank}</Text>
+        <Text className="body-sm text-center font-body-semibold text-text-secondary" style={{ width: 24 }}>
+          {rank}
+        </Text>
       )}
 
       <View style={{ borderWidth: medal ? 2 : 0, borderColor: medal, borderRadius: 999 }}>
@@ -91,7 +117,7 @@ function DivisionLabel({ division }: { division: Division }) {
 function LeaderboardList({ entries }: { entries: Entry[] }) {
   if (entries.length === 0) {
     return (
-      <View className="mx-4 mt-8 items-center gap-2 rounded-2xl border border-dashed border-divider px-6 py-10">
+      <View className="mx-4 mt-8 items-center gap-2 py-10">
         <Ionicons name="planet-outline" size={26} color={colors.neutral.textSecondary} />
         <Text className="body-sm text-center text-text-secondary">No one has reached this division yet.</Text>
       </View>
@@ -99,9 +125,9 @@ function LeaderboardList({ entries }: { entries: Entry[] }) {
   }
 
   return (
-    <View className="gap-2.5 px-4">
+    <View className="px-4">
       {entries.map((entry, index) => (
-        <LeaderboardRow key={entry.id} rank={index + 1} entry={entry} />
+        <LeaderboardRow key={entry.id} rank={index + 1} entry={entry} isLast={index === entries.length - 1} />
       ))}
     </View>
   );
@@ -156,35 +182,13 @@ export default function CrewLeaderboardScreen() {
       </View>
 
       <View className="mx-4 mt-4 gap-1">
-        <Text style={headerStyle} className="text-brand-white">
-          {scope === "Crews" ? "TOP CREWS" : scope === "Global" ? "WORLD STAGE" : "HOME TURF"}
+        <Text style={HOME_EYEBROW}>
+          {scope === "Crews" ? "Crews rank within their own division — no mismatches." : scope === "Global" ? "Ranked within your division. Climb to earn a bigger stage." : myGymName || "Set your gym in Settings to see gym rankings"}
         </Text>
-        <View className="flex-row items-center gap-1.5">
-          <Ionicons name="stats-chart" size={13} color={colors.brand.yellow} />
-          <Text className="caption font-body-semibold text-text-secondary">
-            {scope === "Crews" && "Crews rank within their own division — no mismatches."}
-            {scope === "Global" && "Ranked within your division. Climb to earn a bigger stage."}
-            {scope === "Gym" && (myGymName || "Set your gym in Settings to see gym rankings")}
-          </Text>
-        </View>
+        <Text style={HOME_SECTION_TITLE}>{scope === "Crews" ? "TOP CREWS" : scope === "Global" ? "WORLD STAGE" : "HOME TURF"}</Text>
       </View>
 
-      <View className="mx-4 mt-4 flex-row rounded-full border border-divider bg-surface p-1">
-        {SCOPES.map((s) => {
-          const active = s === scope;
-          return (
-            <Pressable
-              key={s}
-              onPress={() => setScope(s)}
-              className={`flex-1 items-center rounded-full py-2 ${active ? "bg-brand-yellow" : ""}`}
-            >
-              <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>
-                {s.toUpperCase()}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <ScopeSwitcher scope={scope} onChange={setScope} />
 
       {scope === "Crews" && <DivisionLabel division={myCrewDivision} />}
       {scope === "Global" && <DivisionLabel division={myGlobalDivision} />}

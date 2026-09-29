@@ -10,8 +10,8 @@ type CrewEventReactionBarProps = {
 };
 
 /** Tap-to-react row for one crew activity event (🔥/👏, always visible so a reaction can be the
- * first one) — shared by the compact CrewFeedList widget and the full crew/activity screen so the
- * toggle look/feel is identical in both places. */
+ * first one) — shared by the Overview tab's compact `CrewFeedSection` and the full crew/activity
+ * screen so the toggle look/feel is identical in both places. */
 export function CrewEventReactionBar({ reactions, onReact }: CrewEventReactionBarProps) {
   return (
     <View className="flex-row gap-2">

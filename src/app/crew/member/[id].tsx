@@ -1,21 +1,26 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
 import { AchievementRow } from "@/components/AchievementRow";
+import { BottomSheet } from "@/components/BottomSheet";
 import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { EditableText } from "@/components/EditableText";
 import { ReportModal } from "@/components/ReportModal";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
+import { HomeRowLead } from "@/components/HomeRowLead";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { ProgressBar } from "@/components/ProgressBar";
 import { RankBadge } from "@/components/RankBadge";
+import { ShareCardModal } from "@/components/ShareCardModal";
 import { StatTile } from "@/components/StatTile";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
 import { VisualTrainingCalendar, type CalendarWorkout } from "@/components/VisualTrainingCalendar";
+import { WorkoutListRow } from "@/components/WorkoutListRow";
+import { WorkoutShareCard } from "@/components/WorkoutShareCard";
 import { EXERCISE_BY_ID, exerciseByIdWithCustom, type Exercise } from "@/data/exercises";
 import type { MuscleGroup } from "@/data/workout-log";
 import { useWeightUnit } from "@/hooks/use-weight-unit";
@@ -174,11 +179,17 @@ function WorkoutsTab({
   calendarWorkouts,
   interactive,
   gender,
+  onPressWorkout,
+  onShareWorkout,
 }: {
   entries: SimpleWorkoutEntry[];
   calendarWorkouts: CalendarWorkout[];
   interactive: boolean;
   gender: Gender;
+  /** Only meaningful when `interactive` — another member's workouts only ever come through as this
+   * lightweight entry shape, never the full `CompletedWorkout` a real summary/share card needs. */
+  onPressWorkout: (id: string) => void;
+  onShareWorkout: (id: string) => void;
 }) {
   const today = useMemo(() => new Date(), []);
   const [visibleMonth, setVisibleMonth] = useState(startOfMonth(today));
@@ -213,29 +224,24 @@ function WorkoutsTab({
         </Pressable>
       </View>
 
-      <View className="gap-2.5">
+      <View>
         {monthEntries.length === 0 ? (
-          <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-14">
+          <View className="items-center gap-2 py-14">
             <Ionicons name="calendar-outline" size={28} color={colors.neutral.textSecondary} />
             <Text className="body-md text-text-secondary">No workouts this month</Text>
           </View>
         ) : (
-          monthEntries.map((entry) => (
-            <View key={entry.id} className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4">
-              <View className="h-11 w-11 items-center justify-center rounded-full bg-background">
-                <Ionicons
-                  name={entry.hasPr ? "trophy" : "barbell-outline"}
-                  size={18}
-                  color={entry.hasPr ? colors.brand.yellow : colors.neutral.textSecondary}
-                />
-              </View>
-              <View className="flex-1 gap-0.5">
-                <Text className="body-md font-body-semibold text-text-primary">{entry.name}</Text>
-                <Text className="caption text-text-secondary">
-                  {entry.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {entry.subtitle}
-                </Text>
-              </View>
-            </View>
+          monthEntries.map((entry, index) => (
+            <WorkoutListRow
+              key={entry.id}
+              name={entry.name}
+              dateLabel={entry.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              detail={entry.subtitle}
+              hasPr={entry.hasPr}
+              isLast={index === monthEntries.length - 1}
+              onPress={interactive ? () => onPressWorkout(entry.id) : undefined}
+              onShare={interactive ? () => onShareWorkout(entry.id) : undefined}
+            />
           ))
         )}
       </View>
@@ -333,7 +339,7 @@ function AchievementsTab({ achievements }: { achievements: AchievementWithTier[]
   return (
     <View className="gap-2.5 p-4">
       {achievements.length === 0 ? (
-        <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-14">
+        <View className="items-center gap-2 py-14">
           <Ionicons name="trophy-outline" size={28} color={colors.neutral.textSecondary} />
           <Text className="body-md text-text-secondary">No achievements yet.</Text>
         </View>
@@ -414,6 +420,12 @@ export default function MemberProfileScreen() {
   const [selectedExercise, setSelectedExercise] = useState<Exercise>(() => EXERCISE_BY_ID[MAJOR_LIFT_EXERCISE_IDS.benchPress]);
   const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
 
+  // Only ever set for "me" — the Workouts tab's `onShareWorkout` is undefined for anyone else (see
+  // `interactive` there), since another member's workouts never come through as the full
+  // `CompletedWorkout` a share card needs, only the lightweight entry shape.
+  const [sharingWorkoutId, setSharingWorkoutId] = useState<string | null>(null);
+  const sharingWorkout = realWorkouts.find((workout) => workout.id === sharingWorkoutId) ?? null;
+
   const workoutsForEntries = isMe ? realWorkouts : otherWorkouts;
   const workoutEntries: SimpleWorkoutEntry[] = workoutsForEntries.map((workout) => ({
     id: workout.id,
@@ -465,7 +477,14 @@ export default function MemberProfileScreen() {
           />
         )}
         {tab === "Workouts" && (
-          <WorkoutsTab entries={workoutEntries} calendarWorkouts={calendarWorkouts} interactive={isMe} gender={displayGender} />
+          <WorkoutsTab
+            entries={workoutEntries}
+            calendarWorkouts={calendarWorkouts}
+            interactive={isMe}
+            gender={displayGender}
+            onPressWorkout={(workoutId) => router.push({ pathname: "/workout/summary", params: { id: workoutId } })}
+            onShareWorkout={setSharingWorkoutId}
+          />
         )}
         {tab === "Stats" && (
           <StatsTab
@@ -492,41 +511,55 @@ export default function MemberProfileScreen() {
         renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, pickerCards, pickerRecords, pickerProfile)} size={34} />}
       />
 
-      <Modal visible={actionsOpen} transparent animationType="fade" onRequestClose={() => setActionsOpen(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }} onPress={() => setActionsOpen(false)}>
-          <Pressable onPress={() => {}} className="gap-1 rounded-t-3xl border-t border-divider bg-surface p-2" style={{ paddingBottom: insets.bottom + 8 }}>
-            <Pressable
-              onPress={() => {
-                setActionsOpen(false);
-                setReportOpen(true);
-              }}
-              className="flex-row items-center gap-3 rounded-xl px-4 py-3.5"
-            >
-              <Ionicons name="flag-outline" size={20} color={colors.neutral.textPrimary} />
-              <Text className="body-md text-text-primary">Report Member</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setActionsOpen(false);
-                if (isBlocked) {
-                  unblockUser(member.id);
-                } else {
-                  Alert.alert("Block Member", `You won't see ${member.name}'s activity in your Crew feed anymore. They won't be notified.`, [
-                    { text: "Cancel", style: "cancel" },
-                    { text: "Block", style: "destructive", onPress: () => blockUser(member.id) },
-                  ]);
-                }
-              }}
-              className="flex-row items-center gap-3 rounded-xl px-4 py-3.5"
-            >
-              <Ionicons name="ban-outline" size={20} color={colors.semantic.error} />
-              <Text className="body-md" style={{ color: colors.semantic.error }}>
-                {isBlocked ? "Unblock Member" : "Block Member"}
-              </Text>
-            </Pressable>
+      <ShareCardModal
+        visible={sharingWorkout !== null}
+        onClose={() => setSharingWorkoutId(null)}
+        fallbackMessage={
+          sharingWorkout
+            ? `${sharingWorkout.name} — ${sharingWorkout.volumeKg.toLocaleString("en-US")} ${sharingWorkout.unit} lifted across ${sharingWorkout.completedSets} sets on GymCrew.`
+            : ""
+        }
+      >
+        {sharingWorkout && <WorkoutShareCard workout={sharingWorkout} gender={displayGender} />}
+      </ShareCardModal>
+
+      <BottomSheet visible={actionsOpen} onClose={() => setActionsOpen(false)}>
+        <View className="px-4 pb-2 pt-2">
+          <Pressable
+            onPress={() => {
+              setActionsOpen(false);
+              setReportOpen(true);
+            }}
+            className="flex-row items-center gap-3 border-b border-divider py-3.5"
+          >
+            <HomeRowLead kind="flat">
+              <Ionicons name="flag-outline" size={18} color={colors.neutral.textPrimary} />
+            </HomeRowLead>
+            <Text className="body-md text-text-primary">Report Member</Text>
           </Pressable>
-        </Pressable>
-      </Modal>
+          <Pressable
+            onPress={() => {
+              setActionsOpen(false);
+              if (isBlocked) {
+                unblockUser(member.id);
+              } else {
+                Alert.alert("Block Member", `You won't see ${member.name}'s activity in your Crew feed anymore. They won't be notified.`, [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Block", style: "destructive", onPress: () => blockUser(member.id) },
+                ]);
+              }
+            }}
+            className="flex-row items-center gap-3 py-3.5"
+          >
+            <HomeRowLead kind="flat">
+              <Ionicons name="ban-outline" size={18} color={colors.semantic.error} />
+            </HomeRowLead>
+            <Text className="body-md" style={{ color: colors.semantic.error }}>
+              {isBlocked ? "Unblock Member" : "Block Member"}
+            </Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
 
       <ReportModal visible={reportOpen} targetType="user" targetId={member.id} onClose={() => setReportOpen(false)} />
     </View>

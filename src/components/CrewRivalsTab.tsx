@@ -4,9 +4,14 @@ import { useEffect, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
+import { BrandBeamFrame } from "@/components/BrandBeamFrame";
+import { CrewSwitcher } from "@/components/CrewSwitcher";
 import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { type DuelMetric, DuelChallengeSheet } from "@/components/DuelChallengeSheet";
 import { EditableText } from "@/components/EditableText";
+import { HOME_EYEBROW, HOME_ROW_DETAIL, HOME_ROW_TITLE, HOME_SECTION_TITLE } from "@/components/homeStyle";
+import { HomeRowLead } from "@/components/HomeRowLead";
+import { NumberFlow } from "@/components/ui/molecules/number-flow";
 import { type MemberContribution, perMemberContributions } from "@/lib/challenge-progress";
 import { describeResolvedDuel, duelMetricLabel, duelOpponentName } from "@/lib/crew-duel-format";
 import {
@@ -29,10 +34,8 @@ import { colors, fontFamily } from "@/theme";
 type RivalsRange = "week" | "month";
 type RivalMetricKey = "totalVolume" | "totalSets" | "totalWorkouts";
 
-const RANGES: { key: RivalsRange; label: string }[] = [
-  { key: "week", label: "THIS WEEK" },
-  { key: "month", label: "THIS MONTH" },
-];
+const RANGES: RivalsRange[] = ["week", "month"];
+const RANGE_LABEL: Record<RivalsRange, string> = { week: "THIS WEEK", month: "THIS MONTH" };
 
 const METRICS: { key: RivalMetricKey; label: string; unit: string }[] = [
   { key: "totalVolume", label: "Volume", unit: "kg" },
@@ -42,38 +45,30 @@ const METRICS: { key: RivalMetricKey; label: string; unit: string }[] = [
 
 const MEDAL_COLOR = ["#FFD700", "#C0C0C0", "#CD7F32"] as const;
 
-// Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native when
-// combined with a sibling className (see other crew tabs' identical headerStyle for the same constraint).
-const headerStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 30,
-  lineHeight: 32,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
-
+/** The crowned leader gets the same running-gold-light treatment as a completed goal ring or the
+ * War's Attack button — genuinely the one special thing on this tab, not another bordered card. */
 function MvpSpotlight({ leader, division, unit }: { leader: MemberContribution; division: Division; unit: string }) {
   const isMe = leader.member.id === CURRENT_MEMBER_ID;
 
   return (
-    <Animated.View
-      entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)}
-      className="items-center gap-3 rounded-3xl border border-brand-yellow/30 bg-brand-yellow/5 p-5"
-    >
+    <Animated.View entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)} className="items-center gap-2 py-2">
+      <BrandBeamFrame borderRadius={999}>
+        <View style={{ padding: 3, backgroundColor: colors.neutral.background, borderRadius: 999 }}>
+          <DivisionAvatarFrame source={{ uri: leader.member.avatarUrl }} division={division} size={76} />
+        </View>
+      </BrandBeamFrame>
       <View className="flex-row items-center gap-1.5">
-        <Ionicons name="trophy" size={14} color={colors.brand.yellow} />
-        <Text className="caption font-body-bold text-brand-yellow" style={{ letterSpacing: 1 }}>
-          CREW MVP
-        </Text>
+        <Ionicons name="trophy" size={13} color={colors.brand.yellow} />
+        <Text style={HOME_EYEBROW}>CREW MVP</Text>
       </View>
-      <DivisionAvatarFrame source={{ uri: leader.member.avatarUrl }} division={division} size={72} />
-      <EditableText id="crew.rivals.mvp.name" className="heading-4 text-text-primary">
+      <EditableText id="crew.rivals.mvp.name" style={HOME_ROW_TITLE}>
         {isMe ? "You" : leader.member.name}
       </EditableText>
-      <EditableText id="crew.rivals.mvp.amount" className="body-md font-body-bold text-brand-yellow">
-        {`${leader.amount.toLocaleString("en-US")}${unit ? ` ${unit}` : ""}`}
-      </EditableText>
-      <Text className="body-sm text-center text-text-secondary">Top of the crew right now — think you can take the crown?</Text>
+      <View className="flex-row items-baseline gap-1">
+        <NumberFlow value={leader.amount} fontSize={22} color={colors.brand.yellow} fontWeight="800" groupSeparator="," />
+        {!!unit && <Text style={HOME_ROW_DETAIL}>{unit}</Text>}
+      </View>
+      <Text style={[HOME_ROW_DETAIL, { textAlign: "center" }]}>Top of the crew right now — think you can take the crown?</Text>
     </Animated.View>
   );
 }
@@ -85,6 +80,7 @@ function LeaderboardRow({
   division,
   canChallenge,
   onChallenge,
+  isLast,
 }: {
   contribution: MemberContribution;
   rank: number;
@@ -92,27 +88,25 @@ function LeaderboardRow({
   division: Division;
   canChallenge: boolean;
   onChallenge: () => void;
+  isLast: boolean;
 }) {
   const medal = MEDAL_COLOR[rank - 1];
   const isMe = contribution.member.id === CURRENT_MEMBER_ID;
 
   return (
-    <View
-      className={`flex-row items-center gap-3 rounded-2xl border p-3 ${medal ? "border-brand-yellow/30 bg-brand-yellow/5" : "border-divider bg-surface"}`}
-    >
-      {medal ? (
-        <Ionicons name="trophy" size={16} color={medal} style={{ width: 20 }} />
-      ) : (
-        <Text className="body-sm w-5 text-center font-body-semibold text-text-secondary">{rank}</Text>
-      )}
+    <View className={`flex-row items-center gap-3 py-3 ${isLast ? "" : "border-b border-divider"}`}>
+      <HomeRowLead kind="flat">
+        {medal ? (
+          <Ionicons name="trophy" size={16} color={medal} />
+        ) : (
+          <Text style={{ fontFamily: fontFamily.heading, fontSize: 14, color: colors.neutral.textSecondary }}>{rank}</Text>
+        )}
+      </HomeRowLead>
       <DivisionAvatarFrame source={{ uri: contribution.member.avatarUrl }} division={division} size={36} />
-      <Text className="body-sm flex-1 font-body-semibold text-text-primary" numberOfLines={1}>
+      <Text style={[HOME_ROW_TITLE, { fontSize: 16, lineHeight: 18, color: isMe ? colors.brand.yellow : colors.brand.white }]} numberOfLines={1} className="flex-1">
         {isMe ? "You" : contribution.member.name}
       </Text>
-      <Text className="body-sm font-body-bold text-brand-yellow">
-        {contribution.amount.toLocaleString("en-US")}
-        {unit ? ` ${unit}` : ""}
-      </Text>
+      <NumberFlow value={contribution.amount} fontSize={15} color={colors.brand.yellow} fontWeight="800" groupSeparator="," />
       {canChallenge && (
         <Pressable onPress={onChallenge} hitSlop={8} className="pl-1">
           <Ionicons name="flag-outline" size={16} color={colors.brand.yellow} />
@@ -122,14 +116,19 @@ function LeaderboardRow({
   );
 }
 
-function DuelRow({ text, onRespond }: { text: string; onRespond?: (accept: boolean) => void }) {
+function DuelRow({ text, onRespond, isLast }: { text: string; onRespond?: (accept: boolean) => void; isLast: boolean }) {
   const awaitingMyResponse = onRespond !== undefined;
 
   return (
-    <View className="gap-2 rounded-2xl border border-divider bg-surface p-3">
-      <Text className="body-sm text-text-primary">{text}</Text>
+    <View className={`gap-2 py-3 ${isLast ? "" : "border-b border-divider"}`}>
+      <View className="flex-row items-center gap-3">
+        <HomeRowLead kind="flat">
+          <Ionicons name="flag" size={16} color={colors.brand.yellow} />
+        </HomeRowLead>
+        <Text className="body-sm flex-1 text-text-primary">{text}</Text>
+      </View>
       {awaitingMyResponse && (
-        <View className="flex-row gap-2">
+        <View className="flex-row gap-2 pl-[56px]">
           <Pressable onPress={() => onRespond(true)} className="flex-1 items-center rounded-full bg-brand-yellow py-2">
             <Text className="caption font-body-bold text-brand-iron">Accept</Text>
           </Pressable>
@@ -146,7 +145,10 @@ function DuelRow({ text, onRespond }: { text: string; onRespond?: (accept: boole
  * perMemberContributions) crowning a "Crew MVP", plus 1-on-1 Peer Duels (crew-duel-store) so any two
  * members can settle a "most volume/sets today" bet directly from their leaderboard row. Distinct
  * from the Challenges tab (whole crew vs. a target, or crew vs. crew) and War tab (crew vs. crew) —
- * this is the only place members compete against each other. */
+ * this is the only place members compete against each other. Rebuilt on the same flowing, no-boxed-
+ * cards system as the rest of Crew: real Reacticx `segmented-control` switchers, hairline-divided
+ * rows instead of a bordered card per row, and a `BrandBeamFrame` MVP spotlight instead of a flat
+ * tinted box. */
 export function CrewRivalsTab() {
   const [range, setRange] = useState<RivalsRange>("week");
   const [metricKey, setMetricKey] = useState<RivalMetricKey>("totalVolume");
@@ -211,89 +213,69 @@ export function CrewRivalsTab() {
   const myDuels = duels.filter((duel) => duel.challengerId === user?.id || duel.opponentId === user?.id);
 
   return (
-    <View className="mx-4 mt-4 gap-4">
+    <View className="mx-4 mt-4 gap-5">
       <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-1">
-        <Text style={headerStyle} className="text-brand-white">
-          RIVALRY
-        </Text>
+        <Text style={HOME_SECTION_TITLE}>RIVALRY</Text>
         <View className="flex-row items-center gap-1.5">
           <Ionicons name="flash" size={13} color={colors.brand.yellow} />
           <Text className="caption font-body-semibold text-text-secondary">Every member for themselves. Bragging rights included.</Text>
         </View>
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(60).springify().damping(16).mass(0.6)} className="flex-row rounded-full border border-divider bg-surface p-1">
-        {RANGES.map(({ key, label }) => {
-          const active = key === range;
-          return (
-            <Pressable key={key} onPress={() => setRange(key)} className={`flex-1 items-center rounded-full py-2 ${active ? "bg-brand-yellow" : ""}`}>
-              <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{label}</Text>
-            </Pressable>
-          );
-        })}
+      <Animated.View entering={FadeInUp.delay(60).springify().damping(16).mass(0.6)} className="gap-2">
+        <CrewSwitcher options={RANGES} labels={RANGE_LABEL} value={range} onChange={setRange} />
+        <CrewSwitcher
+          options={METRICS.map((m) => m.key)}
+          labels={Object.fromEntries(METRICS.map((m) => [m.key, m.label.toUpperCase()])) as Record<RivalMetricKey, string>}
+          value={metricKey}
+          onChange={setMetricKey}
+        />
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(90).springify().damping(16).mass(0.6)} className="flex-row gap-2">
-        {METRICS.map((option) => {
-          const active = option.key === metricKey;
-          return (
-            <Pressable
-              key={option.key}
-              onPress={() => setMetricKey(option.key)}
-              className={`flex-1 items-center rounded-full border py-2 ${active ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"}`}
-            >
-              <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{option.label}</Text>
-            </Pressable>
-          );
-        })}
-      </Animated.View>
+      {leader && leader.amount > 0 && <MvpSpotlight leader={leader} division={divisionFor(leader.member.id, leader.member.division)} unit={metricUnit} />}
 
-      {leader && leader.amount > 0 && (
-        <MvpSpotlight leader={leader} division={divisionFor(leader.member.id, leader.member.division)} unit={metricUnit} />
-      )}
-
-      <Animated.View entering={FadeInUp.delay(180).springify().damping(16).mass(0.6)} className="gap-2.5">
+      <View className="border-t border-divider">
         {leaderboard.map((contribution, index) => (
-          <LeaderboardRow
-            key={contribution.member.id}
-            contribution={contribution}
-            rank={index + 1}
-            unit={metricUnit}
-            division={divisionFor(contribution.member.id, contribution.member.division)}
-            canChallenge={contribution.member.id !== CURRENT_MEMBER_ID}
-            onChallenge={() => setChallengingId(contribution.member.id)}
-          />
+          <Animated.View key={contribution.member.id} entering={FadeInUp.delay(180 + index * 40).springify().damping(16).mass(0.6)}>
+            <LeaderboardRow
+              contribution={contribution}
+              rank={index + 1}
+              unit={metricUnit}
+              division={divisionFor(contribution.member.id, contribution.member.division)}
+              canChallenge={contribution.member.id !== CURRENT_MEMBER_ID}
+              onChallenge={() => setChallengingId(contribution.member.id)}
+              isLast={index === leaderboard.length - 1}
+            />
+          </Animated.View>
         ))}
-      </Animated.View>
+      </View>
 
-      <Animated.View entering={FadeInUp.delay(240).springify().damping(16).mass(0.6)} className="gap-3">
-        <View className="flex-row items-center gap-1.5">
-          <Ionicons name="flag" size={13} color={colors.brand.yellow} />
-          <Text className="caption font-body-semibold text-text-secondary" style={{ letterSpacing: 1 }}>
-            PEER DUELS
-          </Text>
-        </View>
+      <Animated.View entering={FadeInUp.delay(240).springify().damping(16).mass(0.6)} className="gap-3 border-t border-divider pt-4">
+        <Text style={HOME_EYEBROW}>PEER DUELS</Text>
 
         {myDuels.length === 0 ? (
-          <View className="items-center gap-2 rounded-2xl border border-dashed border-divider px-6 py-10">
+          <View className="items-center gap-2 py-8">
             <Ionicons name="flag-outline" size={24} color={colors.neutral.textSecondary} />
-            <Text className="body-sm text-center text-text-secondary">
-              No duels yet — tap the flag next to a crewmate above to challenge them 1-on-1.
-            </Text>
+            <Text style={[HOME_ROW_DETAIL, { textAlign: "center" }]}>No duels yet — tap the flag next to a crewmate above to challenge them 1-on-1.</Text>
           </View>
         ) : (
-          <View className="gap-2.5">
-            {myDuels.map((duel) =>
+          <View>
+            {myDuels.map((duel, index) =>
               duel.status === "pending" && duel.opponentId === user?.id ? (
                 <DuelRow
                   key={duel.id}
                   text={`${duel.challengerName} challenged you — most ${duelMetricLabel(duel)} today`}
                   onRespond={(accept) => handleRespond(duel.id, accept)}
+                  isLast={index === myDuels.length - 1}
                 />
               ) : duel.status === "pending" ? (
-                <DuelRow key={duel.id} text={`Waiting for ${duelOpponentName(duel, user?.id)} to respond — most ${duelMetricLabel(duel)} today`} />
+                <DuelRow
+                  key={duel.id}
+                  text={`Waiting for ${duelOpponentName(duel, user?.id)} to respond — most ${duelMetricLabel(duel)} today`}
+                  isLast={index === myDuels.length - 1}
+                />
               ) : (
-                <DuelRow key={duel.id} text={describeResolvedDuel(duel, user?.id)} />
+                <DuelRow key={duel.id} text={describeResolvedDuel(duel, user?.id)} isLast={index === myDuels.length - 1} />
               ),
             )}
           </View>

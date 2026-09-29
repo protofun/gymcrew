@@ -1,17 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { ContributorsList } from "@/components/ContributorsList";
+import { CrewSwitcher } from "@/components/CrewSwitcher";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { EditableText } from "@/components/EditableText";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
+import { HOME_EYEBROW, HOME_ROW_DETAIL, HOME_ROW_TITLE, HOME_SECTION_TITLE } from "@/components/homeStyle";
+import { HomeRowLead } from "@/components/HomeRowLead";
+import { HomeRowPair } from "@/components/HomeRowPair";
 import { HorizontalBarChart } from "@/components/HorizontalBarChart";
 import { RankBadge } from "@/components/RankBadge";
 import { SegmentedProportionBar } from "@/components/SegmentedProportionBar";
 import { StatTile } from "@/components/StatTile";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
+import { NumberFlow } from "@/components/ui/molecules/number-flow";
 import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { perMemberContributions } from "@/lib/challenge-progress";
 import {
@@ -38,11 +43,8 @@ import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
 import { colors, fontFamily } from "@/theme";
 
-const RANGES: { key: StatsRange; label: string }[] = [
-  { key: "week", label: "WEEK" },
-  { key: "month", label: "MONTH" },
-  { key: "allTime", label: "ALL TIME" },
-];
+const RANGES: StatsRange[] = ["week", "month", "allTime"];
+const RANGE_LABEL: Record<StatsRange, string> = { week: "WEEK", month: "MONTH", allTime: "ALL TIME" };
 
 const TOP_LIFTS: { exerciseId: string; exerciseName: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { exerciseId: "Barbell_Squat", exerciseName: "Squat", icon: "walk-outline" },
@@ -50,22 +52,29 @@ const TOP_LIFTS: { exerciseId: string; exerciseName: string; icon: keyof typeof 
   { exerciseId: "Barbell_Deadlift", exerciseName: "Deadlift", icon: "body-outline" },
 ];
 
-// Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native when
-// combined with a sibling className (see TopBar's wordmarkStyle for the same constraint).
-const headerStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 30,
-  lineHeight: 32,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
-
 const TOTAL_STATS: { key: keyof ReturnType<typeof crewTotals>; label: string; icon: keyof typeof Ionicons.glyphMap; isWeight: boolean }[] = [
   { key: "volumeKg", label: "VOLUME", icon: "barbell", isWeight: true },
   { key: "workouts", label: "WORKOUTS", icon: "flame", isWeight: false },
   { key: "sets", label: "SETS", icon: "layers", isWeight: false },
 ];
 
+/** A section's own eyebrow+title, half-width — `MUSCLE SPLIT` / `WEEKLY ACTIVITY` side by side via
+ * `HomeRowPair`, the same divider treatment `HomeMuscleHero` uses for its own two-column split. */
+function StatSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View className="gap-3">
+      <Text style={{ fontFamily: fontFamily.heading, fontSize: 15, letterSpacing: 0.5 }} className="text-text-primary">
+        {title}
+      </Text>
+      {children}
+    </View>
+  );
+}
+
+/** The Crew Stats tab — a real dashboard, same flowing no-boxed-cards system as the rest of Crew:
+ * `CrewSwitcher` for the range, hairline-divided rows for Top Lifts, a `HomeRowPair` split instead
+ * of two separate bordered mini-cards for Muscle Split/Weekly Activity, and Crew Power's headline
+ * number rolling up with `number-flow` instead of sitting static in a tinted box. */
 export function StatsTab() {
   const [range, setRange] = useState<StatsRange>("week");
   const [selectedExercise, setSelectedExercise] = useState({ exerciseId: TRACKABLE_EXERCISES[0].exerciseId, exerciseName: TRACKABLE_EXERCISES[0].exerciseName });
@@ -99,14 +108,7 @@ export function StatsTab() {
   const selectedTrend = crewExerciseVolumeTrend(selectedExercise.exerciseId, members, myWorkouts, membersActivity, startKey, endKey);
 
   const myTotalVolume = realTotalVolumeInRange(myWorkouts, startKey, endKey);
-  const topContributors = perMemberContributions(
-    { type: "totalVolume" },
-    members,
-    myTotalVolume,
-    startKey,
-    endKey,
-    memberActivityLookup,
-  );
+  const topContributors = perMemberContributions({ type: "totalVolume" }, members, myTotalVolume, startKey, endKey, memberActivityLookup);
 
   const muscleSplit = crewMuscleSplit(members, myWorkouts, membersActivity);
   const weeklyActivity = crewWeeklyActivity(members, myWorkouts, membersActivity);
@@ -118,34 +120,20 @@ export function StatsTab() {
   });
 
   return (
-    <View className="mx-4 mt-4 gap-4">
+    <View className="mx-4 mt-4 gap-6">
       <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-1">
-        <EditableText id="crew.stats.headline" style={headerStyle} className="text-brand-white">
-          THE NUMBERS
-        </EditableText>
+        <Text style={HOME_SECTION_TITLE}>THE NUMBERS</Text>
         <View className="flex-row items-center gap-1.5">
           <Ionicons name="stats-chart" size={13} color={colors.brand.yellow} />
-          <EditableText id="crew.stats.tagline" className="caption font-body-semibold text-text-secondary">
-            Every rep, tracked. No hiding from the grind.
-          </EditableText>
+          <Text className="caption font-body-semibold text-text-secondary">Every rep, tracked. No hiding from the grind.</Text>
         </View>
       </Animated.View>
 
-      <Animated.View
-        entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)}
-        className="flex-row rounded-full border border-divider bg-surface p-1"
-      >
-        {RANGES.map(({ key, label }) => {
-          const active = key === range;
-          return (
-            <Pressable key={key} onPress={() => setRange(key)} className={`flex-1 items-center rounded-full py-2 ${active ? "bg-brand-yellow" : ""}`}>
-              <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{label}</Text>
-            </Pressable>
-          );
-        })}
+      <Animated.View entering={FadeInUp.delay(60).springify().damping(16).mass(0.6)}>
+        <CrewSwitcher options={RANGES} labels={RANGE_LABEL} value={range} onChange={setRange} />
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(140).springify().damping(16).mass(0.6)} className="flex-row gap-3">
+      <Animated.View entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)} className="flex-row gap-3">
         {TOTAL_STATS.map(({ key, label, icon, isWeight }) => (
           <StatTile
             key={key}
@@ -157,100 +145,69 @@ export function StatsTab() {
         ))}
       </Animated.View>
 
-      <Animated.View
-        entering={FadeInUp.delay(200).springify().damping(16).mass(0.6)}
-        className="gap-3 rounded-2xl border border-brand-yellow/30 bg-brand-yellow/5 p-4"
-      >
-        <View>
-          <Text className="caption font-body-bold text-text-secondary" style={{ letterSpacing: 1 }}>
-            CREW POWER
-          </Text>
-          <View className="flex-row items-end gap-2">
-            <EditableText id="crew.stats.power.value" style={{ fontFamily: fontFamily.heading, fontSize: 36, lineHeight: 38 }} className="text-text-primary">
-              {crewPower.toLocaleString("en-US")}
+      <Animated.View entering={FadeInUp.delay(180).springify().damping(16).mass(0.6)} className="gap-3 border-t border-divider pt-4">
+        <Text style={HOME_EYEBROW}>CREW POWER</Text>
+        <View className="flex-row items-end gap-2">
+          <NumberFlow value={crewPower} fontSize={36} color={colors.brand.white} fontWeight="800" groupSeparator="," />
+          <View className="mb-1.5 flex-row items-center gap-1">
+            <Ionicons name="trending-up" size={13} color={colors.semantic.success} />
+            <EditableText id="crew.stats.power.changePercent" className="caption font-body-semibold" style={{ color: colors.semantic.success }}>
+              {`${crewPowerChangePercent}% vs last week`}
             </EditableText>
-            <View className="mb-1.5 flex-row items-center gap-1">
-              <Ionicons name="trending-up" size={13} color={colors.semantic.success} />
-              <EditableText id="crew.stats.power.changePercent" className="caption font-body-semibold" style={{ color: colors.semantic.success }}>
-                {`${crewPowerChangePercent}% vs last week`}
-              </EditableText>
-            </View>
           </View>
         </View>
         <StrengthProgressChart exerciseName="Crew Power" points={powerTrend} title="Trend" unit="pts" />
       </Animated.View>
 
-      <Animated.View
-        entering={FadeInUp.delay(260).springify().damping(16).mass(0.6)}
-        className="gap-3 rounded-2xl border border-divider bg-surface p-4"
-      >
-        <Text style={{ fontFamily: fontFamily.heading, fontSize: 18 }} className="text-text-primary">
-          TOP LIFTS (CREW TOTAL)
-        </Text>
-        <View className="gap-2.5">
+      <View className="gap-3 border-t border-divider pt-4">
+        <Text style={HOME_EYEBROW}>TOP LIFTS (CREW TOTAL)</Text>
+        <View>
           {topLifts.map((lift, index) => (
-            <View key={lift.exerciseId} className="flex-row items-center gap-3">
-              <View
-                className="h-9 w-9 items-center justify-center rounded-full"
-                style={{ backgroundColor: index === 0 ? `${colors.brand.yellow}26` : `${colors.neutral.textSecondary}1a` }}
-              >
+            <View key={lift.exerciseId} className={`flex-row items-center gap-3 py-3 ${index === topLifts.length - 1 ? "" : "border-b border-divider"}`}>
+              <HomeRowLead kind="flat">
                 <Ionicons name={lift.icon} size={16} color={index === 0 ? colors.brand.yellow : colors.neutral.textSecondary} />
-              </View>
-              <Text className="body-md flex-1 font-body-semibold text-text-primary">{lift.exerciseName}</Text>
-              <Text className="body-md font-body-bold text-brand-yellow">{formatWeight(lift.volume, weightUnit).toUpperCase()}</Text>
+              </HomeRowLead>
+              <Text style={[HOME_ROW_TITLE, { fontSize: 16, lineHeight: 18 }]} className="flex-1">
+                {lift.exerciseName}
+              </Text>
+              <Text style={{ fontFamily: fontFamily.bodyBold, fontSize: 14, color: colors.brand.yellow }}>{formatWeight(lift.volume, weightUnit).toUpperCase()}</Text>
             </View>
           ))}
         </View>
-      </Animated.View>
+      </View>
 
-      <Animated.View
-        entering={FadeInUp.delay(320).springify().damping(16).mass(0.6)}
-        className="gap-3 rounded-2xl border border-divider bg-surface p-4"
-      >
+      <View className="gap-3 border-t border-divider pt-4">
         <View className="flex-row items-center gap-1.5">
           <Ionicons name="trophy" size={14} color={colors.brand.yellow} />
-          <Text style={{ fontFamily: fontFamily.heading, fontSize: 18 }} className="text-text-primary">
-            TOP CONTRIBUTORS
-          </Text>
+          <Text style={HOME_EYEBROW}>TOP CONTRIBUTORS</Text>
         </View>
-        <ContributorsList
-          contributors={topContributors.map((entry) => ({ ...entry, amount: displayWeight(entry.amount, weightUnit) }))}
-          unit={weightUnit}
+        <ContributorsList contributors={topContributors.map((entry) => ({ ...entry, amount: displayWeight(entry.amount, weightUnit) }))} unit={weightUnit} />
+      </View>
+
+      <Animated.View entering={FadeInUp.delay(240).springify().damping(16).mass(0.6)} className="border-t border-divider pt-4">
+        <HomeRowPair
+          left={
+            <StatSection title="MUSCLE SPLIT">
+              {muscleSplit.length === 0 ? <Text style={HOME_ROW_DETAIL}>No sets logged yet.</Text> : <SegmentedProportionBar segments={muscleSplit} />}
+            </StatSection>
+          }
+          right={
+            <StatSection title="WEEKLY ACTIVITY">
+              <HorizontalBarChart items={weeklyActivity} />
+            </StatSection>
+          }
         />
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(380).springify().damping(16).mass(0.6)} className="flex-row gap-3">
-        <View className="flex-1 gap-3 rounded-2xl border border-divider bg-surface p-4">
-          <Text style={{ fontFamily: fontFamily.heading, fontSize: 16 }} className="text-text-primary">
-            MUSCLE SPLIT
+      <View className="gap-3 border-t border-divider pt-4">
+        <Text style={HOME_EYEBROW}>EXPLORE ANY LIFT</Text>
+        <Pressable onPress={() => setPickerOpen(true)} className="flex-row items-center gap-3 active:opacity-70">
+          <HomeRowLead kind="flat">
+            <Ionicons name="search" size={16} color={colors.brand.yellow} />
+          </HomeRowLead>
+          <Text style={[HOME_ROW_TITLE, { fontSize: 16, lineHeight: 18 }]} className="flex-1">
+            {selectedExercise.exerciseName}
           </Text>
-          {muscleSplit.length === 0 ? (
-            <Text className="body-sm text-text-secondary">No sets logged this week yet.</Text>
-          ) : (
-            <SegmentedProportionBar segments={muscleSplit} />
-          )}
-        </View>
-
-        <View className="flex-1 gap-3 rounded-2xl border border-divider bg-surface p-4">
-          <Text style={{ fontFamily: fontFamily.heading, fontSize: 16 }} className="text-text-primary">
-            WEEKLY ACTIVITY
-          </Text>
-          <HorizontalBarChart items={weeklyActivity} />
-        </View>
-      </Animated.View>
-
-      <Animated.View
-        entering={FadeInUp.delay(440).springify().damping(16).mass(0.6)}
-        className="gap-3 rounded-2xl border border-divider bg-surface p-4"
-      >
-        <Text style={{ fontFamily: fontFamily.heading, fontSize: 18 }} className="text-text-primary">
-          EXPLORE ANY LIFT
-        </Text>
-        <Pressable
-          onPress={() => setPickerOpen(true)}
-          className="flex-row items-center justify-between rounded-xl border border-divider bg-background px-4 py-4"
-        >
-          <Text className="body-md text-text-primary">{selectedExercise.exerciseName}</Text>
           <Ionicons name="chevron-down" size={18} color={colors.neutral.textSecondary} />
         </Pressable>
         <StrengthProgressChart
@@ -259,7 +216,7 @@ export function StatsTab() {
           title="Crew Volume"
           unit={weightUnit}
         />
-      </Animated.View>
+      </View>
 
       <ExercisePickerModal
         visible={pickerOpen}
@@ -274,13 +231,8 @@ export function StatsTab() {
         renderLeading={(exercise) => <RankBadge tier={tierForExercise(exercise, rankCards, records, rankProfile)} size={34} />}
       />
 
-      <Animated.View
-        entering={FadeInUp.delay(500).springify().damping(16).mass(0.6)}
-        className="gap-3 rounded-2xl border border-divider bg-surface p-4"
-      >
-        <Text style={{ fontFamily: fontFamily.heading, fontSize: 18 }} className="text-text-primary">
-          DIVISION TIMELINE
-        </Text>
+      <View className="gap-3 border-t border-divider pt-4">
+        <Text style={HOME_EYEBROW}>DIVISION TIMELINE</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 4, paddingRight: 8 }}>
           <View className="flex-row items-start">
             {timeline.map((entry, index) => {
@@ -308,7 +260,7 @@ export function StatsTab() {
             })}
           </View>
         </ScrollView>
-      </Animated.View>
+      </View>
     </View>
   );
 }

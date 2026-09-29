@@ -2,17 +2,17 @@ import { useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, View } from "react-native";
-import Animated, { FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, ZoomIn } from "react-native-reanimated";
+import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
+import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { usePostHog } from "posthog-react-native";
 import { AttachStep } from "react-native-spotlight-tour";
 
 import { ATTACH_INDEXES } from "@/components/AppTourOverlay";
-import { AvatarStack } from "@/components/AvatarStack";
 import { ChallengesTab } from "@/components/ChallengesTab";
 import { CrewActivitySheet } from "@/components/CrewActivitySheet";
+import { CrewCarousel } from "@/components/CrewCarousel";
+import { CrewEventReactionBar } from "@/components/CrewEventReactionBar";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
-import { CrewFeedList } from "@/components/CrewFeedList";
 import { CrewLeagueRecapCard } from "@/components/CrewLeagueRecapCard";
 import { CrewLeagueTab } from "@/components/CrewLeagueTab";
 import { CrewRivalsTab } from "@/components/CrewRivalsTab";
@@ -20,28 +20,36 @@ import { CrewWarRecapCard } from "@/components/CrewWarRecapCard";
 import { CrewWarTab } from "@/components/CrewWarTab";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { EditableText } from "@/components/EditableText";
-import { GoalRing } from "@/components/GoalRing";
+import { HOME_ACCENT, HOME_EYEBROW, HOME_ROW_DETAIL, HOME_ROW_TITLE, HOME_SECTION_TITLE } from "@/components/homeStyle";
+import { HomeReveal } from "@/components/HomeReveal";
+import { HomeRow } from "@/components/HomeRow";
+import { HomeRowLead } from "@/components/HomeRowLead";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
-import { PeerDuelsCard } from "@/components/PeerDuelsCard";
-import { ProgressBar } from "@/components/ProgressBar";
+import AnimatedText from "@/components/ui/organisms/animated-text";
+import { NumberFlow } from "@/components/ui/molecules/number-flow";
 import { PromoBanners } from "@/components/PromoBanners";
+import { RankBadge } from "@/components/RankBadge";
 import { ShareCardModal } from "@/components/ShareCardModal";
 import { StatsTab } from "@/components/StatsTab";
 import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
-import { exerciseImages, images, rankTierImages } from "@/constants/images";
-import { WORKOUT_NAME_HERO_IMAGE } from "@/data/workout-templates";
+import { images, rankTierImages } from "@/constants/images";
+import type { MuscleGroup } from "@/data/workout-log";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
 import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { waitForAuthToken, type ApiCrewLiveSession } from "@/lib/api";
 import { mostRecentCrewAchievement } from "@/lib/crew-achievements";
 import { crewMuscleBalance } from "@/lib/crew-muscle-balance";
-import { nextDivision, xpRequiredFor } from "@/lib/division";
-import { intensityToRedGreenColor } from "@/lib/muscle-groups";
+import { describeEvent, divisionFromEvent, EVENT_ICON, EVENT_TINT, tierForPrEvent } from "@/lib/crew-feed";
+import { describeResolvedDuel, duelMetricLabel, duelOpponentName } from "@/lib/crew-duel-format";
+import { realCurrentWeekMuscleIntensity } from "@/lib/member-real-profile";
+import { formatMuscleLabel, intensityToRedGreenColor } from "@/lib/muscle-groups";
 import { formatRankTier } from "@/lib/rank";
 import { formatShortAgo } from "@/lib/time-since";
 import { formatWeight } from "@/lib/units";
 import { useActiveWorkoutStore } from "@/store/active-workout-store";
 import { useCrewActivityStore } from "@/store/crew-activity-store";
+import { useCrewDuelStore } from "@/store/crew-duel-store";
+import { useCrewFeedStore } from "@/store/crew-feed-store";
 import { useCrewLeagueStore } from "@/store/crew-league-store";
 import { CURRENT_MEMBER_ID, useCrewStore } from "@/store/crew-store";
 import { useCrewWarStore } from "@/store/crew-war-store";
@@ -73,33 +81,7 @@ const TAB_ICON: Record<CrewTab, keyof typeof Ionicons.glyphMap> = {
 
 const PRESSED_STYLE = ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.7 : 1 });
 
-// Inline-only: NativeWind doesn't reliably compile `transform`/`font-style`
-// onto native when combined with a sibling className (see TopBar's wordmarkStyle).
-const crewNameStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 40,
-  lineHeight: 42,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-10deg" }],
-};
-
-// Inline-only: NativeWind doesn't reliably compile `transform`/`font-style`
-// onto native when combined with a sibling className (see TopBar's wordmarkStyle).
-const overviewHeaderStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 30,
-  lineHeight: 32,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
-
-const AVATAR_SIZE = 92;
-const AVATAR_RING_PADDING = 3;
-
-const avatarGlow = Platform.select({
-  ios: { shadowColor: colors.brand.yellow, shadowOpacity: 0.45, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
-  default: { elevation: 10 },
-});
+const AVATAR_SIZE = 84;
 
 function InfoChip({ icon, label, tint, id }: { icon: keyof typeof Ionicons.glyphMap; label: string; tint: string; id: string }) {
   return (
@@ -112,6 +94,9 @@ function InfoChip({ icon, label, tint, id }: { icon: keyof typeof Ionicons.glyph
   );
 }
 
+/** The top of Crew, styled exactly like Home's own hero (see `HomeHero`) — the same eyebrow, the same letter-by-letter
+ * Reacticx `animated-text` reveal. No `ChromaFrame` ring around the crew badge — removed app-wide
+ * ("dat is kanker lelijk... haal het overal ook weg"), so the plain badge is just bigger instead. */
 function CrewBanner() {
   const name = useCrewStore((state) => state.name);
   const tagline = useCrewStore((state) => state.tagline);
@@ -121,47 +106,28 @@ function CrewBanner() {
   const division = useCrewStore((state) => state.division);
 
   return (
-    <View className="px-4 pt-4">
-      <Text className="caption font-body-semibold text-text-secondary" style={{ letterSpacing: 1.5 }}>
-        YOUR CREW
-      </Text>
-
-      <View className="mt-3 flex-row items-center gap-3">
-        <Animated.View
-          entering={ZoomIn.springify().damping(12).mass(0.6)}
-          style={[
-            {
-              width: AVATAR_SIZE,
-              height: AVATAR_SIZE,
-              borderRadius: AVATAR_SIZE / 2,
-              padding: AVATAR_RING_PADDING,
-              backgroundColor: colors.brand.yellow,
-            },
-            avatarGlow,
-          ]}
-        >
-          <View className="flex-1 overflow-hidden rounded-full border-2 border-background">
-            <CrewIconBadge iconKey={icon} size={AVATAR_SIZE - AVATAR_RING_PADDING * 2 - 4} />
-          </View>
-        </Animated.View>
-
-        <Animated.View entering={FadeInUp.delay(100).springify().damping(14).mass(0.6)} className="flex-1 gap-2">
-          <EditableText id="crew.banner.name" style={crewNameStyle} className="text-brand-white" numberOfLines={2}>
-            {name.toUpperCase()}
-          </EditableText>
-
+    <View className="gap-4 px-4 pt-5">
+      <Text style={HOME_EYEBROW}>YOUR CREW</Text>
+      <View className="flex-row items-center gap-3">
+        <CrewIconBadge iconKey={icon} size={AVATAR_SIZE} />
+        <View className="flex-1 gap-2">
+          <AnimatedText
+            text={name.toUpperCase()}
+            animationConfig={{ characterDelay: 16 }}
+            enterFrom={{ translateY: 20, scale: 0.6 }}
+            style={{ fontFamily: fontFamily.heading, fontSize: 28, lineHeight: 30, letterSpacing: 1, color: colors.brand.white }}
+          />
           <View className="flex-row flex-wrap items-center gap-2">
             <InfoChip id="crew.banner.division" icon="shield" label={division} tint={colors.brand.yellow} />
             <InfoChip id="crew.banner.memberCount" icon="people" label={`${members.length}/${maxMembers}`} tint={colors.neutral.textSecondary} />
           </View>
-        </Animated.View>
+        </View>
       </View>
-
-      <View className="mt-4">
-        <EditableText id="crew.banner.tagline" className="body-md text-text-secondary">
+      {tagline ? (
+        <EditableText id="crew.banner.tagline" style={HOME_ROW_DETAIL}>
           {tagline}
         </EditableText>
-      </View>
+      ) : null}
     </View>
   );
 }
@@ -169,12 +135,14 @@ function CrewBanner() {
 // Chips are sized to their own content and sit in a single horizontally scrollable row instead of
 // being squeezed flex-1-even into one bar — with 7 tabs that bar had no room left to breathe, and
 // wrapping to a second row isn't allowed (see FILTERS chips on crew/members.tsx for the same pattern).
+// Reacticx's segmented-control was considered here but it lays out a fixed width divided evenly among
+// its children with no built-in scroll — the wrong shape for 7 unevenly-sized, icon+label tabs.
 function CrewTopTabs({ active, onChange }: { active: CrewTab; onChange: (tab: CrewTab) => void }) {
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      className="mt-4"
+      className="mt-5"
       contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
     >
       {TABS.map((tab) => {
@@ -183,14 +151,10 @@ function CrewTopTabs({ active, onChange }: { active: CrewTab; onChange: (tab: Cr
           <Pressable
             key={tab}
             onPress={() => (tab === "Settings" ? router.push("/crew/settings") : onChange(tab))}
-            className={`flex-row items-center gap-1.5 rounded-full border px-4 py-2 ${
-              isActive ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"
-            }`}
+            className={`flex-row items-center gap-1.5 rounded-full px-4 py-2 ${isActive ? "bg-brand-yellow" : "bg-surface"}`}
           >
             <Ionicons name={TAB_ICON[tab]} size={13} color={isActive ? colors.brand.iron : colors.neutral.textSecondary} />
-            <Text className={`caption font-body-semibold ${isActive ? "text-brand-iron" : "text-text-secondary"}`}>
-              {tab}
-            </Text>
+            <Text className={`caption font-body-semibold ${isActive ? "text-brand-iron" : "text-text-secondary"}`}>{tab}</Text>
           </Pressable>
         );
       })}
@@ -198,36 +162,12 @@ function CrewTopTabs({ active, onChange }: { active: CrewTab; onChange: (tab: Cr
   );
 }
 
-function OverviewHeader() {
-  return (
-    <View className="mx-4 mt-4 gap-1">
-      <EditableText id="crew.overview.headline" style={overviewHeaderStyle} className="text-brand-white">
-        CREW HQ
-      </EditableText>
-      <View className="flex-row items-center gap-1.5">
-        <Ionicons name="flash" size={13} color={colors.brand.yellow} />
-        <EditableText id="crew.overview.tagline" className="caption font-body-semibold text-text-secondary">
-          Where the crew&apos;s grind adds up.
-        </EditableText>
-      </View>
-    </View>
-  );
-}
-
 function ComingSoon({ label }: { label: string }) {
   return (
-    <View className="mx-4 mt-10 items-center gap-2 rounded-3xl border border-divider bg-surface px-6 py-10">
+    <View className="mx-4 mt-10 items-center gap-2 py-10">
       <Ionicons name="hourglass-outline" size={28} color={colors.neutral.textSecondary} />
-      <Text className="body-md font-body-semibold text-text-primary">{label} coming soon</Text>
-      <Text className="body-sm text-center text-text-secondary">This tab isn&apos;t built yet — check back soon.</Text>
-    </View>
-  );
-}
-
-function IconBadge({ icon, tint }: { icon: keyof typeof Ionicons.glyphMap; tint: string }) {
-  return (
-    <View className="h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: `${tint}26` }}>
-      <Ionicons name={icon} size={17} color={tint} />
+      <Text style={HOME_ROW_TITLE}>{label.toUpperCase()}</Text>
+      <Text style={HOME_ROW_DETAIL}>Coming soon</Text>
     </View>
   );
 }
@@ -255,231 +195,155 @@ function LiveDot() {
  * tapping into TodayPlanCard's bottom sheet — this surfaces it right at the top of Overview instead,
  * since a live crewmate session is the single most convertible moment the crew tab has (join now vs.
  * scroll past and never see it). Only rendered when there's a session neither leading nor already
- * joined — see the `canJoin` condition CrewActivitySheet uses for the same state. */
+ * joined — see the `canJoin` condition CrewActivitySheet uses for the same state. Styled as a flowing
+ * row, not a boxed banner — the live dot and yellow "join" chevron already say "this one's different". */
 function LiveSessionBanner({ session, onPress }: { session: ApiCrewLiveSession; onPress: () => void }) {
   return (
-    <Animated.View entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)} className="mx-4 mt-4">
-      <Pressable
-        onPress={onPress}
-        style={PRESSED_STYLE}
-        className="flex-row items-center gap-3 rounded-2xl border border-brand-yellow/40 bg-brand-yellow/10 p-3.5"
-      >
-        <View className="h-10 w-10 items-center justify-center rounded-full bg-brand-yellow/20">
-          <Ionicons name="flash" size={18} color={colors.brand.yellow} />
-        </View>
+    <HomeRow onPress={onPress}>
+      <View className="flex-row items-center gap-3">
+        <HomeRowLead kind="flat">
+          <Ionicons name="flash" size={18} color={HOME_ACCENT} />
+        </HomeRowLead>
         <View className="flex-1 gap-0.5">
           <View className="flex-row items-center gap-1.5">
             <LiveDot />
-            <Text className="body-sm font-body-semibold text-text-primary">{session.leaderName} is training now</Text>
+            <Text style={HOME_EYEBROW}>LIVE NOW</Text>
           </View>
-          <Text className="caption text-text-secondary">{session.workoutName} · tap to join</Text>
+          <Text style={HOME_ROW_TITLE} numberOfLines={1}>
+            {session.leaderName.toUpperCase()}
+          </Text>
+          <Text style={HOME_ROW_DETAIL} numberOfLines={1}>
+            {`${session.workoutName} · tap to join`}
+          </Text>
         </View>
-        <Ionicons name="chevron-forward" size={16} color={colors.brand.yellow} />
-      </Pressable>
-    </Animated.View>
+      </View>
+    </HomeRow>
   );
 }
 
-function DivisionRankCard() {
-  const division = useCrewStore((state) => state.division);
-  const globalRank = useCrewStore((state) => state.globalRank);
-  const region = useCrewStore((state) => state.region);
-  const xp = useCrewStore((state) => state.xp);
-  const xpNeeded = xpRequiredFor(division);
-  const next = nextDivision(division);
-  const ratio = Number.isFinite(xpNeeded) ? xp / xpNeeded : 1;
-
-  return (
-    <AttachStep index={ATTACH_INDEXES.crew} fill>
-      <Animated.View entering={FadeInUp.delay(150).springify().damping(16).mass(0.6)} className="relative mx-4 mt-6 gap-4 rounded-3xl border border-divider bg-surface p-4">
-        <View className="flex-row items-center gap-4">
-          <Pressable onPress={() => router.push("/crew/division")} style={PRESSED_STYLE}>
-            <GoalRing ratio={ratio} color={colors.brand.yellow} size={82} strokeWidth={5}>
-              <DivisionBadge division={division} size={56} />
-            </GoalRing>
-          </Pressable>
-
-          <View className="flex-1 gap-2.5">
-            <Pressable onPress={() => router.push("/crew/division")} style={PRESSED_STYLE} className="gap-0.5">
-              <View className="flex-row items-center gap-1">
-                <Text className="caption text-text-secondary">DIVISION</Text>
-                <Ionicons name="chevron-forward" size={11} color={colors.neutral.textSecondary} />
-              </View>
-              <EditableText id="crew.division.current" className="heading-3 text-brand-yellow">
-                {division}
-              </EditableText>
-            </Pressable>
-
-            <Pressable onPress={() => router.push("/crew/leaderboard")} style={PRESSED_STYLE} className="flex-row items-center gap-1">
-              <Ionicons name="podium-outline" size={13} color={colors.neutral.textSecondary} />
-              <EditableText id="crew.division.globalRank" className="caption font-body-semibold text-text-primary">
-                {`#${globalRank}`}
-              </EditableText>
-              <EditableText id="crew.division.region" className="caption text-text-secondary">
-                {`in ${region}`}
-              </EditableText>
-              <Ionicons name="chevron-forward" size={11} color={colors.neutral.textSecondary} />
-            </Pressable>
-          </View>
-        </View>
-
-        <View className="gap-1.5">
-          <View className="flex-row items-center justify-between">
-            <Text className="caption text-text-secondary">{next ? `Progress to ${next}` : "Top division reached"}</Text>
-            {next && (
-              <EditableText id="crew.division.xpProgress" className="caption font-body-semibold text-text-primary">
-                {`${xp.toLocaleString("en-US")} / ${xpNeeded.toLocaleString("en-US")} XP`}
-              </EditableText>
-            )}
-          </View>
-          <ProgressBar ratio={ratio} color={colors.brand.yellow} height={8} />
-        </View>
-      </Animated.View>
-    </AttachStep>
-  );
-}
-
-function CrewPowerCard() {
-  const crewPower = useCrewStore((state) => state.crewPower);
-  const crewPowerChangePercent = useCrewStore((state) => state.crewPowerChangePercent);
-
-  return (
-    <Animated.View entering={FadeInUp.delay(220).springify().damping(16).mass(0.6)} className="flex-1">
-      <Pressable
-        onPress={() => router.push("/crew/leaderboard")}
-        style={PRESSED_STYLE}
-        className="flex-1 gap-2 rounded-2xl border border-divider bg-surface p-4"
-      >
-        <View className="flex-row items-center justify-between">
-          <IconBadge icon="flash" tint={colors.brand.yellow} />
-          <Ionicons name="chevron-forward" size={14} color={colors.neutral.textSecondary} />
-        </View>
-
-        <Text className="caption font-body-semibold text-text-secondary">CREW POWER</Text>
-        <EditableText id="crew.power.value" className="heading-3 text-text-primary">
-          {crewPower.toLocaleString("en-US")}
-        </EditableText>
-        <View className="flex-row items-center gap-1">
-          <Ionicons name="trending-up" size={13} color={colors.semantic.success} />
-          <EditableText id="crew.power.changePercent" className="caption font-body-semibold" style={{ color: colors.semantic.success }}>
-            {`${crewPowerChangePercent}% vs last week`}
-          </EditableText>
-        </View>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-function MembersCard() {
-  const members = useCrewStore((state) => state.members);
-  const maxMembers = useCrewStore((state) => state.maxMembers);
-
-  return (
-    <Animated.View entering={FadeInUp.delay(280).springify().damping(16).mass(0.6)} className="flex-1">
-      <Pressable
-        onPress={() => router.push("/crew/members")}
-        style={PRESSED_STYLE}
-        className="flex-1 gap-2 rounded-2xl border border-divider bg-surface p-4"
-      >
-        <View className="flex-row items-center justify-between">
-          <IconBadge icon="people" tint={colors.semantic.info} />
-          <Ionicons name="chevron-forward" size={14} color={colors.neutral.textSecondary} />
-        </View>
-
-        <Text className="caption font-body-semibold text-text-secondary">MEMBERS</Text>
-        <EditableText id="crew.members.count" className="heading-3 text-text-primary">
-          {`${members.length}/${maxMembers}`}
-        </EditableText>
-        <AvatarStack avatarUrls={members.map((member) => member.avatarUrl)} />
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-function TodayPlanCard({ onPress }: { onPress: () => void }) {
-  const members = useCrewStore((state) => state.members);
-  const todayPlan = useCrewStore((state) => state.todayPlan);
-  const today = useTodayWorkout();
-  const workoutName = today.workoutName;
-  const trainingAvatars = todayPlan.memberIdsTraining
-    .map((id) => members.find((member) => member.id === id)?.avatarUrl)
-    .filter((url): url is string => Boolean(url));
-  const trainingCount = todayPlan.memberIdsTraining.length;
-  const heroImage = WORKOUT_NAME_HERO_IMAGE[workoutName] ?? exerciseImages.benchPress;
-
-  return (
-    <Animated.View entering={FadeInUp.delay(340).springify().damping(16).mass(0.6)} className="mx-4 mt-3">
-      <Pressable
-        onPress={onPress}
-        style={PRESSED_STYLE}
-        className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4"
-      >
-        <Image source={heroImage} resizeMode="cover" className="rounded-xl bg-background" style={{ width: 64, height: 64 }} />
-
-        <View className="flex-1 gap-1">
-          <Text className="caption font-body-semibold text-text-secondary">TODAY&apos;S PLAN</Text>
-          <EditableText id="crew.todayPlan.workoutName" className="heading-4 text-text-primary">
-            {workoutName}
-          </EditableText>
-          {trainingCount > 0 && (
-            <View className="flex-row items-center gap-1.5">
-              <LiveDot />
-              <EditableText id="crew.todayPlan.trainingCount" className="body-sm text-text-secondary">
-                {`${trainingCount} members training now`}
-              </EditableText>
-            </View>
-          )}
-        </View>
-
-        <View className="items-end gap-2">
-          <AvatarStack avatarUrls={trainingAvatars} />
-          <Ionicons name="chevron-forward" size={14} color={colors.neutral.textSecondary} />
-        </View>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-function MuscleBalanceCard() {
-  const members = useCrewStore((state) => state.members);
-  const myWorkouts = useWorkoutHistoryStore((state) => state.workouts);
+/** The crew-internal motivation feed — real, timestamped crewmate moments (PR / streak milestone /
+ * long session / division up), logged from workout/active.tsx and profile-level-store.ts right when
+ * each is detected. See backend/routes/crew-activity-events.php. Renders nothing until there's at
+ * least one real event, same "don't show an empty state for a feature nobody's used yet" idea as
+ * RecentAchievementCard. Flowing section, not a boxed card — matches Train This Next's shape on Home. */
+function CrewFeedSection() {
+  const { user } = useUser();
+  const events = useCrewFeedStore((state) => state.events);
+  const fetchEvents = useCrewFeedStore((state) => state.fetch);
+  const react = useCrewFeedStore((state) => state.react);
   const membersActivity = useCrewActivityStore((state) => state.membersActivity);
-  const muscleIntensity = crewMuscleBalance(members, myWorkouts, membersActivity);
+  const gender = useOnboardingStore((state) => state.onboarding.gender);
+  const weightKg = useOnboardingStore((state) => state.onboarding.weightKg);
+  const customExercises = useCustomExercisesStore((state) => state.exercises);
+
+  useEffect(() => {
+    fetchEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (events.length === 0) return null;
 
   return (
-    <Animated.View
-      entering={FadeInUp.delay(400).springify().damping(16).mass(0.6)}
-      className="mx-4 mt-3 gap-4 rounded-2xl border border-divider bg-surface p-4"
-    >
-      <View>
-        <Text className="caption font-body-semibold text-text-secondary" style={{ letterSpacing: 1 }}>
-          MUSCLE BALANCE (CREW)
-        </Text>
-        <EditableText id="crew.muscleBalance.subtitle" className="caption text-text-secondary">
-          {`This week, across all ${members.length} members`}
-        </EditableText>
+    <View className="mx-4 gap-4 border-b border-divider pb-5">
+      <View className="flex-row items-center justify-between">
+        <Text style={HOME_EYEBROW}>CREW ACTIVITY</Text>
+        <Pressable onPress={() => router.push("/crew/activity")} hitSlop={6} style={PRESSED_STYLE}>
+          <Text className="caption font-body-semibold text-brand-yellow">View all</Text>
+        </Pressable>
       </View>
 
-      <MuscleHeatmap muscleIntensity={muscleIntensity} height={220} showLegend={false} colorForIntensity={intensityToRedGreenColor} />
-
-      <View className="gap-1.5">
-        {/* No native linear-gradient view here, so the scale is approximated with evenly spaced
-            solid bands matching the same red-green function the body silhouette uses. */}
-        <View className="flex-row overflow-hidden rounded-full" style={{ height: 10 }}>
-          {Array.from({ length: 20 }).map((_, index) => (
-            <View key={index} className="flex-1" style={{ backgroundColor: intensityToRedGreenColor((index / 19) * 10) }} />
-          ))}
-        </View>
-        <View className="flex-row justify-between">
-          <Text className="caption text-text-secondary">LOW</Text>
-          <Text className="caption text-text-secondary">HIGH</Text>
-        </View>
+      <View className="gap-4">
+        {events.slice(0, 5).map((event) => {
+          const isMe = event.userId === user?.id;
+          const division = divisionFromEvent(event);
+          const prTier = tierForPrEvent(
+            event,
+            isMe,
+            { gender: gender ?? undefined, weightKg: weightKg ?? undefined },
+            membersActivity,
+            customExercises,
+          );
+          return (
+            <View key={event.id} className="gap-2">
+              <View className="flex-row items-center gap-3">
+                {division ? (
+                  <DivisionBadge division={division} size={36} />
+                ) : prTier ? (
+                  <RankBadge tier={prTier} size={36} />
+                ) : (
+                  <HomeRowLead kind="flat">
+                    <Ionicons name={EVENT_ICON[event.eventType]} size={16} color={EVENT_TINT[event.eventType]} />
+                  </HomeRowLead>
+                )}
+                <Text className="body-sm flex-1 text-text-secondary" numberOfLines={2}>
+                  {describeEvent(event, isMe)}
+                </Text>
+                <Text style={HOME_ROW_DETAIL}>{formatShortAgo(event.createdAt)}</Text>
+              </View>
+              <View className="pl-12">
+                <CrewEventReactionBar reactions={event.reactions} onReact={(emoji) => react(event.id, emoji)} />
+              </View>
+            </View>
+          );
+        })}
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
-function RecentAchievementCard() {
+/** Peer Duels — a lighter, 1-on-1 "who does more today" challenge between crewmates (proposed from
+ * the Challenge button on crew/members.tsx). Renders nothing until there's at least one real duel,
+ * same "don't show an empty state for a feature nobody's used yet" idea as CrewFeedSection. */
+function PeerDuelsSection() {
+  const { user } = useUser();
+  const duels = useCrewDuelStore((state) => state.duels);
+  const fetchDuels = useCrewDuelStore((state) => state.fetch);
+  const respond = useCrewDuelStore((state) => state.respond);
+
+  useEffect(() => {
+    fetchDuels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const myDuels = duels.filter((duel) => duel.challengerId === user?.id || duel.opponentId === user?.id).slice(0, 5);
+  if (myDuels.length === 0) return null;
+
+  return (
+    <View className="mx-4 gap-4 border-b border-divider pb-5">
+      <Text style={HOME_EYEBROW}>PEER DUELS</Text>
+
+      <View className="gap-4">
+        {myDuels.map((duel) =>
+          duel.status === "pending" && duel.opponentId === user?.id ? (
+            <View key={duel.id} className="gap-2">
+              <Text className="body-sm text-text-primary">
+                <Text className="font-body-semibold">{duel.challengerName}</Text> challenged you — most {duelMetricLabel(duel)} today
+              </Text>
+              <View className="flex-row gap-2">
+                <Pressable onPress={() => respond(duel.id, true)} className="flex-1 items-center rounded-full bg-brand-yellow py-2">
+                  <Text className="caption font-body-bold text-brand-iron">Accept</Text>
+                </Pressable>
+                <Pressable onPress={() => respond(duel.id, false)} className="flex-1 items-center rounded-full border border-divider py-2">
+                  <Text className="caption font-body-semibold text-text-secondary">Decline</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : duel.status === "pending" ? (
+            <Text key={duel.id} style={HOME_ROW_DETAIL}>
+              Waiting for {duelOpponentName(duel, user?.id)} · most {duelMetricLabel(duel)} today
+            </Text>
+          ) : (
+            <Text key={duel.id} style={HOME_ROW_DETAIL}>
+              {describeResolvedDuel(duel, user?.id)}
+            </Text>
+          ),
+        )}
+      </View>
+    </View>
+  );
+}
+
+function RecentAchievementRow() {
   const members = useCrewStore((state) => state.members);
   const myRecords = usePersonalRecordsStore((state) => state.records);
   const myGender = useOnboardingStore((state) => state.onboarding.gender);
@@ -493,41 +357,115 @@ function RecentAchievementCard() {
 
   const { member, achievement, rankTier } = result;
   const isMe = member.id === CURRENT_MEMBER_ID;
-  const achievedDate = new Date(achievement.achievedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   return (
-    <Animated.View
-      entering={FadeInUp.delay(460).springify().damping(16).mass(0.6)}
-      className="mx-4 mt-3 gap-3 rounded-2xl border border-divider bg-surface p-4"
-    >
-      <View className="flex-row items-center gap-1.5">
-        <Ionicons name="trophy" size={13} color={colors.brand.yellow} />
-        <Text className="caption font-body-semibold text-text-secondary" style={{ letterSpacing: 1 }}>
-          RECENT ACHIEVEMENT
-        </Text>
-      </View>
-
+    <HomeRow>
       <View className="flex-row items-center gap-3">
-        <View className="items-center gap-1">
-          <Image source={rankTierImages[rankTier]} resizeMode="contain" style={{ width: 44, height: 44 }} />
-          <EditableText id="crew.achievement.tier" className="caption font-body-bold text-brand-yellow">
-            {formatRankTier(rankTier)}
-          </EditableText>
-        </View>
-
+        <HomeRowLead kind="flat">
+          <Image source={rankTierImages[rankTier]} resizeMode="contain" style={{ width: 30, height: 30 }} />
+        </HomeRowLead>
         <View className="flex-1 gap-0.5">
-          <EditableText id="crew.achievement.memberName" className="body-md font-body-bold text-text-primary">
-            {isMe ? "You" : member.name}
+          <Text style={HOME_EYEBROW}>RECENT ACHIEVEMENT</Text>
+          <EditableText id="crew.achievement.memberName" style={HOME_ROW_TITLE} numberOfLines={1}>
+            {(isMe ? "You" : member.name).toUpperCase()}
           </EditableText>
-          <EditableText id="crew.achievement.detail" className="body-sm text-text-secondary">
-            {`${achievement.exerciseName} PR · ${formatWeight(achievement.weightKg, weightUnit)} × ${achievement.reps} reps`}
-          </EditableText>
-          <EditableText id="crew.achievement.date" className="caption text-text-secondary">
-            {`${achievedDate} · ${formatShortAgo(achievement.achievedAt)}`}
+          <EditableText id="crew.achievement.detail" style={HOME_ROW_DETAIL} numberOfLines={1}>
+            {`${formatRankTier(rankTier)} · ${achievement.exerciseName} · ${formatWeight(achievement.weightKg, weightUnit)} · ${formatShortAgo(achievement.achievedAt)}`}
           </EditableText>
         </View>
       </View>
-    </Animated.View>
+    </HomeRow>
+  );
+}
+
+/** Home's `HomeMuscleHero` treatment, applied to the crew-wide balance — one full-size silhouette
+ * across everyone's training instead of a boxed mini-card, a red-green scale bar underneath in place
+ * of a paragraph explaining what it means. */
+/** Tapping a muscle on the crew silhouette (`MuscleHeatmap`'s own `onPressGroup`) reveals who's
+ * actually behind that group's load this week, ranked — the heatmap says WHAT is imbalanced,
+ * this says WHO to blame or thank for it. Reacticx `animated-text` + `number-flow` for the reveal,
+ * so tapping around the body feels like querying live data, not just reading a static picture. */
+function MuscleBalanceSection() {
+  const members = useCrewStore((state) => state.members);
+  const myWorkouts = useWorkoutHistoryStore((state) => state.workouts);
+  const membersActivity = useCrewActivityStore((state) => state.membersActivity);
+  const muscleIntensity = crewMuscleBalance(members, myWorkouts, membersActivity);
+  const [selected, setSelected] = useState<MuscleGroup | null>(null);
+
+  const leaders = selected
+    ? members
+        .map((member) => {
+          const workouts = member.id === CURRENT_MEMBER_ID ? myWorkouts : (membersActivity[member.id]?.recentWorkouts ?? []);
+          const intensity = realCurrentWeekMuscleIntensity(workouts)[selected] ?? 0;
+          return { member, intensity };
+        })
+        .filter((entry) => entry.intensity > 0)
+        .sort((a, b) => b.intensity - a.intensity)
+        .slice(0, 3)
+    : [];
+
+  return (
+    <View className="gap-4">
+      <View className="gap-1">
+        <Text style={HOME_EYEBROW}>{`ACROSS ALL ${members.length} MEMBERS`}</Text>
+        <Text style={HOME_SECTION_TITLE}>MUSCLE BALANCE</Text>
+      </View>
+
+      <View className="items-center">
+        <MuscleHeatmap
+          muscleIntensity={muscleIntensity}
+          height={230}
+          view="front"
+          showLegend={false}
+          showViewLabel={false}
+          colorForIntensity={intensityToRedGreenColor}
+          onPressGroup={(group) => setSelected((prev) => (prev === group ? null : group))}
+        />
+      </View>
+
+      <View className="gap-1.5">
+        {/* No native linear-gradient view here, so the scale is approximated with evenly spaced
+            solid bands matching the same red-green function the body silhouette uses. */}
+        <View className="flex-row overflow-hidden rounded-full" style={{ height: 8 }}>
+          {Array.from({ length: 20 }).map((_, index) => (
+            <View key={index} className="flex-1" style={{ backgroundColor: intensityToRedGreenColor((index / 19) * 10) }} />
+          ))}
+        </View>
+        <View className="flex-row justify-between">
+          <Text style={HOME_ROW_DETAIL}>LOW</Text>
+          <Text style={HOME_ROW_DETAIL}>HIGH</Text>
+        </View>
+      </View>
+
+      {selected && (
+        <Animated.View entering={FadeInDown.duration(220)} className="gap-3 border-t border-divider pt-4">
+          <AnimatedText
+            key={selected}
+            text={`${formatMuscleLabel(selected).toUpperCase()} THIS WEEK`}
+            animationConfig={{ characterDelay: 10 }}
+            enterFrom={{ translateY: 10, scale: 0.8 }}
+            style={HOME_EYEBROW}
+          />
+          {leaders.length === 0 ? (
+            <Text style={HOME_ROW_DETAIL}>Nobody&apos;s trained this yet this week.</Text>
+          ) : (
+            <View className="gap-3">
+              {leaders.map(({ member, intensity }, index) => (
+                <View key={member.id} className="flex-row items-center gap-3">
+                  <HomeRowLead kind="flat">
+                    <Text style={{ fontFamily: fontFamily.heading, fontSize: 15, color: index === 0 ? HOME_ACCENT : colors.neutral.textSecondary }}>{index + 1}</Text>
+                  </HomeRowLead>
+                  <Text className="body-sm flex-1 font-body-semibold text-text-primary" numberOfLines={1}>
+                    {member.id === CURRENT_MEMBER_ID ? "You" : member.name}
+                  </Text>
+                  <NumberFlow value={intensity} fontSize={16} color={colors.brand.white} fontWeight="800" />
+                </View>
+              ))}
+            </View>
+          )}
+        </Animated.View>
+      )}
+    </View>
   );
 }
 
@@ -536,15 +474,10 @@ function CrewEmptyState() {
     <View className="flex-1 items-center justify-center gap-6 px-8 pt-16">
       <Image source={images.mascotsCrew} resizeMode="contain" style={{ width: 220, height: 220 * (420 / 520) }} />
       <View className="items-center gap-2">
-        <Text className="heading-3 text-center text-text-primary">No Crew Yet</Text>
-        <Text className="body-md text-center text-text-secondary">
-          Join your friends or create your own crew to plan workouts and compete together.
-        </Text>
+        <Text style={HOME_SECTION_TITLE}>NO CREW YET</Text>
+        <Text style={[HOME_ROW_DETAIL, { textAlign: "center" }]}>Join your friends or create your own crew to plan workouts and compete together.</Text>
       </View>
-      <Pressable
-        onPress={() => router.push("/build-crew/choose-path")}
-        className="w-full items-center rounded-full bg-brand-yellow py-4"
-      >
+      <Pressable onPress={() => router.push("/build-crew/choose-path")} className="w-full items-center rounded-full bg-brand-yellow py-4">
         <Text className="body-md font-body-bold text-brand-iron">Set Up Your Crew</Text>
       </Pressable>
     </View>
@@ -598,7 +531,7 @@ export default function CrewScreen() {
   const iAmLeader = !!user && session?.leaderId === user.id;
   const iHaveJoined = !!user && (session?.participantIds.includes(user.id) ?? false);
 
-  // Real crewmate workouts/PRs for MuscleBalanceCard/RecentAchievementCard (see
+  // Real crewmate workouts/PRs for MuscleBalanceSection/RecentAchievementRow (see
   // crew-activity-store.ts) — fetched once the real crew id is known, not before. `crewId` comes
   // from crew-store.ts's persisted state, so it can already be populated from a *previous* session
   // the instant this screen mounts after a hard refresh — well before Clerk's session/token has
@@ -682,22 +615,52 @@ export default function CrewScreen() {
       <CrewTopTabs active={activeTab} onChange={setActiveTab} />
 
       {activeTab === "Overview" ? (
-        <>
-          <OverviewHeader />
+        <View className="mt-2">
           {session && !iAmLeader && !iHaveJoined && (
-            <LiveSessionBanner session={session} onPress={() => router.push("/crew/join-workout")} />
+            <View className="mx-4">
+              <LiveSessionBanner session={session} onPress={() => router.push("/crew/join-workout")} />
+            </View>
           )}
-          <DivisionRankCard />
-          <View className="mx-4 mt-3 flex-row items-stretch gap-3">
-            <CrewPowerCard />
-            <MembersCard />
+
+          {/* Division, Crew Power, Members and Today's Plan — Crew's own "glance at one number"
+              content, moved off flowing rows onto the same swipeable Reacticx `tilt-carousel` deck
+              Home's own quick-glance cards use ("style de crew page waar het kan ook zoals de home
+              met die cards"). Everything below this (the crew feed, peer duels, the recent-
+              achievement row, muscle balance) stays a full-width flowing section — the same call
+              `HomeCarousel` itself makes for content that needs real reading width rather than a
+              one-glance card. */}
+          <AttachStep index={ATTACH_INDEXES.crew} fill>
+            <HomeReveal index={2} bleed tight>
+              <CrewCarousel onPressPlan={() => setActivitySheetOpen(true)} />
+            </HomeReveal>
+          </AttachStep>
+
+          <HomeReveal index={5}>
+            <CrewFeedSection />
+          </HomeReveal>
+          <HomeReveal index={6}>
+            <PeerDuelsSection />
+          </HomeReveal>
+          <View className="mx-4">
+            <HomeReveal index={7} tight>
+              <RecentAchievementRow />
+            </HomeReveal>
           </View>
-          <TodayPlanCard onPress={() => setActivitySheetOpen(true)} />
-          <CrewFeedList />
-          <PeerDuelsCard />
-          <RecentAchievementCard />
-          <MuscleBalanceCard />
-        </>
+          {/* Home's own flat-card treatment (see `home.tsx`'s `VisualTrainingCalendar` wrapper, and
+              `HomeStrengthTrend`'s own "Objective Proof" card) applied here too — "bij de crew pages
+              moet je ook de card styling gebruiken van de home zoals je objective proof bij sommige
+              dingen." A data-viz section like this one (a heatmap + legend + a leaderboard that
+              expands under it) reads as a distinct module the same way the calendar does on Home,
+              so it gets the same rounded, flat `colors.neutral.surface` boundary instead of just
+              running straight into the page background like the flowing rows above it. */}
+          <View className="mx-4">
+            <HomeReveal index={8} tight>
+              <View style={{ borderRadius: 28, backgroundColor: colors.neutral.surface, padding: 20 }}>
+                <MuscleBalanceSection />
+              </View>
+            </HomeReveal>
+          </View>
+        </View>
       ) : activeTab === "War" ? (
         <CrewWarTab />
       ) : activeTab === "League" ? (

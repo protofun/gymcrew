@@ -6,6 +6,8 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { ChallengeCard } from "@/components/ChallengeCard";
 import { CreateChallengeModal } from "@/components/CreateChallengeModal";
+import { HOME_EYEBROW, HOME_SECTION_TITLE } from "@/components/homeStyle";
+import SegmentedControl from "@/components/ui/organisms/segmented-control";
 import { activeWeeklyChallenges, CHALLENGE_XP_REWARD, upcomingWeeklyChallenges, type ChallengeTemplate } from "@/data/challenges";
 import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
 import { crewChallengeProgress, simulatedOpponentProgress, weekKeyRange } from "@/lib/challenge-progress";
@@ -18,7 +20,7 @@ import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewStore } from "@/store/crew-store";
 import { TOKENS_PER_BATTLE_WIN, TOKENS_PER_CHALLENGE_COMPLETE, useCurrencyStore } from "@/store/currency-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
-import { colors, fontFamily } from "@/theme";
+import { colors } from "@/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SCOPES = ["Active", "Upcoming", "Completed"] as const;
@@ -28,16 +30,6 @@ type Scope = (typeof SCOPES)[number];
 const BATTLE_LEADER_MIN_DIVISION = "Silver";
 /** Bonus crew XP on top of the normal completion reward, only when the crew actually beat its Battle opponent. */
 const BATTLE_WIN_XP_BONUS = 200;
-
-// Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native when
-// combined with a sibling className (see TopBar's wordmarkStyle for the same constraint).
-const headerStyle = {
-  fontFamily: fontFamily.heading,
-  fontSize: 30,
-  lineHeight: 32,
-  fontStyle: "italic" as const,
-  transform: [{ skewX: "-8deg" }],
-};
 
 function formatTimeLeft(endsAt: number, isComplete: boolean): string {
   if (isComplete) return "Challenge complete";
@@ -50,6 +42,41 @@ function formatStartsIn(startsAt: number): string {
   const daysUntil = Math.max(0, Math.ceil((startsAt - Date.now()) / DAY_MS));
   if (daysUntil === 0) return "Starts today";
   return `Starts in ${daysUntil} day${daysUntil === 1 ? "" : "s"}`;
+}
+
+// A tap-open dropdown segment doesn't fit 3 SCOPES here the way it does crew/leaderboard.tsx's
+// Global/Gym/Crews switcher — this one needs an active/inactive label pair per segment, so it stays
+// a small local label component instead.
+function ScopeLabel({ label, active }: { label: string; active: boolean }) {
+  return <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{label}</Text>;
+}
+
+/** Real Reacticx `segmented-control` for Active/Upcoming/Completed — three fixed equal segments is
+ * exactly its shape (see `HomeWeekBar`/`crew/leaderboard.tsx`'s `ScopeSwitcher` for the same
+ * measure-width-then-render pattern), unlike Crew Overview's own 7-tab bar. */
+function ScopeSwitcher({ scope, onChange }: { scope: Scope; onChange: (scope: Scope) => void }) {
+  const [width, setWidth] = useState(0);
+  return (
+    <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+      {width > 0 && (
+        <SegmentedControl
+          currentIndex={SCOPES.indexOf(scope)}
+          onChange={(index) => onChange(SCOPES[index])}
+          width={width}
+          borderRadius={22}
+          paddingVertical={9}
+          segmentedControlBackgroundColor={colors.neutral.surface}
+          activeSegmentBackgroundColor={colors.brand.yellow}
+          dividerColor="transparent"
+          disableScaleEffect
+        >
+          {SCOPES.map((s) => (
+            <ScopeLabel key={s} label={s} active={s === scope} />
+          ))}
+        </SegmentedControl>
+      )}
+    </View>
+  );
 }
 
 export function ChallengesTab() {
@@ -204,45 +231,42 @@ export function ChallengesTab() {
   }
 
   return (
-    <View className="mx-4 mt-4 gap-4">
+    <View className="mx-4 mt-4 gap-5">
       {summerChallenges.length > 0 && (
-        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-3">
+        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-3 border-b border-divider pb-5">
           <View className="gap-1">
-            <Text style={headerStyle} className="text-brand-white">
-              🦍 SUMMER CHALLENGE
-            </Text>
+            <Text style={HOME_EYEBROW}>LOCKED</Text>
+            <Text style={HOME_SECTION_TITLE}>🦍 SUMMER CHALLENGE</Text>
             <View className="flex-row items-center gap-1.5">
               <Ionicons name="lock-closed" size={13} color={colors.neutral.textSecondary} />
               <Text className="caption font-body-semibold text-text-secondary">Unlocks when the app officially releases.</Text>
             </View>
           </View>
-          <View className="gap-3">
+          <View>
             {summerChallenges.map((challenge, index) => (
-              <Animated.View key={challenge.id} entering={FadeInUp.delay(index * 60).springify().damping(16).mass(0.6)}>
-                <ChallengeCard
-                  id={`crew.challenges.summer.${challenge.id}`}
-                  metric={challenge.metric}
-                  name={challenge.name}
-                  unit={challenge.unit}
-                  progress={0}
-                  target={challenge.perMemberTarget * members.length}
-                  timeLabel=""
-                  isComplete={false}
-                  xpReward={CHALLENGE_XP_REWARD}
-                  locked
-                  lockedLabel="Waiting for app release"
-                  onPress={() => {}}
-                />
-              </Animated.View>
+              <ChallengeCard
+                key={challenge.id}
+                id={`crew.challenges.summer.${challenge.id}`}
+                metric={challenge.metric}
+                name={challenge.name}
+                unit={challenge.unit}
+                progress={0}
+                target={challenge.perMemberTarget * members.length}
+                timeLabel=""
+                isComplete={false}
+                xpReward={CHALLENGE_XP_REWARD}
+                locked
+                lockedLabel="Waiting for app release"
+                isLast={index === summerChallenges.length - 1}
+                onPress={() => {}}
+              />
             ))}
           </View>
         </Animated.View>
       )}
 
       <Animated.View entering={FadeInUp.delay(60).springify().damping(16).mass(0.6)} className="gap-1">
-        <Text style={headerStyle} className="text-brand-white">
-          {scope === "Upcoming" ? "WHAT'S COMING" : scope === "Completed" ? "VICTORIES" : "PROVE YOURSELVES"}
-        </Text>
+        <Text style={HOME_SECTION_TITLE}>{scope === "Upcoming" ? "WHAT'S COMING" : scope === "Completed" ? "VICTORIES" : "PROVE YOURSELVES"}</Text>
         <View className="flex-row items-center gap-1.5">
           <Ionicons name="flame" size={13} color={colors.semantic.streak} />
           <Text className="caption font-body-semibold text-text-secondary">
@@ -253,49 +277,21 @@ export function ChallengesTab() {
         </View>
       </Animated.View>
 
-      <Animated.View
-        entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)}
-        className="flex-row rounded-full border border-divider bg-surface p-1"
-      >
-        {SCOPES.map((s) => {
-          const active = s === scope;
-          return (
-            <Pressable
-              key={s}
-              onPress={() => setScope(s)}
-              className={`flex-1 items-center rounded-full py-2 ${active ? "bg-brand-yellow" : ""}`}
-            >
-              <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{s}</Text>
-            </Pressable>
-          );
-        })}
+      <Animated.View entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)}>
+        <ScopeSwitcher scope={scope} onChange={setScope} />
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(140).springify().damping(16).mass(0.6)}>
-        <Pressable
-          onPress={() => canIssueBattle && setCreateOpen(true)}
-          className={`flex-row items-center justify-center gap-2 rounded-2xl border border-dashed py-3.5 ${
-            canIssueBattle ? "border-brand-yellow" : "border-divider"
-          }`}
-        >
-          <Ionicons
-            name={canIssueBattle ? "flag" : "lock-closed"}
-            size={16}
-            color={canIssueBattle ? colors.brand.yellow : colors.neutral.textSecondary}
-          />
-          <Text className={`body-sm font-body-semibold ${canIssueBattle ? "text-brand-yellow" : "text-text-secondary"}`}>
-            {canIssueBattle
-              ? "Challenge Another Crew"
-              : `Reach ${BATTLE_LEADER_MIN_DIVISION} personally to challenge crews (you're ${personalDivision})`}
+        <Pressable onPress={() => canIssueBattle && setCreateOpen(true)} className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-3.5" style={{ opacity: canIssueBattle ? 1 : 0.5 }}>
+          <Ionicons name={canIssueBattle ? "flag" : "lock-closed"} size={16} color={colors.brand.iron} />
+          <Text className="body-sm font-body-bold text-brand-iron">
+            {canIssueBattle ? "Challenge Another Crew" : `Reach ${BATTLE_LEADER_MIN_DIVISION} personally to challenge crews (you're ${personalDivision})`}
           </Text>
         </Pressable>
       </Animated.View>
 
       {visible.length === 0 ? (
-        <Animated.View
-          entering={FadeInUp.delay(200).springify().damping(16).mass(0.6)}
-          className="items-center gap-2 rounded-2xl border border-dashed border-divider px-6 py-12"
-        >
+        <Animated.View entering={FadeInUp.delay(200).springify().damping(16).mass(0.6)} className="items-center gap-2 py-12">
           <Ionicons name={scope === "Completed" ? "trophy-outline" : "flag-outline"} size={26} color={colors.neutral.textSecondary} />
           <Text className="body-sm text-center text-text-secondary">
             {scope === "Active" && "No active challenges right now — check back Monday."}
@@ -304,23 +300,23 @@ export function ChallengesTab() {
           </Text>
         </Animated.View>
       ) : (
-        <View className="gap-3">
+        <View>
           {visible.map((challenge, index) => (
-            <Animated.View key={challenge.key} entering={FadeInUp.delay(180 + index * 60).springify().damping(16).mass(0.6)}>
-              <ChallengeCard
-                id={`crew.challenges.${challenge.key}`}
-                metric={challenge.metric}
-                name={challenge.name}
-                unit={challenge.unit}
-                progress={challenge.progress}
-                target={challenge.target}
-                timeLabel={challenge.timeLabel}
-                isComplete={challenge.isComplete}
-                xpReward={challenge.xpReward}
-                battleStatus={"isWinning" in challenge ? (challenge.isWinning ? "winning" : "losing") : undefined}
-                onPress={() => router.push(`/crew/challenge/${challenge.key}`)}
-              />
-            </Animated.View>
+            <ChallengeCard
+              key={challenge.key}
+              id={`crew.challenges.${challenge.key}`}
+              metric={challenge.metric}
+              name={challenge.name}
+              unit={challenge.unit}
+              progress={challenge.progress}
+              target={challenge.target}
+              timeLabel={challenge.timeLabel}
+              isComplete={challenge.isComplete}
+              xpReward={challenge.xpReward}
+              battleStatus={"isWinning" in challenge ? (challenge.isWinning ? "winning" : "losing") : undefined}
+              isLast={index === visible.length - 1}
+              onPress={() => router.push(`/crew/challenge/${challenge.key}`)}
+            />
           ))}
         </View>
       )}
