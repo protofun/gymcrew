@@ -17,9 +17,25 @@
  *   GET    /admin/users/:id                -> one user's detail
  *   PUT    /admin/users/:id                -> { banned: true|false }
  *   PUT    /admin/users/:id/profile        -> edit personal data (see routes/admin-users.php)
+ *   PUT    /admin/users/:id/ai-scan-limits -> { daily?, weekly?, monthly? } per-user AI meal-scan credit
+ *                                              overrides (each an int or null to clear; wins over both
+ *                                              the global daily default and the unlimited allowlist —
+ *                                              see routes/nutrition-photo-scan.php's mealScanLimits)
+ *   POST   /admin/users/ai-scan-limits/bulk -> { userIds: string[], daily?, weekly?, monthly? } same,
+ *                                              applied to every listed user at once
  *   POST   /admin/users/:id/password       -> { password } set a new password (write-only, via Clerk)
  *   POST   /admin/users/:id/sign-out       -> sign the user out of every session
+ *   PUT    /admin/users/:id/app-admin      -> { isAppAdmin: true|false } grants/revokes this account's
+ *                                              own admin-challenges management access (replaces the
+ *                                              old hardcoded ADMIN_CHALLENGE_EMAILS allowlist)
  *   DELETE /admin/users/:id                -> permanently deletes the account and all its data
+ *   GET    /admin/rank-tiers?scope=player|crew -> the player/crew division ladder (name + threshold,
+ *                                              in order) — see db/schema.sql's `rank_tier_config`
+ *   PUT    /admin/rank-tiers/:id           -> { name?, threshold? } edit one tier
+ *   GET/POST/PUT/DELETE /admin/contacts        -> saved outreach contacts (see routes/admin-contacts.php)
+ *   GET/POST/PUT/DELETE /admin/marketing/socials -> tracked social platforms (routes/admin-marketing.php)
+ *   GET/POST/PUT/DELETE /admin/marketing/ideas   -> post ideas + logged performance per platform
+ *   GET/POST/PUT/DELETE /admin/finance          -> cost/income log (see routes/admin-finance.php)
  *   GET    /admin/crews?search=&page=      -> paginated crew list
  *   GET    /admin/crews/:id                -> one crew's detail + members
  *   PUT    /admin/crews/:id                -> { disabled: true|false }
@@ -146,6 +162,14 @@ function handleAdmin(PDO $pdo, string $method, ?array $body, array $segments): v
     if ($sub === 'users') {
         $userAction = $segments[3] ?? null;
         if ($id === null && $method === 'GET') { respondWithAdminUsers($pdo); return; }
+        if ($id === 'ai-scan-limits' && $userAction === 'bulk' && $method === 'POST') {
+            bulkUpdateUserAiScanLimits($pdo, (string) $admin['sub'], (string) $admin['email'], $data);
+            return;
+        }
+        if ($id !== null && $userAction === 'ai-scan-limits' && $method === 'PUT') {
+            updateUserAiScanLimits($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data);
+            return;
+        }
         if ($id !== null && $userAction === 'records' && $method === 'GET') { respondWithUserRecords($pdo, $id); return; }
         if ($id !== null && $userAction === 'records' && $method === 'PUT') { upsertUserRecord($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data); return; }
         if ($id !== null && $userAction === 'workouts' && $method === 'GET') { respondWithUserWorkouts($pdo, $id); return; }
@@ -154,6 +178,7 @@ function handleAdmin(PDO $pdo, string $method, ?array $body, array $segments): v
         if ($id !== null && $userAction === 'profile' && $method === 'PUT') { updateAdminUserProfile($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data); return; }
         if ($id !== null && $userAction === 'password' && $method === 'POST') { setAdminUserPassword($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data); return; }
         if ($id !== null && $userAction === 'sign-out' && $method === 'POST') { signOutAdminUserEverywhere($pdo, (string) $admin['sub'], (string) $admin['email'], $id); return; }
+        if ($id !== null && $userAction === 'app-admin' && $method === 'PUT') { updateUserAppAdmin($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data); return; }
         if ($id !== null && $method === 'GET') { respondWithAdminUserDetail($pdo, $id); return; }
         if ($id !== null && $method === 'PUT') { updateAdminUser($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data); return; }
         if ($id !== null && $method === 'DELETE') { deleteAdminUser($pdo, (string) $admin['sub'], (string) $admin['email'], $id); return; }
@@ -211,6 +236,42 @@ function handleAdmin(PDO $pdo, string $method, ?array $body, array $segments): v
     if ($sub === 'settings') {
         if ($method === 'GET') { respondWithSettings($pdo); return; }
         if ($method === 'PUT') { updateSetting($pdo, (string) $admin['sub'], (string) $admin['email'], $data); return; }
+    }
+
+    if ($sub === 'rank-tiers') {
+        if ($id === null && $method === 'GET') { respondWithRankTiers($pdo); return; }
+        if ($id !== null && $method === 'PUT') { updateRankTier($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data); return; }
+    }
+
+    if ($sub === 'contacts') {
+        if ($id === null && $method === 'GET') { respondWithAdminContacts($pdo); return; }
+        if ($id === null && $method === 'POST') { createAdminContact($pdo, $data); return; }
+        if ($id !== null && $method === 'PUT') { updateAdminContact($pdo, $id, $data); return; }
+        if ($id !== null && $method === 'DELETE') { deleteAdminContact($pdo, $id); return; }
+    }
+
+    if ($sub === 'marketing') {
+        $resource = $id; // 'socials' | 'ideas'
+        $resourceId = $segments[3] ?? null;
+        if ($resource === 'socials') {
+            if ($resourceId === null && $method === 'GET') { respondWithMarketingSocials($pdo); return; }
+            if ($resourceId === null && $method === 'POST') { createMarketingSocial($pdo, $data); return; }
+            if ($resourceId !== null && $method === 'PUT') { updateMarketingSocial($pdo, $resourceId, $data); return; }
+            if ($resourceId !== null && $method === 'DELETE') { deleteMarketingSocial($pdo, $resourceId); return; }
+        }
+        if ($resource === 'ideas') {
+            if ($resourceId === null && $method === 'GET') { respondWithMarketingIdeas($pdo); return; }
+            if ($resourceId === null && $method === 'POST') { createMarketingIdea($pdo, $data); return; }
+            if ($resourceId !== null && $method === 'PUT') { updateMarketingIdea($pdo, $resourceId, $data); return; }
+            if ($resourceId !== null && $method === 'DELETE') { deleteMarketingIdea($pdo, $resourceId); return; }
+        }
+    }
+
+    if ($sub === 'finance') {
+        if ($id === null && $method === 'GET') { respondWithFinanceEntries($pdo); return; }
+        if ($id === null && $method === 'POST') { createFinanceEntry($pdo, $data); return; }
+        if ($id !== null && $method === 'PUT') { updateFinanceEntry($pdo, $id, $data); return; }
+        if ($id !== null && $method === 'DELETE') { deleteFinanceEntry($pdo, $id); return; }
     }
 
     if ($sub === '2fa') {
@@ -410,7 +471,7 @@ function respondWithAdminUsers(PDO $pdo): void
     }
 
     $baseSelect =
-        "SELECT u.id, u.email, u.full_name, u.username, u.gym_name, u.created_at, u.banned_at, u.founding_athlete_id,
+        "SELECT u.id, u.email, u.full_name, u.username, u.gym_name, u.created_at, u.banned_at, u.founding_athlete_id, u.is_app_admin,
          (SELECT COUNT(*) FROM workouts w WHERE w.user_id = u.id) AS workout_count,
          (SELECT COUNT(*) FROM personal_records pr WHERE pr.user_id = u.id) AS pr_count,
          (SELECT COUNT(*) FROM food_logs f WHERE f.user_id = u.id) AS meal_count,
@@ -466,6 +527,7 @@ function respondWithAdminUsers(PDO $pdo): void
             'createdAt' => $row['created_at'],
             'banned' => $row['banned_at'] !== null,
             'isFoundingAthlete' => $row['founding_athlete_id'] !== null,
+            'isAppAdmin' => (bool) $row['is_app_admin'],
             'workoutCount' => (int) $row['workout_count'],
             'prCount' => (int) $row['pr_count'],
             'mealCount' => (int) $row['meal_count'],
@@ -500,6 +562,21 @@ function respondWithAdminUserDetail(PDO $pdo, string $id): void
     $crewStmt->execute([$id]);
     $crew = $crewStmt->fetch();
 
+    // Shown next to the AI Scan Limits editor on the User Detail page, so an admin can see how close
+    // this person already is to whatever cap applies before changing it.
+    $scanUsageStmt = $pdo->prepare(
+        "SELECT
+            (SELECT COUNT(*) FROM meal_photo_scans WHERE user_id = ? AND scanned_at >= ?) AS used_today,
+            (SELECT COUNT(*) FROM meal_photo_scans WHERE user_id = ? AND scanned_at >= ?) AS used_this_week,
+            (SELECT COUNT(*) FROM meal_photo_scans WHERE user_id = ? AND scanned_at >= ?) AS used_this_month"
+    );
+    $scanUsageStmt->execute([
+        $id, strtotime('today') * 1000,
+        $id, strtotime('monday this week') * 1000,
+        $id, strtotime('first day of this month') * 1000,
+    ]);
+    $scanUsage = $scanUsageStmt->fetch();
+
     jsonResponse([
         'id' => $user['id'],
         'email' => $user['email'],
@@ -516,10 +593,62 @@ function respondWithAdminUserDetail(PDO $pdo, string $id): void
         'createdAt' => $user['created_at'],
         'banned' => $user['banned_at'] !== null,
         'isFoundingAthlete' => $user['founding_athlete_id'] !== null,
+        'isAppAdmin' => (bool) $user['is_app_admin'],
         'hasPushToken' => $user['expo_push_token'] !== null,
         'workoutCount' => (int) $workoutCountStmt->fetchColumn(),
         'crew' => $crew ? ['id' => $crew['id'], 'name' => $crew['name'], 'role' => $crew['role']] : null,
+        'aiScanLimitDaily' => $user['ai_scan_limit_daily'] !== null ? (int) $user['ai_scan_limit_daily'] : null,
+        'aiScanLimitWeekly' => $user['ai_scan_limit_weekly'] !== null ? (int) $user['ai_scan_limit_weekly'] : null,
+        'aiScanLimitMonthly' => $user['ai_scan_limit_monthly'] !== null ? (int) $user['ai_scan_limit_monthly'] : null,
+        'aiScanUsedToday' => (int) $scanUsage['used_today'],
+        'aiScanUsedThisWeek' => (int) $scanUsage['used_this_week'],
+        'aiScanUsedThisMonth' => (int) $scanUsage['used_this_month'],
     ]);
+}
+
+/** Normalizes {daily, weekly, monthly} into ints-or-null — an empty string, missing key, or explicit
+ * null all mean "no override for this period", anything else is clamped to a sane non-negative int. */
+function normalizeAiScanLimits(array $data): array
+{
+    $clean = function ($value): ?int {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        return max(0, (int) $value);
+    };
+    return [
+        'daily' => $clean($data['daily'] ?? null),
+        'weekly' => $clean($data['weekly'] ?? null),
+        'monthly' => $clean($data['monthly'] ?? null),
+    ];
+}
+
+/** Sets one user's AI meal-scan credit overrides (see nutrition-photo-scan.php's mealScanLimits for
+ * how these are applied — they win over both the global daily default and the unlimited allowlist). */
+function updateUserAiScanLimits(PDO $pdo, string $adminId, string $adminEmail, string $id, array $data): void
+{
+    $limits = normalizeAiScanLimits($data);
+    $pdo->prepare('UPDATE users SET ai_scan_limit_daily = ?, ai_scan_limit_weekly = ?, ai_scan_limit_monthly = ? WHERE id = ?')
+        ->execute([$limits['daily'], $limits['weekly'], $limits['monthly'], $id]);
+    logAdminAction($pdo, $adminId, $adminEmail, 'update_ai_scan_limits', 'user', $id, json_encode($limits));
+    jsonResponse(['ok' => true]);
+}
+
+/** Same as updateUserAiScanLimits, applied to every id in `userIds` at once — the admin panel's Users
+ * list bulk-action bar uses this for a multi-select "Set AI Scan Limits". */
+function bulkUpdateUserAiScanLimits(PDO $pdo, string $adminId, string $adminEmail, array $data): void
+{
+    $userIds = array_values(array_unique(array_filter(array_map('strval', $data['userIds'] ?? []), fn($v) => $v !== '')));
+    if (empty($userIds)) {
+        errorResponse('userIds is required');
+        return;
+    }
+    $limits = normalizeAiScanLimits($data);
+    $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+    $pdo->prepare("UPDATE users SET ai_scan_limit_daily = ?, ai_scan_limit_weekly = ?, ai_scan_limit_monthly = ? WHERE id IN ($placeholders)")
+        ->execute([$limits['daily'], $limits['weekly'], $limits['monthly'], ...$userIds]);
+    logAdminAction($pdo, $adminId, $adminEmail, 'bulk_update_ai_scan_limits', 'user', implode(',', $userIds), json_encode($limits));
+    jsonResponse(['ok' => true, 'updated' => count($userIds)]);
 }
 
 function updateAdminUser(PDO $pdo, string $adminId, string $adminEmail, string $id, array $data): void
@@ -531,6 +660,68 @@ function updateAdminUser(PDO $pdo, string $adminId, string $adminEmail, string $
     $bannedAt = $data['banned'] ? date('Y-m-d H:i:s') : null;
     $pdo->prepare('UPDATE users SET banned_at = ? WHERE id = ?')->execute([$bannedAt, $id]);
     logAdminAction($pdo, $adminId, $adminEmail, $data['banned'] ? 'ban_user' : 'unban_user', 'user', $id);
+    jsonResponse(['ok' => true]);
+}
+
+/** Grants/revokes `users.is_app_admin` — see admin-challenges.php's isAdminUser, the reason this
+ * exists at all (replacing that file's old hardcoded ADMIN_CHALLENGE_EMAILS allowlist). */
+function updateUserAppAdmin(PDO $pdo, string $adminId, string $adminEmail, string $id, array $data): void
+{
+    if (!array_key_exists('isAppAdmin', $data)) {
+        errorResponse('isAppAdmin is required');
+        return;
+    }
+    $isAppAdmin = (bool) $data['isAppAdmin'];
+    $pdo->prepare('UPDATE users SET is_app_admin = ? WHERE id = ?')->execute([$isAppAdmin ? 1 : 0, $id]);
+    logAdminAction($pdo, $adminId, $adminEmail, $isAppAdmin ? 'grant_app_admin' : 'revoke_app_admin', 'user', $id);
+    jsonResponse(['ok' => true]);
+}
+
+/** The player or crew rank ladder, in order — see db/schema.sql's `rank_tier_config` and
+ * leaderboards.php's getRankTierConfig, which is what actually applies these at runtime. */
+function respondWithRankTiers(PDO $pdo): void
+{
+    $scope = ($_GET['scope'] ?? 'player') === 'crew' ? 'crew' : 'player';
+    $stmt = $pdo->prepare('SELECT id, tier_order, name, threshold FROM rank_tier_config WHERE scope = ? ORDER BY tier_order ASC');
+    $stmt->execute([$scope]);
+    $tiers = array_map(fn(array $r): array => [
+        'id' => (int) $r['id'],
+        'tierOrder' => (int) $r['tier_order'],
+        'name' => $r['name'],
+        'threshold' => (int) $r['threshold'],
+    ], $stmt->fetchAll());
+    jsonResponse(['scope' => $scope, 'tiers' => $tiers]);
+}
+
+/** Edits one tier's name and/or threshold. Renaming a tier does NOT rename it in any crew/user's
+ * already-stored `division` column — same "changing the ladder doesn't retroactively rewrite who's
+ * standing where" behavior the hardcoded arrays this replaces always had. */
+function updateRankTier(PDO $pdo, string $adminId, string $adminEmail, string $id, array $data): void
+{
+    $fields = [];
+    $params = [];
+    if (array_key_exists('name', $data)) {
+        $name = trim((string) $data['name']);
+        if ($name === '') {
+            errorResponse('name cannot be empty');
+            return;
+        }
+        $fields[] = 'name = ?';
+        $params[] = $name;
+    }
+    if (array_key_exists('threshold', $data)) {
+        $fields[] = 'threshold = ?';
+        $params[] = max(0, (int) $data['threshold']);
+    }
+    if (empty($fields)) {
+        errorResponse('Nothing to update');
+        return;
+    }
+    $fields[] = 'updated_at = ?';
+    $params[] = (int) round(microtime(true) * 1000);
+    $params[] = $id;
+    $pdo->prepare('UPDATE rank_tier_config SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+    logAdminAction($pdo, $adminId, $adminEmail, 'update_rank_tier', 'rank_tier', $id, json_encode($data));
     jsonResponse(['ok' => true]);
 }
 

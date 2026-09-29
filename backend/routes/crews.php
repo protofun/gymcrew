@@ -169,38 +169,37 @@ function respondWithCrewActivity(PDO $pdo, string $userId, string $crewId): void
     jsonResponse(['members' => $members]);
 }
 
-/** Same 20-tier ladder as src/lib/division.ts's `DIVISIONS` — keep both in sync if it ever changes. */
-const CREW_DIVISION_ORDER = [
-    'Rookie', 'Novice', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Elite', 'Master',
-    'Grandmaster', 'Champion', 'Titan', 'Mythic', 'Immortal', 'Legend', 'Overlord', 'Supreme',
-    'Conqueror', 'Dominator', 'Apex',
-];
-
-/** Same as src/lib/division.ts's `DIVISION_XP_REQUIRED` — XP needed to climb OUT of each division. */
-const CREW_DIVISION_XP_REQUIRED = [
-    'Rookie' => 500, 'Novice' => 750, 'Bronze' => 1100, 'Silver' => 1600, 'Gold' => 2300,
-    'Platinum' => 3300, 'Diamond' => 4700, 'Elite' => 6700, 'Master' => 9600, 'Grandmaster' => 13800,
-    'Champion' => 19800, 'Titan' => 28500, 'Mythic' => 41000, 'Immortal' => 59000, 'Legend' => 85000,
-    'Overlord' => 122000, 'Supreme' => 176000, 'Conqueror' => 253000, 'Dominator' => 364000,
-];
-
 /**
  * Server-side port of src/lib/division.ts's `advanceDivision` — the authority now has to live here
  * too, since XP grants are applied server-side (see `awardCrewXp`), not just locally. Adds
  * `$xpGained`, rolling over into however many divisions it covers, and returns
  * [newXp, newDivision, divisionsNewlyReached] (the last one empty unless it actually climbed).
+ *
+ * The division order and XP-to-climb thresholds used to be hardcoded here (`CREW_DIVISION_ORDER`/
+ * `CREW_DIVISION_XP_REQUIRED`) — now read from `rank_tier_config` via leaderboards.php's
+ * getRankTierConfig (`scope = 'crew'`), admin-editable from the Rank Tiers page. The ladder's final
+ * tier (Apex) has a placeholder `threshold` of 0, meaning "nothing to climb to" — not a real
+ * requirement of zero XP.
  */
-function advanceCrewDivision(int $currentXp, string $currentDivision, int $xpGained): array
+function advanceCrewDivision(PDO $pdo, int $currentXp, string $currentDivision, int $xpGained): array
 {
+    $tiers = getRankTierConfig($pdo, 'crew');
+    $names = array_column($tiers, 'name');
     $xp = $currentXp + $xpGained;
-    $division = in_array($currentDivision, CREW_DIVISION_ORDER, true) ? $currentDivision : 'Rookie';
+    $division = in_array($currentDivision, $names, true) ? $currentDivision : ($names[0] ?? 'Rookie');
     $newlyReached = [];
 
     while (true) {
-        $index = array_search($division, CREW_DIVISION_ORDER, true);
-        $next = $index < count(CREW_DIVISION_ORDER) - 1 ? CREW_DIVISION_ORDER[$index + 1] : null;
-        $required = CREW_DIVISION_XP_REQUIRED[$division] ?? null;
-        if ($next === null || $required === null || $xp < $required) break;
+        $index = array_search($division, $names, true);
+        $next = $index !== false && $index < count($names) - 1 ? $names[$index + 1] : null;
+        $required = null;
+        foreach ($tiers as $tier) {
+            if ($tier['name'] === $division) {
+                $required = $tier['threshold'];
+                break;
+            }
+        }
+        if ($next === null || $required === null || $required <= 0 || $xp < $required) break;
         $xp -= $required;
         $division = $next;
         $newlyReached[] = $division;
@@ -255,7 +254,7 @@ function awardCrewXp(PDO $pdo, string $userId, string $crewId, array $data): voi
         return;
     }
 
-    [$newXp, $newDivision, $newlyReached] = advanceCrewDivision((int) $crew['xp'], $crew['division'], $amount);
+    [$newXp, $newDivision, $newlyReached] = advanceCrewDivision($pdo, (int) $crew['xp'], $crew['division'], $amount);
 
     if ($newlyReached) {
         $history = json_decode((string) $crew['division_history_json'], true) ?: [];

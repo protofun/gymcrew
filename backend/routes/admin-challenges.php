@@ -17,22 +17,15 @@
  *   DELETE /admin-challenges/:id   -> delete (admin only)
  */
 
-const ADMIN_CHALLENGE_EMAILS = ['jaimy.mathon@gmail.com', 'akb.koycu@gmail.com'];
-
+/** Whether this account may manage app-wide admin challenges — a real, admin-panel-editable flag
+ * (`users.is_app_admin`, toggled from User Detail's Actions card, see routes/admin.php's
+ * updateUserAppAdmin) rather than the hardcoded email list this used to be. Still not a general
+ * roles system — one flag, not a permissions model to build on. */
 function isAdminUser(PDO $pdo, string $userId): bool
 {
-    $stmt = $pdo->prepare('SELECT email FROM users WHERE id = ?');
+    $stmt = $pdo->prepare('SELECT is_app_admin FROM users WHERE id = ?');
     $stmt->execute([$userId]);
-    $row = $stmt->fetch();
-    if (!$row || !$row['email']) {
-        return false;
-    }
-    foreach (ADMIN_CHALLENGE_EMAILS as $adminEmail) {
-        if (strcasecmp($row['email'], $adminEmail) === 0) {
-            return true;
-        }
-    }
-    return false;
+    return (bool) $stmt->fetchColumn();
 }
 
 function handleAdminChallenges(PDO $pdo, string $userId, string $method, ?array $body, array $segments): void

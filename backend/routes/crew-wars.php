@@ -61,29 +61,68 @@ function handleCrewWars(PDO $pdo, string $userId, string $method, ?array $body, 
     errorResponse('Not found', 404);
 }
 
-const WAR_DURATION_MS = 3 * 24 * 60 * 60 * 1000;
+// Every constant below used to be hardcoded — now admin-editable app_settings keys (see the admin
+// panel's App Controls "Crew Wars" card, routes/admin.php's settings endpoints), each falling back
+// to its original value if unset. warSetting() reads once per request (static cache), not once per
+// use — these are read from inside loops (bot-attack generation) as well as one-off checks.
+function warSetting(PDO $pdo, string $key, int $default): int
+{
+    static $cache = [];
+    if (isset($cache[$key])) {
+        return $cache[$key];
+    }
+    $configured = getAppSetting($pdo, $key);
+    return $cache[$key] = (ctype_digit($configured) ? (int) $configured : $default);
+}
+
+function warDurationMs(PDO $pdo): int
+{
+    return warSetting($pdo, 'war_duration_days', 3) * 24 * 60 * 60 * 1000;
+}
+
 // A real crew with nobody having trained in this long is treated as abandoned for matchmaking
 // purposes — long enough that someone on a normal rest/deload week never gets flagged, short
-// enough that a War (itself only WAR_DURATION_MS long) doesn't get handed a dead opponent.
-const WAR_MATCH_ACTIVITY_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
-const ATTACK_PR_BONUS = 250;
-const BOT_ATTACK_MIN_INTERVAL_MS = 8 * 60 * 60 * 1000;
+// enough that a War (itself only warDurationMs() long) doesn't get handed a dead opponent.
+function warMatchActivityWindowMs(PDO $pdo): int
+{
+    return warSetting($pdo, 'war_match_activity_window_days', 14) * 24 * 60 * 60 * 1000;
+}
+
+function attackPrBonus(PDO $pdo): int
+{
+    return warSetting($pdo, 'war_pr_bonus', 250);
+}
+
+function botAttackMinIntervalMs(PDO $pdo): int
+{
+    return warSetting($pdo, 'war_bot_min_interval_hours', 8) * 60 * 60 * 1000;
+}
+
+function botAttackMaxIntervalMs(PDO $pdo): int
+{
+    return warSetting($pdo, 'war_bot_max_interval_hours', 16) * 60 * 60 * 1000;
+}
+
 // One attack is supposed to be one just-finished real workout (see the doc comment above) — these
 // guard against a client (or a raw replayed request, bypassing the app entirely) inflating a
 // crew's War score with an implausible volume or by firing the same "finished workout" repeatedly.
-// Generous on purpose: this is an abuse ceiling, not a fairness/anti-cheat mechanism — a bot attack
-// already tops out at 9,000kg (see generateDueBotAttacks), so a real session should never need to
-// exceed this by much even on a very heavy multi-exercise day.
-const MAX_ATTACK_VOLUME_KG = 20000;
-const MAX_ATTACK_PR_COUNT = 10;
-const MIN_ATTACK_INTERVAL_MS = 2 * 60 * 1000;
-const BOT_ATTACK_MAX_INTERVAL_MS = 16 * 60 * 60 * 1000;
+// Generous by default on purpose: this is an abuse ceiling, not a fairness/anti-cheat mechanism — a
+// bot attack already tops out at 9,000kg (see generateDueBotAttacks), so a real session should never
+// need to exceed the default by much even on a very heavy multi-exercise day.
+function maxAttackVolumeKg(PDO $pdo): int
+{
+    return warSetting($pdo, 'war_max_attack_volume_kg', 20000);
+}
 
-const DIVISION_ORDER = [
-    'Rookie', 'Novice', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Elite', 'Master',
-    'Grandmaster', 'Champion', 'Titan', 'Mythic', 'Immortal', 'Legend', 'Overlord', 'Supreme',
-    'Conqueror', 'Dominator', 'Apex',
-];
+function maxAttackPrCount(PDO $pdo): int
+{
+    return warSetting($pdo, 'war_max_attack_pr_count', 10);
+}
+
+function minAttackIntervalMs(PDO $pdo): int
+{
+    return warSetting($pdo, 'war_min_attack_interval_minutes', 2) * 60 * 1000;
+}
 
 /** Matches the bot crews seeded in db/schema.sql — division is looked up live from `crews` rather
  * than duplicated here, this is just which ids are bots at all (see isBotCrew). */
@@ -118,7 +157,7 @@ function crewPowerSnapshot(PDO $pdo, string $crewId): int
 }
 
 /** True if any real member of `$crewId` has completed a real workout within the last
- * WAR_MATCH_ACTIVITY_WINDOW_MS — used to keep matchmaking from pairing a crew against one that's
+ * warMatchActivityWindowMs() — used to keep matchmaking from pairing a crew against one that's
  * effectively abandoned. Bot crews are always "active" by definition (see isBotCrew) — their
  * attacks are generated on a schedule, never from real member activity. */
 function crewHasRecentActivity(PDO $pdo, string $crewId): bool
@@ -127,7 +166,7 @@ function crewHasRecentActivity(PDO $pdo, string $crewId): bool
         return true;
     }
 
-    $cutoff = (int) round(microtime(true) * 1000) - WAR_MATCH_ACTIVITY_WINDOW_MS;
+    $cutoff = (int) round(microtime(true) * 1000) - warMatchActivityWindowMs($pdo);
     $stmt = $pdo->prepare(
         'SELECT 1 FROM workouts w
          JOIN crew_members cm ON cm.user_id = w.user_id
@@ -174,14 +213,15 @@ function nearestBotCrewId(PDO $pdo, string $crewId): string
     $stmt = $pdo->prepare('SELECT division FROM crews WHERE id = ?');
     $stmt->execute([$crewId]);
     $division = $stmt->fetch()['division'] ?? 'Rookie';
-    $myIndex = array_search($division, DIVISION_ORDER, true);
+    $divisionOrder = array_column(getRankTierConfig($pdo, 'crew'), 'name');
+    $myIndex = array_search($division, $divisionOrder, true);
     $myIndex = $myIndex === false ? 0 : $myIndex;
 
     $botStmt = $pdo->query("SELECT id, division FROM crews WHERE id LIKE 'bot-crew-%'");
     $best = 'bot-crew-beast-mode';
     $bestDistance = PHP_INT_MAX;
     foreach ($botStmt->fetchAll() as $bot) {
-        $botIndex = array_search($bot['division'], DIVISION_ORDER, true);
+        $botIndex = array_search($bot['division'], $divisionOrder, true);
         if ($botIndex === false) continue;
         $distance = abs($myIndex - $botIndex);
         if ($distance < $bestDistance) {
@@ -290,7 +330,7 @@ function getOrStartWar(PDO $pdo, string $crewId, bool $force): ?array
         $warId = 'war-' . bin2hex(random_bytes(8));
         $pdo->prepare(
             'INSERT INTO crew_wars (id, crew_a_id, crew_b_id, started_at, ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-        )->execute([$warId, $crewId, $opponentCrewId, $now, $now + WAR_DURATION_MS, $now]);
+        )->execute([$warId, $crewId, $opponentCrewId, $now, $now + warDurationMs($pdo), $now]);
 
         $pdo->commit();
     } catch (Throwable $e) {
@@ -326,13 +366,14 @@ function generateDueBotAttacks(PDO $pdo, array $war): void
     $slotTime = (int) $war['started_at'];
     while (true) {
         $seed = warHash($war['id'] . ':' . $slotIndex);
-        $interval = BOT_ATTACK_MIN_INTERVAL_MS + ($seed % (BOT_ATTACK_MAX_INTERVAL_MS - BOT_ATTACK_MIN_INTERVAL_MS));
+        $minInterval = botAttackMinIntervalMs($pdo);
+        $interval = $minInterval + ($seed % max(1, botAttackMaxIntervalMs($pdo) - $minInterval));
         $slotTime += $interval;
         if ($slotTime > $upTo) break;
 
         $volumeKg = 2500 + ($seed % 6500); // one plausible session's volume, ~2,500-9,000kg
         $prCount = ($seed % 5) === 0 ? 1 : 0; // ~1 in 5 bot attacks lands a "PR"
-        $score = $volumeKg + $prCount * ATTACK_PR_BONUS;
+        $score = $volumeKg + $prCount * attackPrBonus($pdo);
         $name = $names[$seed % count($names)];
         $workoutName = $workouts[intdiv($seed, 7) % count($workouts)];
 
@@ -494,8 +535,8 @@ function handleStartWar(PDO $pdo, string $userId): void
 function recordAttack(PDO $pdo, string $userId, array $data): void
 {
     $volumeKg = isset($data['volumeKg']) ? (float) $data['volumeKg'] : 0;
-    $volumeKg = min($volumeKg, MAX_ATTACK_VOLUME_KG);
-    $prCount = isset($data['prCount']) ? max(0, min(MAX_ATTACK_PR_COUNT, (int) $data['prCount'])) : 0;
+    $volumeKg = min($volumeKg, maxAttackVolumeKg($pdo));
+    $prCount = isset($data['prCount']) ? max(0, min(maxAttackPrCount($pdo), (int) $data['prCount'])) : 0;
     $workoutName = isset($data['workoutName']) ? trim((string) $data['workoutName']) : null;
     if ($workoutName === '') $workoutName = null;
 
@@ -515,12 +556,12 @@ function recordAttack(PDO $pdo, string $userId, array $data): void
     generateDueBotAttacks($pdo, $war);
 
     // A real user finishes at most one workout at a time — this can only trip on a replayed/looped
-    // request, not on normal use (see MIN_ATTACK_INTERVAL_MS's comment above).
+    // request, not on normal use (see minAttackIntervalMs()'s comment above).
     $lastStmt = $pdo->prepare('SELECT MAX(attacked_at) AS last_at FROM crew_war_attacks WHERE war_id = ? AND user_id = ?');
     $lastStmt->execute([$war['id'], $userId]);
     $lastAt = (int) ($lastStmt->fetch()['last_at'] ?? 0);
     $now = (int) round(microtime(true) * 1000);
-    if ($lastAt > 0 && $now - $lastAt < MIN_ATTACK_INTERVAL_MS) {
+    if ($lastAt > 0 && $now - $lastAt < minAttackIntervalMs($pdo)) {
         jsonResponse(['ok' => true, 'attacked' => false]);
         return;
     }
@@ -529,7 +570,7 @@ function recordAttack(PDO $pdo, string $userId, array $data): void
     $nameStmt->execute([$userId]);
     $attackerName = $nameStmt->fetch()['full_name'] ?: 'You';
 
-    $score = $volumeKg + $prCount * ATTACK_PR_BONUS;
+    $score = $volumeKg + $prCount * attackPrBonus($pdo);
 
     $pdo->prepare(
         'INSERT INTO crew_war_attacks (war_id, crew_id, user_id, attacker_name, workout_name, volume_kg, pr_count, score, attacked_at)

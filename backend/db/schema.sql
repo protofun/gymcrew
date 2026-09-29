@@ -47,6 +47,24 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS founding_athlete_id VARCHAR(64) NULL 
 ALTER TABLE users ADD UNIQUE KEY IF NOT EXISTS uniq_users_founding_athlete (founding_athlete_id);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS expo_push_token VARCHAR(255) NULL AFTER founding_athlete_id;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS banned_at DATETIME NULL AFTER expo_push_token;
+-- Per-user AI meal-scan credit overrides, set from the admin panel's User Detail page (see
+-- routes/admin.php's updateUserAiScanLimits/bulkUpdateUserAiScanLimits and
+-- routes/nutrition-photo-scan.php's mealScanLimits). NULL = no override for that period, falls back
+-- to the global app_settings `ai_scan_daily_limit` (day only — there's no global week/month limit).
+-- Any of the three set here take priority over the hardcoded MEAL_SCAN_UNLIMITED_EMAILS allowlist,
+-- so an admin can cap a normally-unlimited account, or lift a normal user past the global default.
+-- All three can be set at once; the strictest one still remaining that period blocks the scan.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_scan_limit_daily INT NULL AFTER banned_at;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_scan_limit_weekly INT NULL AFTER ai_scan_limit_daily;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_scan_limit_monthly INT NULL AFTER ai_scan_limit_weekly;
+-- Replaces routes/admin-challenges.php's old hardcoded ADMIN_CHALLENGE_EMAILS array — a real,
+-- admin-panel-editable flag (see routes/admin.php's updateUserAppAdmin, User Detail's Actions card)
+-- for "this account can manage app-wide admin challenges", instead of an email allowlist baked into
+-- source. Not a general roles system (still just one flag), but a real toggle instead of a redeploy.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_app_admin TINYINT(1) NOT NULL DEFAULT 0 AFTER ai_scan_limit_monthly;
+-- Re-run on every import so the two accounts that used to be hardcoded keep working after the
+-- column is added — harmless no-op once they're already flagged, and never touches anyone else.
+UPDATE users SET is_app_admin = 1 WHERE email IN ('jaimy.mathon@gmail.com', 'akb.koycu@gmail.com');
 
 -- One row per completed workout. `exercises_json` / `muscle_intensity_json` / `prs_json` mirror the
 -- app's CompletedWorkout shape exactly (LoggedExercise[], Partial<Record<MuscleGroup,number>>,
@@ -818,6 +836,106 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 CREATE TABLE IF NOT EXISTS app_settings (
   setting_key VARCHAR(64) NOT NULL PRIMARY KEY,
   setting_value VARCHAR(500) NOT NULL,
+  updated_at BIGINT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- The player-leaderboard and crew-division rank ladders, admin-editable (see the admin panel's Rank
+-- Tiers page, routes/admin.php's rank-tier endpoints) — previously two separate hardcoded PHP arrays
+-- (routes/leaderboards.php's PLAYER_DIVISION_MIN_POWER, routes/crews.php's CREW_DIVISION_XP_REQUIRED),
+-- both with a comment saying "keep in sync with src/lib/division.ts" by hand. This table is now the
+-- one server-side source both files read from (see getRankTierConfig in routes/leaderboards.php) —
+-- the client's own copy in src/lib/division.ts is NOT wired to this yet and still needs updating by
+-- hand if these values ever change, same as before.
+-- `scope` = 'player' (threshold = minimum power score for that division) or 'crew' (threshold = XP
+-- required to climb OUT of that division into the next one; the crew ladder's final tier, Apex, has
+-- no "next" tier so its threshold is a placeholder 0, not a real requirement).
+CREATE TABLE IF NOT EXISTS rank_tier_config (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  scope ENUM('player', 'crew') NOT NULL,
+  tier_order INT NOT NULL,
+  name VARCHAR(64) NOT NULL,
+  threshold INT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  UNIQUE KEY uniq_rank_tier_scope_order (scope, tier_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO rank_tier_config (scope, tier_order, name, threshold, updated_at) VALUES
+  ('player', 0, 'Rookie', 0, 0), ('player', 1, 'Novice', 3200, 0), ('player', 2, 'Bronze', 6800, 0),
+  ('player', 3, 'Silver', 11200, 0), ('player', 4, 'Gold', 16000, 0), ('player', 5, 'Platinum', 21200, 0),
+  ('player', 6, 'Diamond', 26800, 0), ('player', 7, 'Elite', 32800, 0), ('player', 8, 'Master', 39200, 0),
+  ('player', 9, 'Grandmaster', 46000, 0), ('player', 10, 'Champion', 53600, 0), ('player', 11, 'Titan', 62000, 0),
+  ('player', 12, 'Mythic', 71200, 0), ('player', 13, 'Immortal', 81600, 0), ('player', 14, 'Legend', 93600, 0),
+  ('player', 15, 'Overlord', 107200, 0), ('player', 16, 'Supreme', 122800, 0), ('player', 17, 'Conqueror', 140800, 0),
+  ('player', 18, 'Dominator', 161600, 0), ('player', 19, 'Apex', 186000, 0),
+  ('crew', 0, 'Rookie', 500, 0), ('crew', 1, 'Novice', 750, 0), ('crew', 2, 'Bronze', 1100, 0),
+  ('crew', 3, 'Silver', 1600, 0), ('crew', 4, 'Gold', 2300, 0), ('crew', 5, 'Platinum', 3300, 0),
+  ('crew', 6, 'Diamond', 4700, 0), ('crew', 7, 'Elite', 6700, 0), ('crew', 8, 'Master', 9600, 0),
+  ('crew', 9, 'Grandmaster', 13800, 0), ('crew', 10, 'Champion', 19800, 0), ('crew', 11, 'Titan', 28500, 0),
+  ('crew', 12, 'Mythic', 41000, 0), ('crew', 13, 'Immortal', 59000, 0), ('crew', 14, 'Legend', 85000, 0),
+  ('crew', 15, 'Overlord', 122000, 0), ('crew', 16, 'Supreme', 176000, 0), ('crew', 17, 'Conqueror', 253000, 0),
+  ('crew', 18, 'Dominator', 364000, 0), ('crew', 19, 'Apex', 0, 0);
+
+-- A plain saved contact list for the admin's own outreach (leads, gyms, influencers, press) — see
+-- routes/admin-contacts.php. Entirely separate from `users` (real app accounts); this is business
+-- bookkeeping, not app data.
+CREATE TABLE IF NOT EXISTS admin_contacts (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(255) NOT NULL,
+  name VARCHAR(255) NULL,
+  category VARCHAR(64) NULL,
+  note TEXT NULL,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  UNIQUE KEY uniq_admin_contacts_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Social platforms the admin tracks marketing content for (self-added, not a fixed list — see
+-- routes/admin-marketing.php), each with its own board of post ideas below.
+CREATE TABLE IF NOT EXISTS marketing_socials (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(64) NOT NULL,
+  handle VARCHAR(128) NULL,
+  color VARCHAR(16) NULL,
+  display_order INT NOT NULL DEFAULT 0,
+  created_at BIGINT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- One post idea for one social platform — tracked from idea through planned through posted, and
+-- (once posted) the actual performance the admin records by hand afterwards (views/likes/comments/
+-- shares + free-text notes on how it did). Nothing here is fetched automatically from any platform's
+-- API — this is a manual log, by design.
+CREATE TABLE IF NOT EXISTS marketing_post_ideas (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  social_id INT NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT NULL,
+  status ENUM('idea', 'planned', 'posted') NOT NULL DEFAULT 'idea',
+  planned_date DATE NULL,
+  posted_at BIGINT NULL,
+  views INT NULL,
+  likes INT NULL,
+  comments INT NULL,
+  shares INT NULL,
+  notes TEXT NULL,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  CONSTRAINT fk_marketing_post_ideas_social FOREIGN KEY (social_id) REFERENCES marketing_socials(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Every cost and every bit of income for the app/business, manually logged — see
+-- routes/admin-finance.php. `amount_cents` avoids float rounding on money; `recurring` is a label
+-- only (e.g. showing "this repeats monthly" on the row) — it does NOT auto-create future rows.
+CREATE TABLE IF NOT EXISTS finance_entries (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  type ENUM('cost', 'income') NOT NULL,
+  category VARCHAR(64) NULL,
+  description VARCHAR(255) NULL,
+  amount_cents INT NOT NULL,
+  currency VARCHAR(8) NOT NULL DEFAULT 'EUR',
+  occurred_on DATE NOT NULL,
+  recurring ENUM('none', 'monthly', 'yearly') NOT NULL DEFAULT 'none',
+  notes TEXT NULL,
+  created_at BIGINT NOT NULL,
   updated_at BIGINT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

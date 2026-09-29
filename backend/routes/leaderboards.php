@@ -15,23 +15,32 @@
 
 const PLAYER_POWER_PER_BODYWEIGHT_RATIO = 4000;
 
-/** Same order + absolute power cutoffs as src/lib/division.ts's `PLAYER_DIVISION_MIN_POWER` — see
- * that file's comment for why these are ×4 the original values (calibrated against a real power
- * score's actual range, not the old static mock leaderboard's illustrative one). */
-const PLAYER_DIVISION_MIN_POWER = [
-    'Rookie' => 0, 'Novice' => 3200, 'Bronze' => 6800, 'Silver' => 11200, 'Gold' => 16000,
-    'Platinum' => 21200, 'Diamond' => 26800, 'Elite' => 32800, 'Master' => 39200, 'Grandmaster' => 46000,
-    'Champion' => 53600, 'Titan' => 62000, 'Mythic' => 71200, 'Immortal' => 81600, 'Legend' => 93600,
-    'Overlord' => 107200, 'Supreme' => 122800, 'Conqueror' => 140800, 'Dominator' => 161600, 'Apex' => 186000,
-];
+/** The player (division cutoffs, by power) or crew (XP required to climb out of each division)
+ * rank ladder — admin-editable (see the admin panel's Rank Tiers page, routes/admin.php's rank-tier
+ * endpoints, db/schema.sql's `rank_tier_config`). Both used to be separate hardcoded PHP arrays here
+ * and in crews.php; this is now the one server-side source both read from. The client's own copy
+ * (src/lib/division.ts) is NOT wired to this — still needs updating by hand if these ever change,
+ * same as before. Cached per request since this can be read once per leaderboard/crew-XP request,
+ * not once per row. */
+function getRankTierConfig(PDO $pdo, string $scope): array
+{
+    static $cache = [];
+    if (isset($cache[$scope])) {
+        return $cache[$scope];
+    }
+    $stmt = $pdo->prepare('SELECT name, threshold FROM rank_tier_config WHERE scope = ? ORDER BY tier_order ASC');
+    $stmt->execute([$scope]);
+    $cache[$scope] = array_map(fn(array $r): array => ['name' => $r['name'], 'threshold' => (int) $r['threshold']], $stmt->fetchAll());
+    return $cache[$scope];
+}
 
 /** Highest division whose cutoff `$power` clears — same rule as the client's own version. */
-function divisionForPlayerPower(float $power): string
+function divisionForPlayerPower(PDO $pdo, float $power): string
 {
     $result = 'Rookie';
-    foreach (PLAYER_DIVISION_MIN_POWER as $division => $minPower) {
-        if ($power >= $minPower) {
-            $result = $division;
+    foreach (getRankTierConfig($pdo, 'player') as $tier) {
+        if ($power >= $tier['threshold']) {
+            $result = $tier['name'];
         } else {
             break;
         }
@@ -135,9 +144,9 @@ function respondWithPlayerLeaderboard(PDO $pdo, string $userId, string $scope): 
         return;
     }
 
-    $myDivision = divisionForPlayerPower($me['power']);
-    $inMyDivision = array_values(array_filter($players, function (array $player) use ($myDivision): bool {
-        return divisionForPlayerPower($player['power']) === $myDivision;
+    $myDivision = divisionForPlayerPower($pdo, $me['power']);
+    $inMyDivision = array_values(array_filter($players, function (array $player) use ($pdo, $myDivision): bool {
+        return divisionForPlayerPower($pdo, $player['power']) === $myDivision;
     }));
     usort($inMyDivision, function (array $a, array $b): int {
         return $b['power'] <=> $a['power'];

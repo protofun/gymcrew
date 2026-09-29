@@ -47,31 +47,79 @@ Include visible sauces, dressings and oils as their own items. Do not invent ite
 If the photo does not contain food or drink, return an empty list.
 PROMPT;
 
-/** Daily scan allowance for this user — null means unlimited. */
-function mealScanDailyLimit(PDO $pdo, string $userId): ?int
+/** This user's day/week/month scan allowances, each null meaning "no cap for this period". Order:
+ * a per-user admin override (routes/admin.php's updateUserAiScanLimits) wins outright, for any of
+ * the three periods it sets, over both the unlimited-email allowlist and the global daily default —
+ * an admin who caps a normally-unlimited account, or lifts a normal user past the shared default,
+ * always gets what they set. Only once none of the three overrides are set does the allowlist (fully
+ * unlimited) or the global `ai_scan_daily_limit` setting (daily only) apply. */
+function mealScanLimits(PDO $pdo, string $userId): array
 {
-    $stmt = $pdo->prepare('SELECT email FROM users WHERE id = ?');
+    $stmt = $pdo->prepare('SELECT email, ai_scan_limit_daily, ai_scan_limit_weekly, ai_scan_limit_monthly FROM users WHERE id = ?');
     $stmt->execute([$userId]);
-    $email = strtolower(trim((string) $stmt->fetchColumn()));
+    $row = $stmt->fetch();
+    $email = strtolower(trim((string) ($row['email'] ?? '')));
+    $hasOverride = $row !== false && ($row['ai_scan_limit_daily'] !== null || $row['ai_scan_limit_weekly'] !== null || $row['ai_scan_limit_monthly'] !== null);
+
+    if ($hasOverride) {
+        return [
+            'daily' => $row['ai_scan_limit_daily'] !== null ? (int) $row['ai_scan_limit_daily'] : null,
+            'weekly' => $row['ai_scan_limit_weekly'] !== null ? (int) $row['ai_scan_limit_weekly'] : null,
+            'monthly' => $row['ai_scan_limit_monthly'] !== null ? (int) $row['ai_scan_limit_monthly'] : null,
+        ];
+    }
     if ($email !== '' && in_array($email, MEAL_SCAN_UNLIMITED_EMAILS, true)) {
-        return null;
+        return ['daily' => null, 'weekly' => null, 'monthly' => null];
     }
     $configured = getAppSetting($pdo, 'ai_scan_daily_limit');
-    return ctype_digit($configured) ? (int) $configured : MEAL_SCAN_FREE_PER_DAY;
+    $dailyDefault = ctype_digit($configured) ? (int) $configured : MEAL_SCAN_FREE_PER_DAY;
+    return ['daily' => $dailyDefault, 'weekly' => null, 'monthly' => null];
 }
 
-/** Scans this user has made since midnight (server time). Counted server-side so the client can't
- * lie about it. */
-function mealScansUsedToday(PDO $pdo, string $userId): int
+/** Backwards-compatible single-number view of mealScanLimits, for anything that only cares about
+ * "unlimited or not" (the GET quota response keeps showing the daily figure as its headline number). */
+function mealScanDailyLimit(PDO $pdo, string $userId): ?int
+{
+    return mealScanLimits($pdo, $userId)['daily'];
+}
+
+/** Scans this user has made since a given server-time cutoff (epoch ms). Counted server-side so the
+ * client can't lie about it. */
+function mealScansUsedSince(PDO $pdo, string $userId, int $sinceMs): int
 {
     $stmt = $pdo->prepare('SELECT COUNT(*) FROM meal_photo_scans WHERE user_id = ? AND scanned_at >= ?');
-    $stmt->execute([$userId, strtotime('today') * 1000]);
+    $stmt->execute([$userId, $sinceMs]);
     return (int) $stmt->fetchColumn();
+}
+
+function mealScansUsedToday(PDO $pdo, string $userId): int
+{
+    return mealScansUsedSince($pdo, $userId, strtotime('today') * 1000);
+}
+
+/** Checks every period the user has a cap for (day/week/month) and returns the first one that's
+ * exhausted, or null if none are. Each period is independent — a generous monthly cap doesn't
+ * excuse blowing through a tighter weekly one first. */
+function mealScanExceededPeriod(PDO $pdo, string $userId, array $limits): ?string
+{
+    $cutoffs = [
+        'daily' => strtotime('today') * 1000,
+        'weekly' => strtotime('monday this week') * 1000,
+        'monthly' => strtotime('first day of this month') * 1000,
+    ];
+    foreach ($cutoffs as $period => $sinceMs) {
+        $limit = $limits[$period];
+        if ($limit !== null && mealScansUsedSince($pdo, $userId, $sinceMs) > $limit) {
+            return $period;
+        }
+    }
+    return null;
 }
 
 function mealScanQuota(PDO $pdo, string $userId): array
 {
-    $limit = mealScanDailyLimit($pdo, $userId);
+    $limits = mealScanLimits($pdo, $userId);
+    $limit = $limits['daily'];
     $used = mealScansUsedToday($pdo, $userId);
     return ['limit' => $limit, 'used' => $used, 'remaining' => $limit === null ? null : max(0, $limit - $used)];
 }
@@ -126,10 +174,16 @@ function handleNutritionPhotoScan(PDO $pdo, string $userId, string $method, ?arr
     $pdo->prepare('INSERT INTO meal_photo_scans (user_id, scanned_at) VALUES (?, ?)')->execute([$userId, (int) (microtime(true) * 1000)]);
     $scanId = (int) $pdo->lastInsertId();
 
-    $limit = mealScanDailyLimit($pdo, $userId);
-    if ($limit !== null && mealScansUsedToday($pdo, $userId) > $limit) {
+    $limits = mealScanLimits($pdo, $userId);
+    $exceededPeriod = mealScanExceededPeriod($pdo, $userId, $limits);
+    if ($exceededPeriod !== null) {
         $pdo->prepare('DELETE FROM meal_photo_scans WHERE id = ?')->execute([$scanId]);
-        errorResponse("You've used all your AI scans for today. They reset tomorrow.", 429);
+        $resetMessage = [
+            'daily' => "You've used all your AI scans for today. They reset tomorrow.",
+            'weekly' => "You've used all your AI scans for this week. They reset next week.",
+            'monthly' => "You've used all your AI scans for this month. They reset next month.",
+        ][$exceededPeriod];
+        errorResponse($resetMessage, 429);
         return;
     }
 
