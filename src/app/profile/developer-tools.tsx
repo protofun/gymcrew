@@ -172,6 +172,12 @@ export default function DeveloperToolsScreen() {
           <Text className="caption text-text-secondary">
             Currently in the app: {testWorkoutCount} test workouts, {testWeighInCount} test weigh-ins.
           </Text>
+          <MenuRow
+            icon="calendar-outline"
+            title="Consistency Test Data"
+            subtitle="Multiple years, configurable — for the Training Consistency heatmap."
+            onPress={() => router.push("/profile/developer-consistency-seed")}
+          />
         </Section>
 
         <Section title="Edit My Data">

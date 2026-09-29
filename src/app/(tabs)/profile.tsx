@@ -12,6 +12,7 @@ import { AvatarActionSheet } from "@/components/AvatarActionSheet";
 import { AvatarGeneratorModal } from "@/components/AvatarGeneratorModal";
 import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { DivisionBadge } from "@/components/DivisionBadge";
+import { EditableNumberFlow } from "@/components/EditableAnimated";
 import { EditableText } from "@/components/EditableText";
 import { ProgressBar } from "@/components/ProgressBar";
 import { PromoBanners } from "@/components/PromoBanners";
@@ -89,13 +90,25 @@ function SettingsRow({ icon, label, value, danger, isLast, onPress }: { icon: ke
 /** A stat readout inline within the profile hero card — deliberately not `StatTile` (the shared
  * grid-tile look used elsewhere, e.g. Crew Stats), since a bordered box per number would read as
  * three more disconnected pieces exactly where the goal is one unified card. */
-function HeroStatColumn({ icon, value, label, id }: { icon: keyof typeof Ionicons.glyphMap; value: string; label: string; id: string }) {
+function HeroStatColumn({
+  icon,
+  value,
+  decimals = 0,
+  suffix,
+  label,
+  id,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  value: number;
+  decimals?: number;
+  suffix?: string;
+  label: string;
+  id: string;
+}) {
   return (
     <View className="flex-1 items-center gap-1.5">
       <Ionicons name={icon} size={15} color={colors.brand.yellow} />
-      <EditableText id={id} style={{ fontFamily: fontFamily.heading, fontSize: 20, lineHeight: 22 }} className="text-text-primary">
-        {value}
-      </EditableText>
+      <EditableNumberFlow id={id} value={value} decimals={decimals} suffix={suffix} fontSize={20} color={colors.brand.white} fontWeight="800" />
       <Text className="caption font-body-semibold text-text-secondary">{label}</Text>
     </View>
   );
@@ -305,11 +318,11 @@ export default function ProfileScreen() {
 
             <AttachStep index={ATTACH_INDEXES.profile} fill>
               <View className="flex-row items-stretch px-5 py-4">
-                <HeroStatColumn id="profile.stats.workouts" icon="barbell" label="Workouts" value={String(displayWorkoutsCount)} />
+                <HeroStatColumn id="profile.stats.workouts" icon="barbell" label="Workouts" value={displayWorkoutsCount} />
                 <View className="w-px bg-divider" />
-                <HeroStatColumn id="profile.stats.prs" icon="ribbon" label="PRs" value={String(displayPrCount)} />
+                <HeroStatColumn id="profile.stats.prs" icon="ribbon" label="PRs" value={displayPrCount} />
                 <View className="w-px bg-divider" />
-                <HeroStatColumn id="profile.stats.volume" icon="trending-up" label="Volume" value={`${(displayVolumeKg / 1000).toFixed(1)}t`} />
+                <HeroStatColumn id="profile.stats.volume" icon="trending-up" label="Volume" value={displayVolumeKg / 1000} decimals={1} suffix="t" />
               </View>
             </AttachStep>
           </Animated.View>

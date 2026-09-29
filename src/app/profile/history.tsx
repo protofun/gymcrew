@@ -5,12 +5,14 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
-import { EditableText } from "@/components/EditableText";
+import { ShareCardModal } from "@/components/ShareCardModal";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { StatCard, StatRow, StatSectionHeader } from "@/components/StatRow";
 import { StatTile } from "@/components/StatTile";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
 import { VisualTrainingCalendar } from "@/components/VisualTrainingCalendar";
+import { WorkoutListRow } from "@/components/WorkoutListRow";
+import { WorkoutShareCard } from "@/components/WorkoutShareCard";
 import { fromDateKey, getCurrentWeekDates, toDateKey } from "@/lib/date";
 import { formatMuscleLabel } from "@/lib/muscle-groups";
 import { computeCurrentStreak, computeLongestStreak, computeTrainedDaysThisWeek } from "@/lib/streak";
@@ -47,6 +49,7 @@ export default function TrainingHistoryScreen() {
   const snapshotWeightKg = useProfileSnapshotStore((state) => state.weightKg);
   const clearSnapshot = useProfileSnapshotStore((state) => state.clearSnapshot);
   const [metric, setMetric] = useState<ChartMetric>("volume");
+  const [sharingWorkout, setSharingWorkout] = useState<CompletedWorkout | null>(null);
 
   // In snapshot mode, everything below is scoped to workouts up to the viewed date — same "as of
   // that moment" rule every other snapshot-aware screen follows.
@@ -87,8 +90,12 @@ export default function TrainingHistoryScreen() {
         <SnapshotBanner asOfMs={snapshotAsOfMs} weightKg={snapshotWeightKg} weightUnit={weightUnit} onExit={clearSnapshot} />
       )}
 
+      {/* `style`, not `className`, for the same reason workout/summary.tsx's ScrollView uses one —
+          `flex-1` as a className is unreliable on native with this project's NativeWind preview
+          version, and a ScrollView that silently doesn't get constrained to the remaining space
+          reads as its header scrolling away with everything else. */}
       <ScrollView
-        className="flex-1"
+        style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: insets.bottom + 32, gap: 20 }}
         showsVerticalScrollIndicator={false}
       >
@@ -113,6 +120,21 @@ export default function TrainingHistoryScreen() {
             );
           })}
         </View>
+
+        <Pressable
+          onPress={() => router.push("/profile/training-consistency")}
+          style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+          className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4"
+        >
+          <View className="h-11 w-11 items-center justify-center rounded-full bg-background">
+            <Ionicons name="calendar" size={18} color={colors.brand.yellow} />
+          </View>
+          <View className="flex-1 gap-0.5">
+            <Text className="body-md font-body-semibold text-text-primary">Training Consistency</Text>
+            <Text className="caption text-text-secondary">Every year, one square per day</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.neutral.textSecondary} />
+        </Pressable>
 
         <VisualTrainingCalendar workouts={workouts} gender={gender} />
 
@@ -193,36 +215,35 @@ export default function TrainingHistoryScreen() {
               <Text className="body-md text-text-secondary">No workouts logged yet.</Text>
             </View>
           ) : (
-            <View className="gap-2.5">
-              {recentWorkouts.map((workout) => (
-                <Pressable
+            <View>
+              {recentWorkouts.map((workout, index) => (
+                <WorkoutListRow
                   key={workout.id}
+                  name={workout.name}
+                  dateLabel={new Date(workout.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  detail={`${workout.completedSets} sets · ${formatWeight(workout.volumeKg, weightUnit)}${workout.prs.length > 0 ? ` · ${workout.prs.length} PR${workout.prs.length === 1 ? "" : "s"}` : ""}`}
+                  hasPr={workout.prs.length > 0}
+                  isLast={index === recentWorkouts.length - 1}
                   onPress={() => goToWorkout(workout)}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
-                  className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4"
-                >
-                  <View className="h-11 w-11 items-center justify-center rounded-full bg-background">
-                    <Ionicons
-                      name={workout.prs.length > 0 ? "trophy" : "barbell-outline"}
-                      size={18}
-                      color={workout.prs.length > 0 ? colors.brand.yellow : colors.neutral.textSecondary}
-                    />
-                  </View>
-                  <View className="flex-1 gap-0.5">
-                    <EditableText id={`profile.history.workout.${workout.id}.name`} className="body-md font-body-semibold text-text-primary">
-                      {workout.name}
-                    </EditableText>
-                    <EditableText id={`profile.history.workout.${workout.id}.detail`} className="caption text-text-secondary">
-                      {`${new Date(workout.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · ${workout.completedSets} sets · ${formatWeight(workout.volumeKg, weightUnit)}${workout.prs.length > 0 ? ` · ${workout.prs.length} PR${workout.prs.length === 1 ? "" : "s"}` : ""}`}
-                    </EditableText>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.neutral.textSecondary} />
-                </Pressable>
+                  onShare={() => setSharingWorkout(workout)}
+                />
               ))}
             </View>
           )}
         </View>
       </ScrollView>
+
+      <ShareCardModal
+        visible={sharingWorkout !== null}
+        onClose={() => setSharingWorkout(null)}
+        fallbackMessage={
+          sharingWorkout
+            ? `${sharingWorkout.name} — ${formatDuration(sharingWorkout.durationSeconds)}, ${formatWeight(sharingWorkout.volumeKg, weightUnit)} lifted across ${sharingWorkout.completedSets} sets on GymCrew.`
+            : ""
+        }
+      >
+        {sharingWorkout && <WorkoutShareCard workout={sharingWorkout} gender={gender} />}
+      </ShareCardModal>
     </View>
   );
 }
