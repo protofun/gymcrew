@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 
 import {
+  BoxCubeIcon,
   ChevronDownIcon,
   GridIcon,
   HorizontaLDots,
@@ -33,6 +34,16 @@ const navItems: NavItem[] = [
       { name: "Rank Moderation", path: "/rank-moderation" },
       { name: "Social Verification", path: "/social-verification" },
       { name: "Crew Wars", path: "/crew-wars" },
+      { name: "Rank Tiers", path: "/rank-tiers" },
+    ],
+  },
+  {
+    icon: <BoxCubeIcon />,
+    name: "Business",
+    subItems: [
+      { name: "Contacts", path: "/contacts" },
+      { name: "Marketing Plans", path: "/marketing" },
+      { name: "Costs & Income", path: "/finance" },
     ],
   },
   {

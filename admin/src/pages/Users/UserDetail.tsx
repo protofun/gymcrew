@@ -7,6 +7,7 @@ import PageMeta from "../../components/common/PageMeta";
 import Badge from "../../components/ui/badge/Badge";
 import Button from "../../components/ui/button/Button";
 import Input from "../../components/form/input/InputField";
+import { AiScanLimitsModal } from "../../components/admin/AiScanLimitsModal";
 import { EditUserModal } from "../../components/admin/EditUserModal";
 import { NotesPanel } from "../../components/admin/NotesPanel";
 import { SearchableSelect } from "../../components/admin/SearchableSelect";
@@ -129,6 +130,19 @@ function OverviewTab({
   const [messageModalOpen, setMessageModalOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [scanLimitsOpen, setScanLimitsOpen] = useState(false);
+
+  async function toggleAppAdmin() {
+    const next = !user.isAppAdmin;
+    if (!window.confirm(next ? "Grant this account App Admin access (can manage app-wide challenges)?" : "Revoke App Admin access?")) return;
+    try {
+      await api.setUserAppAdmin(user.id, next);
+      onUserChange({ ...user, isAppAdmin: next });
+      toast.success(next ? "Granted App Admin access" : "Revoked App Admin access");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to update App Admin access");
+    }
+  }
 
   async function handleSignOut() {
     if (!window.confirm(`Sign ${user.email ?? user.id} out of all their devices? They can sign back in with their password.`)) return;
@@ -158,6 +172,7 @@ function OverviewTab({
           <Field label="Joined" value={new Date(user.createdAt).toLocaleDateString()} />
           <Field label="Push Notifications" value={user.hasPushToken ? "Enabled" : "Not registered"} />
           <Field label="Founding Athlete" value={user.isFoundingAthlete ? "Yes" : "No"} />
+          <Field label="App Admin" value={user.isAppAdmin ? "Yes" : "No"} />
         </div>
       </div>
 
@@ -171,6 +186,23 @@ function OverviewTab({
               value={user.crew ? <Link to={`/crews/${user.crew.id}`} className="text-brand-500 hover:underline">{user.crew.name} ({user.crew.role})</Link> : "No crew"}
             />
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/[0.03]">
+          <h3 className="mb-4 text-base font-medium text-gray-800 dark:text-white/90">AI Scan Limits</h3>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Today" value={`${user.aiScanUsedToday} used${user.aiScanLimitDaily !== null ? ` / ${user.aiScanLimitDaily}` : ""}`} />
+            <Field label="This week" value={`${user.aiScanUsedThisWeek} used${user.aiScanLimitWeekly !== null ? ` / ${user.aiScanLimitWeekly}` : ""}`} />
+            <Field label="This month" value={`${user.aiScanUsedThisMonth} used${user.aiScanLimitMonthly !== null ? ` / ${user.aiScanLimitMonthly}` : ""}`} />
+          </div>
+          <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+            {user.aiScanLimitDaily === null && user.aiScanLimitWeekly === null && user.aiScanLimitMonthly === null
+              ? "No override — using the shared default (or unlimited, if this account is on that list)."
+              : "Custom override in effect for this account."}
+          </p>
+          <Button size="sm" variant="outline" className="mt-4" onClick={() => setScanLimitsOpen(true)}>
+            Edit Limits
+          </Button>
         </div>
 
         <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/[0.03]">
@@ -191,6 +223,9 @@ function OverviewTab({
             <Button variant="outline" onClick={onToggleBan}>
               {user.banned ? "Unban User" : "Ban User"}
             </Button>
+            <Button variant="outline" onClick={toggleAppAdmin}>
+              {user.isAppAdmin ? "Revoke App Admin" : "Grant App Admin"}
+            </Button>
             <Button variant="outline" className="!text-error-500" onClick={onDelete}>
               Delete Account
             </Button>
@@ -203,6 +238,15 @@ function OverviewTab({
       <SendMessageModal isOpen={messageModalOpen} onClose={() => setMessageModalOpen(false)} userIds={[user.id]} />
       <EditUserModal isOpen={editOpen} onClose={() => setEditOpen(false)} user={user} onSaved={onUserChange} />
       <SetPasswordModal isOpen={passwordOpen} onClose={() => setPasswordOpen(false)} userId={user.id} userLabel={user.email ?? user.id} />
+      <AiScanLimitsModal
+        isOpen={scanLimitsOpen}
+        onClose={() => setScanLimitsOpen(false)}
+        userIds={[user.id]}
+        initial={{ daily: user.aiScanLimitDaily, weekly: user.aiScanLimitWeekly, monthly: user.aiScanLimitMonthly }}
+        onSaved={(limits) =>
+          onUserChange({ ...user, aiScanLimitDaily: limits.daily, aiScanLimitWeekly: limits.weekly, aiScanLimitMonthly: limits.monthly })
+        }
+      />
     </div>
   );
 }

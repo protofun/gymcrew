@@ -9,6 +9,12 @@ interface ButtonProps {
   onClick?: () => void; // Click handler
   disabled?: boolean; // Disabled state
   className?: string; // Disabled state
+  // Left undefined by default (native <button> default: "submit" inside a <form>, otherwise
+  // "button") to keep every existing caller's behavior — e.g. Roadmap.tsx's submit button relies on
+  // that default with no onClick of its own. Pass "button" explicitly for a Cancel button inside a
+  // form, so it doesn't accidentally submit that form.
+  type?: "button" | "submit" | "reset";
+  title?: string; // Native tooltip, e.g. explaining why a button is disabled
 }
 
 const Button: React.FC<ButtonProps> = ({
@@ -20,6 +26,8 @@ const Button: React.FC<ButtonProps> = ({
   onClick,
   className = "",
   disabled = false,
+  type,
+  title,
 }) => {
   // Size Classes
   const sizeClasses = {
@@ -44,6 +52,8 @@ const Button: React.FC<ButtonProps> = ({
       }`}
       onClick={onClick}
       disabled={disabled}
+      type={type}
+      title={title}
     >
       {startIcon && <span className="flex items-center">{startIcon}</span>}
       {children}

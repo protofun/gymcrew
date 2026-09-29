@@ -223,6 +223,7 @@ export type AdminUserListItem = {
   createdAt: string;
   banned: boolean;
   isFoundingAthlete: boolean;
+  isAppAdmin: boolean;
   workoutCount: number;
   prCount: number;
   mealCount: number;
@@ -247,7 +248,21 @@ export type AdminUserDetail = AdminUserListItem & {
   hasPushToken: boolean;
   workoutCount: number;
   crew: { id: string; name: string; role: string } | null;
+  aiScanLimitDaily: number | null;
+  aiScanLimitWeekly: number | null;
+  aiScanLimitMonthly: number | null;
+  aiScanUsedToday: number;
+  aiScanUsedThisWeek: number;
+  aiScanUsedThisMonth: number;
 };
+
+/** {daily, weekly, monthly} — each a non-negative credit count, or null to clear that period's
+ * override and fall back to the global default / unlimited allowlist (see the backend's
+ * mealScanLimits). All three can be set at once; whichever is hit first blocks the scan. */
+export type AiScanLimits = { daily: number | null; weekly: number | null; monthly: number | null };
+
+export type RankTierScope = "player" | "crew";
+export type RankTier = { id: number; tierOrder: number; name: string; threshold: number };
 
 export type AdminCrewListItem = {
   id: string;
@@ -451,6 +466,17 @@ export const api = {
   setUserPassword: (id: string, password: string, signOutEverywhere: boolean) =>
     request<{ ok: true }>(`/users/${id}/password`, { method: "POST", body: { password, signOutEverywhere } }),
   signOutUser: (id: string) => request<{ ok: true; revoked: number }>(`/users/${id}/sign-out`, { method: "POST" }),
+  setUserAiScanLimits: (id: string, limits: AiScanLimits) =>
+    request<{ ok: true }>(`/users/${id}/ai-scan-limits`, { method: "PUT", body: limits }),
+  bulkSetUserAiScanLimits: (userIds: string[], limits: AiScanLimits) =>
+    request<{ ok: true; updated: number }>("/users/ai-scan-limits/bulk", { method: "POST", body: { userIds, ...limits } }),
+  setUserAppAdmin: (id: string, isAppAdmin: boolean) =>
+    request<{ ok: true }>(`/users/${id}/app-admin`, { method: "PUT", body: { isAppAdmin } }),
+
+  // ---- Rank Tiers (player leaderboard / crew division ladders) ----
+  getRankTiers: (scope: RankTierScope) => request<{ scope: RankTierScope; tiers: RankTier[] }>(`/rank-tiers?scope=${scope}`),
+  updateRankTier: (id: number, fields: Partial<{ name: string; threshold: number }>) =>
+    request<{ ok: true }>(`/rank-tiers/${id}`, { method: "PUT", body: fields }),
 
   // ---- User Detail: behavior / ranks / workouts / crew management ----
   getUserActivity: (id: string) => request<UserActivity>(`/users/${id}/activity`),
@@ -577,6 +603,104 @@ export const api = {
   // ---- Status page ----
   getStatusHistory: () => request<StatusUpdate[]>("/status"),
   createStatusUpdate: (status: SystemStatus, message?: string) => request<{ ok: true }>("/status", { method: "POST", body: { status, message } }),
+
+  // ---- Contacts (saved outreach emails — leads, gyms, influencers, press) ----
+  getAdminContacts: () => request<{ contacts: AdminContact[] }>("/contacts"),
+  createAdminContact: (data: { email: string; name?: string; category?: string; note?: string }) =>
+    request<{ ok: true }>("/contacts", { method: "POST", body: data }),
+  updateAdminContact: (id: number, data: Partial<{ email: string; name: string; category: string; note: string }>) =>
+    request<{ ok: true }>(`/contacts/${id}`, { method: "PUT", body: data }),
+  deleteAdminContact: (id: number) => request<{ ok: true }>(`/contacts/${id}`, { method: "DELETE" }),
+
+  // ---- Marketing plans (socials + post ideas) ----
+  getMarketingSocials: () => request<{ socials: MarketingSocial[] }>("/marketing/socials"),
+  createMarketingSocial: (data: { name: string; handle?: string; color?: string }) =>
+    request<{ ok: true; id: number }>("/marketing/socials", { method: "POST", body: data }),
+  updateMarketingSocial: (id: number, data: Partial<{ name: string; handle: string; color: string; displayOrder: number }>) =>
+    request<{ ok: true }>(`/marketing/socials/${id}`, { method: "PUT", body: data }),
+  deleteMarketingSocial: (id: number) => request<{ ok: true }>(`/marketing/socials/${id}`, { method: "DELETE" }),
+
+  getMarketingIdeas: () => request<{ ideas: MarketingIdea[] }>("/marketing/ideas"),
+  createMarketingIdea: (data: { socialId: number; title: string; description?: string; status?: MarketingIdeaStatus; plannedDate?: string }) =>
+    request<{ ok: true; id: number }>("/marketing/ideas", { method: "POST", body: data }),
+  updateMarketingIdea: (
+    id: number,
+    data: Partial<{
+      title: string;
+      description: string;
+      status: MarketingIdeaStatus;
+      plannedDate: string;
+      views: number | null;
+      likes: number | null;
+      comments: number | null;
+      shares: number | null;
+      notes: string;
+    }>,
+  ) => request<{ ok: true }>(`/marketing/ideas/${id}`, { method: "PUT", body: data }),
+  deleteMarketingIdea: (id: number) => request<{ ok: true }>(`/marketing/ideas/${id}`, { method: "DELETE" }),
+
+  // ---- Finance (costs + income log) ----
+  getFinanceEntries: () => request<{ entries: FinanceEntry[] }>("/finance"),
+  createFinanceEntry: (data: {
+    type: FinanceType;
+    amount: number;
+    category?: string;
+    description?: string;
+    occurredOn: string;
+    recurring?: FinanceRecurring;
+    notes?: string;
+  }) => request<{ ok: true; id: number }>("/finance", { method: "POST", body: data }),
+  updateFinanceEntry: (
+    id: number,
+    data: Partial<{ type: FinanceType; amount: number; category: string; description: string; occurredOn: string; recurring: FinanceRecurring; notes: string }>,
+  ) => request<{ ok: true }>(`/finance/${id}`, { method: "PUT", body: data }),
+  deleteFinanceEntry: (id: number) => request<{ ok: true }>(`/finance/${id}`, { method: "DELETE" }),
+};
+
+export type AdminContact = {
+  id: number;
+  email: string;
+  name: string | null;
+  category: string | null;
+  note: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type MarketingSocial = { id: number; name: string; handle: string | null; color: string | null; displayOrder: number; createdAt: number };
+
+export type MarketingIdeaStatus = "idea" | "planned" | "posted";
+export type MarketingIdea = {
+  id: number;
+  socialId: number;
+  title: string;
+  description: string | null;
+  status: MarketingIdeaStatus;
+  plannedDate: string | null;
+  postedAt: number | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  notes: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type FinanceType = "cost" | "income";
+export type FinanceRecurring = "none" | "monthly" | "yearly";
+export type FinanceEntry = {
+  id: number;
+  type: FinanceType;
+  category: string | null;
+  description: string | null;
+  amount: number;
+  currency: string;
+  occurredOn: string;
+  recurring: FinanceRecurring;
+  notes: string | null;
+  createdAt: number;
+  updatedAt: number;
 };
 
 export type AuditLogEntry = {

@@ -102,6 +102,28 @@ export default function AppControls() {
     save("scan", ["ai_scan_enabled", "ai_scan_daily_limit"]);
   }
 
+  const WAR_SETTING_KEYS = [
+    "war_duration_days",
+    "war_match_activity_window_days",
+    "war_pr_bonus",
+    "war_bot_min_interval_hours",
+    "war_bot_max_interval_hours",
+    "war_max_attack_volume_kg",
+    "war_max_attack_pr_count",
+    "war_min_attack_interval_minutes",
+  ];
+
+  function saveWarSettings() {
+    for (const key of WAR_SETTING_KEYS) {
+      const value = get(key).trim();
+      if (value !== "" && !/^\d+$/.test(value)) {
+        toast.error("Every Crew War field must be a whole number");
+        return;
+      }
+    }
+    save("war", WAR_SETTING_KEYS);
+  }
+
   return (
     <>
       <PageMeta title="App Controls | GymCrew Admin" description="Remote switches for the app" />
@@ -165,6 +187,48 @@ export default function AppControls() {
           <div className="max-w-[200px]">
             <Label>Scans per person per day</Label>
             <Input type="number" min="0" value={get("ai_scan_daily_limit")} onChange={text("ai_scan_daily_limit")} placeholder="5" />
+          </div>
+        </ControlCard>
+
+        <ControlCard
+          title="Crew Wars"
+          description="How a crew-vs-crew War runs — how long it lasts, bot attack pacing, and abuse ceilings on a single real attack. Leave a field blank to use its default."
+          saving={saving === "war"}
+          onSave={saveWarSettings}
+        >
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <div>
+              <Label>War duration (days)</Label>
+              <Input type="number" min="0" value={get("war_duration_days")} onChange={text("war_duration_days")} placeholder="3" />
+            </div>
+            <div>
+              <Label>Abandon after (days)</Label>
+              <Input type="number" min="0" value={get("war_match_activity_window_days")} onChange={text("war_match_activity_window_days")} placeholder="14" />
+            </div>
+            <div>
+              <Label>PR bonus (points)</Label>
+              <Input type="number" min="0" value={get("war_pr_bonus")} onChange={text("war_pr_bonus")} placeholder="250" />
+            </div>
+            <div>
+              <Label>Bot attack min interval (hrs)</Label>
+              <Input type="number" min="0" value={get("war_bot_min_interval_hours")} onChange={text("war_bot_min_interval_hours")} placeholder="8" />
+            </div>
+            <div>
+              <Label>Bot attack max interval (hrs)</Label>
+              <Input type="number" min="0" value={get("war_bot_max_interval_hours")} onChange={text("war_bot_max_interval_hours")} placeholder="16" />
+            </div>
+            <div>
+              <Label>Max attack volume (kg)</Label>
+              <Input type="number" min="0" value={get("war_max_attack_volume_kg")} onChange={text("war_max_attack_volume_kg")} placeholder="20000" />
+            </div>
+            <div>
+              <Label>Max PRs per attack</Label>
+              <Input type="number" min="0" value={get("war_max_attack_pr_count")} onChange={text("war_max_attack_pr_count")} placeholder="10" />
+            </div>
+            <div>
+              <Label>Min minutes between attacks</Label>
+              <Input type="number" min="0" value={get("war_min_attack_interval_minutes")} onChange={text("war_min_attack_interval_minutes")} placeholder="2" />
+            </div>
           </div>
         </ControlCard>
       </div>

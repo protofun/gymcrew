@@ -17,6 +17,7 @@ import PageMeta from "../../components/common/PageMeta";
 import Badge from "../../components/ui/badge/Badge";
 import Button from "../../components/ui/button/Button";
 import Input from "../../components/form/input/InputField";
+import { AiScanLimitsModal } from "../../components/admin/AiScanLimitsModal";
 import { SendMessageModal } from "../../components/admin/SendMessageModal";
 import { api, ApiError, type AdminUserListItem, type UsersFilter } from "../../lib/api";
 import { formatTimeAgo } from "../../lib/format";
@@ -53,6 +54,7 @@ export default function UsersList() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [messageModalOpen, setMessageModalOpen] = useState(false);
+  const [scanLimitsModalOpen, setScanLimitsModalOpen] = useState(false);
 
   const load = useCallback((searchValue: string, pageValue: number, filterValue: UsersFilter | null) => {
     setLoading(true);
@@ -277,6 +279,9 @@ export default function UsersList() {
           <Button size="sm" variant="outline" onClick={() => bulkBan(false)}>
             Unban Selected
           </Button>
+          <Button size="sm" variant="outline" onClick={() => setScanLimitsModalOpen(true)}>
+            Set AI Scan Limits
+          </Button>
           <Button size="sm" variant="outline" onClick={exportSelected}>
             Export CSV
           </Button>
@@ -355,6 +360,12 @@ export default function UsersList() {
         onClose={() => setMessageModalOpen(false)}
         userIds={selectedIds}
         onSent={() => setRowSelection({})}
+      />
+      <AiScanLimitsModal
+        isOpen={scanLimitsModalOpen}
+        onClose={() => setScanLimitsModalOpen(false)}
+        userIds={selectedIds}
+        onSaved={() => setRowSelection({})}
       />
     </>
   );
