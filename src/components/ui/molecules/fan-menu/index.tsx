@@ -1,5 +1,3 @@
-// GymCrew patch: the per-item blur burst (expo-blur) was removed — expo-blur is not part of the app's native
-// build. The fan-out spring, stagger and tilt are unchanged.
 import React, {
   memo,
   useCallback,
@@ -84,6 +82,7 @@ const FanRoot: React.FC<IFanMenu> & React.FunctionComponent<IFanMenu> =
       springConfig = DEFAULT_SPRING,
       buttonSize = DEFAULT_BUTTON_SIZE,
       closeOnBackdropPress = true,
+      layout = "arc",
       style,
     }: IFanMenu): React.JSX.Element & React.ReactNode & React.ReactElement => {
       const isControlled = open !== undefined;
@@ -103,6 +102,7 @@ const FanRoot: React.FC<IFanMenu> & React.FunctionComponent<IFanMenu> =
           tilt,
           springConfig,
           stagger,
+          layout,
         }),
         [
           direction,
@@ -112,6 +112,7 @@ const FanRoot: React.FC<IFanMenu> & React.FunctionComponent<IFanMenu> =
           tilt,
           springConfig,
           stagger,
+          layout,
         ],
       );
 
@@ -333,8 +334,8 @@ const FanItem = memo<IFanItem>(
     const count = order.length;
     const rank = Math.max(count - index, 1);
     const geo = useMemo(
-      () => computeItemGeometry(rank, config),
-      [rank, config],
+      () => computeItemGeometry(rank, count, config),
+      [rank, count, config],
     );
 
     const cx = buttonSize / 2;
@@ -381,6 +382,8 @@ const FanItem = memo<IFanItem>(
         },
       ],
     }));
+
+    // GymCrew patch: the per-item blur burst (expo-blur) was removed — expo-blur is not part of the app's native build.
 
     const handlePressIn = () => {
       pressed.value = withSpring(1);
@@ -456,11 +459,19 @@ const styles = StyleSheet.create({
     width: SCREEN_W * 2,
     height: SCREEN_H * 2,
     zIndex: 0,
+    // GymCrew patch: the vendored backdrop had no color at all, so the animated opacity dimmed nothing — every fan menu opened
+    // with the page behind it still at full brightness. A plain dark scrim makes the open menu read as its own layer.
+    backgroundColor: "rgba(6, 7, 10, 0.7)",
   },
   itemAnchor: {
     position: "absolute",
     zIndex: 1,
 
+    // GymCrew note: this box is screen-width even though the pill it holds sits at its left edge
+    // (alignItems: flex-start) — on web, `rotate` in this element's animated transform pivots around
+    // the CENTER of this full-width box by default, not around the pill, so any nonzero `tilt` swings
+    // the pill tens of px off its intended arc position. Keep `tilt={0}` at call sites until this
+    // element gets an explicit transformOrigin at the pill's own anchor point.
     width: SCREEN_W,
     alignItems: "flex-start",
   },
@@ -478,6 +489,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 12,
     elevation: 6,
+  },
+  itemBlur: {
+    overflow: "hidden",
+    borderRadius: 99,
   },
   itemIcon: {
     alignItems: "center",

@@ -41,6 +41,14 @@ enum FanDirection {
   Right = "right",
 }
 
+/** GymCrew patch: which geometry `computeItemGeometry` uses. `"arc"` (default) puts every item on
+ * one circle around the trigger, evenly spread across an angle — right for a handful of small,
+ * similarly-sized icons (see `TabBarFan`). `"cascade"` grows the radius per item instead (its
+ * original vendored shape, tuned to actually stay on screen) — right for wider, label-carrying
+ * items like a speed-dial of text pills (see `NutritionAddFan`), where the arc's constant radius
+ * forces items to overlap however wide `spacing` gets, since it only spreads them by angle. */
+type TFanLayout = "arc" | "cascade";
+
 interface IResolvedConfig {
   readonly baseAngle: number;
   readonly sweep: number;
@@ -49,6 +57,7 @@ interface IResolvedConfig {
   readonly tilt: number;
   readonly springConfig: WithSpringConfig;
   readonly stagger: number;
+  readonly layout: TFanLayout;
 }
 
 interface IFanMenu {
@@ -62,6 +71,7 @@ interface IFanMenu {
   readonly offset?: TFanOffset;
   readonly direction?: TFanDirection;
   readonly itemDirection?: TItemDirection;
+  readonly layout?: TFanLayout;
   readonly spacing?: number;
   readonly spread?: number;
   readonly tilt?: number;
@@ -116,6 +126,7 @@ export type {
   TItemDirection,
   TFanPosition,
   TFanOffset,
+  TFanLayout,
   IResolvedConfig,
   IFanMenu,
   IFanTrigger,

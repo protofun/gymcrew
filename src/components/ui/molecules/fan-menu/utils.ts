@@ -53,12 +53,34 @@ function resolveAnchor(
 
 function computeItemGeometry(
   rank: number,
+  count: number,
   config: IResolvedConfig,
 ): { x: number; y: number; rotate: number } {
-  const { baseAngle, sweep, spread, spacing, tilt } = config;
-  const step = rank - 0.6;
-  const angle = degToRad<number>(baseAngle + sweep * spread * step);
-  const radius = spacing * rank;
+  const { baseAngle, sweep, spread, spacing, tilt, layout } = config;
+
+  if (layout === "cascade") {
+    // GymCrew patch, `layout="cascade"`: the vendored shape, radius growing per item — right for
+    // wide, label-carrying items (NutritionAddFan's 5 text pills), where an "arc" (below) would need
+    // an unreasonably large constant radius to keep items from overlapping, since it only spreads
+    // them by angle, never by distance. `spread`/`spacing` still need to stay modest for the same
+    // `degToRad` reason as the arc — see this file's own note on it.
+    const step = rank - 1;
+    const angle = degToRad<number>(baseAngle + sweep * spread * step);
+    const radius = spacing * rank;
+    return {
+      x: Math.cos(angle) * radius,
+      y: -Math.sin(angle) * radius,
+      rotate: -sweep * tilt * step,
+    };
+  }
+
+  // GymCrew patch, `layout="arc"` (default): every item sits on the SAME circle around the trigger
+  // (constant `spacing` radius), spread evenly across an arc centered straight over the button —
+  // items arranged around it, like a classic radial menu — right for a handful of small, similarly-
+  // sized icons (TabBarFan), where the cascade above would read as one-directional instead.
+  const step = rank - (count + 1) / 2;
+  const angle = degToRad<number>(baseAngle + spread * step);
+  const radius = spacing;
   return {
     x: Math.cos(angle) * radius,
     y: -Math.sin(angle) * radius,

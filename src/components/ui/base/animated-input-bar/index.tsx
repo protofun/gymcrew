@@ -165,6 +165,8 @@ const AnimatedInput: React.FC<IAnimatedInput> &
     characterExitDuration = 200,
     characterDelayIncrement = 30,
     placeholderLeft,
+    onFocus,
+    onBlur,
     ...props
   }: IAnimatedInput): React.ReactNode &
     React.JSX.Element &
@@ -216,8 +218,14 @@ const AnimatedInput: React.FC<IAnimatedInput> &
             style={[styles.input, inputStyle]}
             value={inputValue}
             onChangeText={handleChangeText}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
+            onFocus={(event) => {
+              setIsFocused(true);
+              onFocus?.(event); // GymCrew patch: the parent can listen to focus too (AuthField's glowing border)
+            }}
+            onBlur={(event) => {
+              setIsFocused(false);
+              onBlur?.(event);
+            }}
             placeholderTextColor="transparent"
             {...props}
           />
