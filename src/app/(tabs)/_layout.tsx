@@ -1,13 +1,14 @@
 import { useAuth, useUser } from "@clerk/expo";
 import { Redirect, Tabs } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { AdminMessageOverlay } from "@/components/AdminMessageOverlay";
 import { PromoPopup } from "@/components/PromoPopup";
 import { AppTourProvider } from "@/components/AppTourOverlay";
 import { SocialsPromptOverlay } from "@/components/SocialsPromptOverlay";
 import { TabBar } from "@/components/TabBar";
+import { TabBarFan } from "@/components/TabBarFan";
 import { TopBar } from "@/components/TopBar";
 import { XpProgressModal } from "@/components/XpProgressModal";
 import { images } from "@/constants/images";
@@ -304,13 +305,18 @@ export default function TabsLayout() {
       <View style={{ flex: 1, backgroundColor: colors.neutral.background }}>
         <TopBar avatarSource={images.iconGorilla} streakDays={streakDays} notifications={notifications} />
 
-        <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
+        <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false, freezeOnBlur: true }}>
           <Tabs.Screen name="home" options={{ title: "Home" }} />
           <Tabs.Screen name="crew" options={{ title: "Crew" }} />
           <Tabs.Screen name="log" options={{ title: "Log" }} />
           <Tabs.Screen name="ranks" options={{ title: "Ranks" }} />
           <Tabs.Screen name="profile" options={{ title: "Profile" }} />
         </Tabs>
+
+        {/* Over the whole screen, so the items the + fans out are tappable wherever they land. */}
+        <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+          <TabBarFan />
+        </View>
 
         <XpProgressModal visible={progressModalVisible} onClose={() => setProgressModalVisible(false)} streakDays={streakDays} xp={profileXp} xpToNextLevel={xpRequiredFor(profileDivision)} crewPoints={crewXp} crewPointsGoal={xpRequiredFor(crewDivision)} trainedDays={trainedDaysThisWeek} />
         <SocialsPromptOverlay />
