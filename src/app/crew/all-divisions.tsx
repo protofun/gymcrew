@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { Easing, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
 import { CrewSwitcher } from "@/components/CrewSwitcher";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { HOME_ROW_DETAIL, HOME_ROW_TITLE } from "@/components/homeStyle";
+import { CircularProgress } from "@/components/ui/organisms/circular-progress";
 import { DIVISIONS, DIVISION_XP_REQUIRED, PLAYER_DIVISION_MIN_POWER, divisionForPlayerPower, divisionIndex } from "@/lib/division";
 import type { RankProfile } from "@/lib/rank";
 import { userOverallPowerScore } from "@/lib/ranks-board";
@@ -51,6 +53,14 @@ export default function AllDivisionsScreen() {
   // Highest division first, like a ranked ladder poster.
   const steps = [...DIVISIONS].reverse();
 
+  // The ladder-progress ring — same `CircularProgress` language every other screen this pass has
+  // added, here showing how far up the WHOLE ladder the current division sits.
+  const ladderPercent = Math.round(((currentIndex + 1) / DIVISIONS.length) * 100);
+  const ladderProgress = useSharedValue(0);
+  useEffect(() => {
+    ladderProgress.value = withTiming(ladderPercent, { duration: 800, easing: Easing.out(Easing.cubic) });
+  }, [ladderPercent, ladderProgress]);
+
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
@@ -64,9 +74,23 @@ export default function AllDivisionsScreen() {
         <CrewSwitcher options={[...SCOPES]} labels={SCOPE_LABEL} value={scope} onChange={setScope} />
       </View>
 
-      <Text className="body-sm mx-4 mt-3 text-text-secondary">
-        {scope === "Crews" ? "How much XP a crew needs to climb out of each division." : "The power score needed to reach each division."}
-      </Text>
+      <View className="mx-4 mt-3 flex-row items-center gap-3">
+        <View style={{ width: 56, height: 56 }} className="items-center justify-center">
+          <CircularProgress
+            progress={ladderProgress}
+            size={56}
+            strokeWidth={5}
+            gap={0}
+            outerCircleColor={colors.neutral.divider}
+            progressCircleColor={colors.brand.yellow}
+            backgroundColor="transparent"
+            renderIcon={() => <DivisionBadge division={currentDivision} size={28} />}
+          />
+        </View>
+        <Text className="body-sm flex-1 text-text-secondary">
+          {scope === "Crews" ? "How much XP a crew needs to climb out of each division." : "The power score needed to reach each division."}
+        </Text>
+      </View>
 
       <ScrollView
         className="flex-1"

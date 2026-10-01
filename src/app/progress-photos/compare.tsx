@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { ProgressPhotoOverlay } from "@/components/ProgressPhotoOverlay";
 import { ProgressPhotoOverlayBlend } from "@/components/ProgressPhotoOverlayBlend";
 import { goBack } from "@/lib/navigation";
@@ -76,7 +77,7 @@ export default function ComparePhotosScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24, gap: 16 }} showsVerticalScrollIndicator={false}>
-        <View className="flex-row gap-2 rounded-2xl border border-divider bg-surface p-1.5">
+        <View className="flex-row gap-2 rounded-2xl bg-surface p-1.5">
           {POSES.map((option) => (
             <Pressable
               key={option.key}
@@ -95,22 +96,19 @@ export default function ComparePhotosScreen() {
             <ActivityIndicator color={colors.brand.yellow} />
           </View>
         ) : posePhotos.length === 0 ? (
-          <View className="items-center gap-3 rounded-2xl border border-divider bg-surface px-6 py-10">
+          <View className="items-center gap-3 rounded-2xl bg-surface px-6 py-10">
             <Ionicons name="camera-outline" size={32} color={colors.neutral.textSecondary} />
             <Text className="body-md text-center text-text-primary">No {pose} photos yet</Text>
             <Text className="body-sm text-center text-text-secondary">Capture your first one to start tracking how your physique changes over time.</Text>
-            <Pressable
-              onPress={() => router.push({ pathname: "/progress-photos/capture", params: { pose } })}
-              className="mt-2 items-center self-stretch rounded-full bg-brand-yellow py-3"
-            >
-              <Text className="body-sm font-body-semibold text-brand-iron">Take a Photo</Text>
-            </Pressable>
+            <View className="mt-2 self-stretch">
+              <PrimaryButton label="Take a Photo" onPress={() => router.push({ pathname: "/progress-photos/capture", params: { pose } })} />
+            </View>
           </View>
         ) : (
           <>
             {selectedPhotos.length === 2 ? (
               <View className="gap-3">
-                <View className="flex-row gap-2 self-start rounded-full border border-divider bg-surface p-1">
+                <View className="flex-row gap-2 self-start rounded-full bg-surface p-1">
                   {COMPARE_MODES.map((option) => (
                     <Pressable
                       key={option.key}

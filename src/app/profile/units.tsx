@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
+import { Checkbox } from "@/components/ui/organisms/check-box";
 import { goBack } from "@/lib/navigation";
 import { kgToLbs } from "@/lib/units";
 import { useOnboardingStore } from "@/store/onboarding-store";
@@ -13,6 +14,10 @@ const UNIT_OPTIONS: { key: "kg" | "lbs"; label: string; description: string }[] 
   { key: "lbs", label: "Pounds (lbs)", description: "Common in the US." },
 ];
 
+/** Flat rows with the real Reacticx `check-box` (an animated SVG draw-in checkmark) as the selection
+ * indicator, instead of the old bordered card + `Ionicons checkmark-circle`. Round 23's Profile pass,
+ * stage 2 — this screen and its `bordered card` picker were a direct case of the "no rings/glow,
+ * flat surface" convention the rest of the app already converged on. */
 export default function UnitsScreen() {
   const insets = useSafeAreaInsets();
   const posthog = usePostHog();
@@ -43,7 +48,8 @@ export default function UnitsScreen() {
                 setWeightUnit(option.key);
                 posthog.capture("weight_unit_changed", { unit: option.key });
               }}
-              className={`flex-row items-center gap-3 rounded-2xl border p-4 ${active ? "border-brand-yellow bg-brand-yellow/10" : "border-divider bg-surface"}`}
+              className="flex-row items-center gap-3 rounded-2xl p-4"
+              style={{ backgroundColor: active ? "rgba(227,255,0,0.08)" : colors.neutral.surface }}
             >
               <View className="flex-1 gap-0.5">
                 <Text className="body-md font-body-semibold text-text-primary">{option.label}</Text>
@@ -52,7 +58,7 @@ export default function UnitsScreen() {
                   Your weight: {option.key === "kg" ? `${weightKg}kg` : `${kgToLbs(weightKg)}lbs`}
                 </Text>
               </View>
-              {active && <Ionicons name="checkmark-circle" size={22} color={colors.brand.yellow} />}
+              <Checkbox checked={active} showBorder checkmarkColor={active ? colors.brand.yellow : colors.neutral.textSecondary} size={24} />
             </Pressable>
           );
         })}

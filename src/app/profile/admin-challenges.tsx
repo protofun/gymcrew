@@ -1,12 +1,14 @@
 import { useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
 import { AdminChallengeFormSheet } from "@/components/AdminChallengeFormSheet";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { ToggleRow } from "@/components/ToggleRow";
 import type { AdminChallengeInput, ApiAdminChallenge } from "@/lib/api";
 import { useAdminChallengeStore } from "@/store/admin-challenge-store";
 import { colors } from "@/theme";
@@ -27,7 +29,7 @@ function ChallengeRow({
   onDelete: () => void;
 }) {
   return (
-    <View className="gap-2.5 rounded-2xl border border-divider bg-surface p-3.5">
+    <View className="gap-2.5 rounded-2xl bg-surface p-3.5">
       <View className="flex-row items-start gap-3">
         <View className="h-9 w-9 items-center justify-center rounded-full bg-brand-yellow/15">
           <Ionicons name={challenge.icon as keyof typeof Ionicons.glyphMap} size={16} color={colors.brand.yellow} />
@@ -52,15 +54,11 @@ function ChallengeRow({
           <Ionicons name="trash-outline" size={18} color={colors.semantic.error} />
         </Pressable>
       </View>
-      <View className="flex-row items-center justify-between border-t border-divider pt-2.5">
-        <Text className={`caption font-body-semibold ${challenge.isActive ? "text-brand-yellow" : "text-text-secondary"}`}>
-          {challenge.isActive ? "Active — visible to every crew" : "Stopped — hidden from crews"}
-        </Text>
-        <Switch
+      <View className="border-t border-divider">
+        <ToggleRow
+          title={challenge.isActive ? "Active — visible to every crew" : "Stopped — hidden from crews"}
           value={challenge.isActive}
           onValueChange={onToggleActive}
-          trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
-          thumbColor={colors.brand.white}
         />
       </View>
     </View>
@@ -159,7 +157,7 @@ export default function AdminChallengesScreen() {
           </Text>
 
           {challenges.length === 0 ? (
-            <View className="items-center gap-2 rounded-2xl border border-dashed border-divider px-6 py-12">
+            <View className="items-center gap-2 rounded-2xl bg-surface px-6 py-12">
               <Ionicons name="flag-outline" size={26} color={colors.neutral.textSecondary} />
               <Text className="body-sm text-center text-text-secondary">No admin challenges yet — create one below.</Text>
             </View>
@@ -177,11 +175,8 @@ export default function AdminChallengesScreen() {
         </ScrollView>
       )}
 
-      <View style={{ paddingBottom: insets.bottom + 16 }} className="border-t border-divider px-4 pt-4">
-        <Pressable onPress={openCreate} className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-4">
-          <Ionicons name="add" size={18} color={colors.brand.iron} />
-          <Text className="body-md font-body-bold text-brand-iron">Create Challenge</Text>
-        </Pressable>
+      <View style={{ paddingBottom: insets.bottom + 16 }} className="px-4 pt-4">
+        <PrimaryButton label="Create Challenge" onPress={openCreate} hideArrow />
       </View>
 
       <AdminChallengeFormSheet visible={formOpen} existing={editing} saving={saving} onClose={() => setFormOpen(false)} onSubmit={handleSubmit} />

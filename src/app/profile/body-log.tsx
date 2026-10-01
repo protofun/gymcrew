@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useMemo, useState } from "react";
-import { Keyboard, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
 import { BmiGauge, calculateBmi } from "@/components/BmiGauge";
+import { BottomSheet } from "@/components/BottomSheet";
 import { EditableText } from "@/components/EditableText";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { SkewedStat } from "@/components/SkewedStat";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { StatCard, StatRow, StatSectionHeader } from "@/components/StatRow";
@@ -43,25 +45,6 @@ function AddEntrySheet({ visible, onClose, weightUnit }: { visible: boolean; onC
     onboardingWeightKg ? String(displayWeight(onboardingWeightKg, weightUnit)) : "",
   );
   const [bodyFatPercent, setBodyFatPercent] = useState("");
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-
-  // A tap outside the sheet is normally "close it" — but while the keyboard is up, that's almost
-  // always the user just trying to dismiss the keyboard (e.g. to see the Save button), not abandon
-  // what they were logging. First outside tap dismisses the keyboard only; a second one (keyboard
-  // already down) actually closes the sheet.
-  useEffect(() => {
-    const showSub = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
-
-  function handleBackdropPress() {
-    if (keyboardVisible) Keyboard.dismiss();
-    else onClose();
-  }
 
   function handleSave() {
     const parsedInput = parseFloat(weightInput.replace(",", "."));
@@ -79,47 +62,43 @@ function AddEntrySheet({ visible, onClose, weightUnit }: { visible: boolean; onC
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }} onPress={handleBackdropPress}>
-        <Pressable onPress={() => {}} style={{ backgroundColor: colors.neutral.surface }} className="gap-4 rounded-t-3xl border-t border-divider p-5">
-          <View className="flex-row items-center justify-between">
-            <Text className="heading-4 text-text-primary">Log Body Weight</Text>
-            <Pressable onPress={onClose} hitSlop={8}>
-              <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
-            </Pressable>
-          </View>
-
-          <View className="flex-row gap-3">
-            <View className="flex-1 gap-1.5">
-              <Text className="caption font-body-semibold text-text-secondary">WEIGHT ({weightUnit.toUpperCase()})</Text>
-              <TextInput
-                value={weightInput}
-                onChangeText={setWeightInput}
-                keyboardType="decimal-pad"
-                placeholder={weightUnit === "kg" ? "85" : "187"}
-                placeholderTextColor={colors.neutral.textSecondary}
-                className="heading-4 rounded-2xl border border-divider bg-background px-4 py-3 text-text-primary"
-              />
-            </View>
-            <View className="flex-1 gap-1.5">
-              <Text className="caption font-body-semibold text-text-secondary">BODY FAT % (OPTIONAL)</Text>
-              <TextInput
-                value={bodyFatPercent}
-                onChangeText={setBodyFatPercent}
-                keyboardType="decimal-pad"
-                placeholder="—"
-                placeholderTextColor={colors.neutral.textSecondary}
-                className="heading-4 rounded-2xl border border-divider bg-background px-4 py-3 text-text-primary"
-              />
-            </View>
-          </View>
-
-          <Pressable onPress={handleSave} className="items-center rounded-full bg-brand-yellow py-4">
-            <Text className="body-md font-body-semibold text-brand-iron">Save Entry</Text>
+    <BottomSheet visible={visible} onClose={onClose} keyboardAware>
+      <View className="gap-4 px-5 pb-4">
+        <View className="flex-row items-center justify-between">
+          <Text className="heading-4 text-text-primary">Log Body Weight</Text>
+          <Pressable onPress={onClose} hitSlop={8}>
+            <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
           </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
+        </View>
+
+        <View className="flex-row gap-3">
+          <View className="flex-1 gap-1.5">
+            <Text className="caption font-body-semibold text-text-secondary">WEIGHT ({weightUnit.toUpperCase()})</Text>
+            <TextInput
+              value={weightInput}
+              onChangeText={setWeightInput}
+              keyboardType="decimal-pad"
+              placeholder={weightUnit === "kg" ? "85" : "187"}
+              placeholderTextColor={colors.neutral.textSecondary}
+              className="heading-4 rounded-2xl bg-background px-4 py-3 text-text-primary"
+            />
+          </View>
+          <View className="flex-1 gap-1.5">
+            <Text className="caption font-body-semibold text-text-secondary">BODY FAT % (OPTIONAL)</Text>
+            <TextInput
+              value={bodyFatPercent}
+              onChangeText={setBodyFatPercent}
+              keyboardType="decimal-pad"
+              placeholder="—"
+              placeholderTextColor={colors.neutral.textSecondary}
+              className="heading-4 rounded-2xl bg-background px-4 py-3 text-text-primary"
+            />
+          </View>
+        </View>
+
+        <PrimaryButton label="Save Entry" onPress={handleSave} />
+      </View>
+    </BottomSheet>
   );
 }
 
@@ -213,7 +192,7 @@ export default function BodyLogScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-3">
-          <View className="flex-row rounded-full border border-divider bg-surface p-1">
+          <View className="flex-row rounded-full bg-surface p-1">
             {availableMetrics.map((option) => {
               const active = option.key === activeMetric.key;
               return (
@@ -229,12 +208,12 @@ export default function BodyLogScreen() {
           </View>
 
           {activeMetric.key === "bmi" && currentBmi != null && (
-            <View className="rounded-2xl border border-divider bg-surface p-4">
+            <View className="rounded-2xl bg-surface p-4">
               <BmiGauge bmi={currentBmi} />
             </View>
           )}
 
-          <View className="rounded-2xl border border-divider bg-surface p-4">
+          <View className="rounded-2xl bg-surface p-4">
             <StrengthProgressChart
               exerciseName={chartLabel[activeMetric.key]}
               points={seriesByMetric[activeMetric.key]}
@@ -287,7 +266,7 @@ export default function BodyLogScreen() {
 
         <View className="gap-2.5">
           {entries.length === 0 ? (
-            <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-14">
+            <View className="items-center gap-2 rounded-2xl bg-surface py-14">
               <Ionicons name="body-outline" size={28} color={colors.neutral.textSecondary} />
               <Text className="body-md text-text-secondary">No entries yet.</Text>
               <Text className="body-sm text-text-secondary">Tap + to log your weight.</Text>
@@ -300,7 +279,7 @@ export default function BodyLogScreen() {
                   key={entry.id}
                   onPress={() => handleEntryPress(entry.loggedAt, entry.weightKg)}
                   style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
-                  className="flex-row items-stretch overflow-hidden rounded-2xl border border-divider bg-surface"
+                  className="flex-row items-stretch overflow-hidden rounded-2xl bg-surface"
                 >
                   <View style={{ width: 4, backgroundColor: colors.brand.yellow }} />
 
@@ -336,7 +315,7 @@ export default function BodyLogScreen() {
                 </Pressable>
               ))}
               {entries.length > RECENT_ENTRIES_LIMIT && (
-                <Pressable onPress={() => setShowAllEntries((value) => !value)} className="items-center rounded-full border border-divider py-3">
+                <Pressable onPress={() => setShowAllEntries((value) => !value)} className="items-center rounded-full bg-surface py-3">
                   <Text className="body-sm font-body-semibold text-brand-yellow">
                     {showAllEntries ? "Show Less" : `Show All ${entries.length} Entries`}
                   </Text>

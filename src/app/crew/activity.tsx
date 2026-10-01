@@ -10,6 +10,7 @@ import { DivisionBadge } from "@/components/DivisionBadge";
 import { HOME_ROW_DETAIL } from "@/components/homeStyle";
 import { HomeRowLead } from "@/components/HomeRowLead";
 import { RankBadge } from "@/components/RankBadge";
+import { SectionHeading } from "@/components/SectionHeading";
 import { ContextMenu } from "@/components/ui/molecules/context-menu";
 import { api, waitForAuthToken, type ApiCrewActivityEvent, type CrewActivityEventType, type CrewActivityReactionEmoji } from "@/lib/api";
 import { describeEvent, divisionFromEvent, EVENT_ICON, EVENT_TINT, EVENT_TYPE_LABEL, tierForPrEvent, toggleReactionOptimistic } from "@/lib/crew-feed";
@@ -38,7 +39,7 @@ function FilterMenu<T extends string>({ label, options, selected, onSelect }: { 
   return (
     <ContextMenu theme="dark">
       <ContextMenu.Trigger openTrigger="press">
-        <View className="flex-row items-center gap-1 rounded-full border border-divider bg-surface px-3 py-1.5">
+        <View className="flex-row items-center gap-1 rounded-full bg-surface px-3 py-1.5">
           <Text className="caption font-body-semibold text-text-secondary">{label}</Text>
           <Ionicons name="chevron-down" size={12} color={colors.neutral.textSecondary} />
         </View>
@@ -161,7 +162,7 @@ export default function CrewActivityScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24, gap: 12 }}
         showsVerticalScrollIndicator={false}
       >
         {events === null ? (
@@ -174,39 +175,42 @@ export default function CrewActivityScreen() {
             <Text className="body-md text-text-secondary">No activity yet.</Text>
           </View>
         ) : (
-          filtered.map((event, index) => {
-            const isMe = event.userId === user?.id;
-            const division = divisionFromEvent(event);
-            const prTier = tierForPrEvent(
-              event,
-              isMe,
-              { gender: gender ?? undefined, weightKg: weightKg ?? undefined },
-              membersActivity,
-              customExercises,
-            );
-            return (
-              <View key={event.id} className={`gap-3 py-3.5 ${index === filtered.length - 1 ? "" : "border-b border-divider"}`}>
-                <View className="flex-row items-center gap-3">
-                  {division ? (
-                    <DivisionBadge division={division} size={40} />
-                  ) : prTier ? (
-                    <RankBadge tier={prTier} size={40} />
-                  ) : (
-                    <HomeRowLead kind="flat">
-                      <Ionicons name={EVENT_ICON[event.eventType]} size={18} color={EVENT_TINT[event.eventType]} />
-                    </HomeRowLead>
-                  )}
-                  <View className="flex-1 gap-0.5">
-                    <Text className="body-sm text-text-primary">{describeEvent(event, isMe)}</Text>
-                    <Text style={HOME_ROW_DETAIL}>{formatFullDate(event.createdAt)}</Text>
+          <>
+            <SectionHeading id="crew.activity.timeline" eyebrow="All Activity" title="Timeline" size={26} />
+            {filtered.map((event, index) => {
+              const isMe = event.userId === user?.id;
+              const division = divisionFromEvent(event);
+              const prTier = tierForPrEvent(
+                event,
+                isMe,
+                { gender: gender ?? undefined, weightKg: weightKg ?? undefined },
+                membersActivity,
+                customExercises,
+              );
+              return (
+                <View key={event.id} className={`gap-3 py-3.5 ${index === filtered.length - 1 ? "" : "border-b border-divider"}`}>
+                  <View className="flex-row items-center gap-3">
+                    {division ? (
+                      <DivisionBadge division={division} size={40} />
+                    ) : prTier ? (
+                      <RankBadge tier={prTier} size={40} />
+                    ) : (
+                      <HomeRowLead kind="flat">
+                        <Ionicons name={EVENT_ICON[event.eventType]} size={18} color={EVENT_TINT[event.eventType]} />
+                      </HomeRowLead>
+                    )}
+                    <View className="flex-1 gap-0.5">
+                      <Text className="body-sm text-text-primary">{describeEvent(event, isMe)}</Text>
+                      <Text style={HOME_ROW_DETAIL}>{formatFullDate(event.createdAt)}</Text>
+                    </View>
+                  </View>
+                  <View className="pl-[56px]">
+                    <CrewEventReactionBar reactions={event.reactions} onReact={(emoji) => handleReact(event.id, emoji)} />
                   </View>
                 </View>
-                <View className="pl-[56px]">
-                  <CrewEventReactionBar reactions={event.reactions} onReact={(emoji) => handleReact(event.id, emoji)} />
-                </View>
-              </View>
-            );
-          })
+              );
+            })}
+          </>
         )}
       </ScrollView>
     </View>

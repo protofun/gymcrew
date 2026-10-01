@@ -23,9 +23,7 @@ export function CrewEventReactionBar({ reactions, onReact }: CrewEventReactionBa
             onPress={() => onReact(emoji)}
             hitSlop={6}
             style={PRESSED_STYLE}
-            className={`flex-row items-center gap-1 rounded-full border px-2.5 py-1 ${
-              reacted ? "border-brand-yellow bg-brand-yellow/10" : "border-divider bg-background"
-            }`}
+            className={`flex-row items-center gap-1 rounded-full px-2.5 py-1 ${reacted ? "bg-brand-yellow/10" : "bg-background"}`}
           >
             <Text style={{ fontSize: 13 }}>{emoji}</Text>
             {count > 0 && (

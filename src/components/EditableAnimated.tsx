@@ -1,4 +1,4 @@
-import { Text, View, type StyleProp, type TextStyle } from "react-native";
+import { Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 
 import { EditableText } from "@/components/EditableText";
 import { NumberFlow } from "@/components/ui/molecules/number-flow";
@@ -70,7 +70,7 @@ export function EditableNumberFlow({ id, value, decimals = 0, fontSize, color = 
 
   return (
     <View className="flex-row items-baseline gap-1">
-      <NumberFlow value={value} decimals={decimals} fontSize={fontSize} color={color} fontWeight={fontWeight} />
+      <NumberFlow value={value} decimals={decimals} fontSize={fontSize} color={color} fontWeight={fontWeight} style={style as StyleProp<ViewStyle>} />
       {suffix ? <Text style={{ fontFamily: fontFamily.bodySemiBold, fontSize: Math.max(11, Math.round(fontSize * 0.42)), color: suffixColor }}>{suffix}</Text> : null}
     </View>
   );

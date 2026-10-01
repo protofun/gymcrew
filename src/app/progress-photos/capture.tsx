@@ -2,10 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Image, Pressable, Text, View } from "react-native";
+import { Alert, Image, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PhotoCaptureGuide } from "@/components/PhotoCaptureGuide";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { goBack } from "@/lib/navigation";
 import { api, isApiConfigured, type ProgressPhotoPose } from "@/lib/api";
 import { colors } from "@/theme";
@@ -86,13 +87,13 @@ export default function CapturePhotoScreen() {
           <Pressable
             onPress={() => setStep("camera")}
             disabled={uploading}
-            className="flex-1 items-center rounded-full border border-divider py-3.5"
+            className="flex-1 items-center rounded-full bg-surface py-3.5"
           >
             <Text className="body-md font-body-semibold text-text-primary">Retake</Text>
           </Pressable>
-          <Pressable onPress={handleUsePhoto} disabled={uploading} className="flex-1 items-center rounded-full bg-brand-yellow py-3.5">
-            {uploading ? <ActivityIndicator color={colors.brand.iron} /> : <Text className="body-md font-body-semibold text-brand-iron">Use Photo</Text>}
-          </Pressable>
+          <View className="flex-1">
+            <PrimaryButton label="Use Photo" onPress={handleUsePhoto} loading={uploading} hideArrow />
+          </View>
         </View>
       </View>
     );
@@ -110,7 +111,7 @@ export default function CapturePhotoScreen() {
       <View className="gap-4 px-4 pt-6">
         <Text className="body-sm text-text-secondary">Pick a pose — line yourself up with the on-screen guide so this photo lines up with your others.</Text>
 
-        <View className="flex-row gap-2 rounded-2xl border border-divider bg-surface p-1.5">
+        <View className="flex-row gap-2 rounded-2xl bg-surface p-1.5">
           {POSES.map((option) => (
             <Pressable
               key={option.key}
@@ -126,10 +127,8 @@ export default function CapturePhotoScreen() {
           <Text className="body-sm text-text-secondary">Progress photos need the app&apos;s backend configured — not available in this build yet.</Text>
         ) : (
           <View className="mt-2 gap-2.5">
-            <Pressable onPress={() => setStep("camera")} className="items-center rounded-full bg-brand-yellow py-3.5">
-              <Text className="body-md font-body-semibold text-brand-iron">Open Camera</Text>
-            </Pressable>
-            <Pressable onPress={handlePickFromLibrary} className="flex-row items-center justify-center gap-2 rounded-full border border-divider py-3.5">
+            <PrimaryButton label="Open Camera" onPress={() => setStep("camera")} hideArrow />
+            <Pressable onPress={handlePickFromLibrary} className="flex-row items-center justify-center gap-2 rounded-full bg-surface py-3.5">
               <Ionicons name="images-outline" size={18} color={colors.neutral.textPrimary} />
               <Text className="body-md font-body-semibold text-text-primary">Choose from Library</Text>
             </Pressable>

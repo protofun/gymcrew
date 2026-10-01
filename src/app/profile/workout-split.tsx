@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
+import { BottomSheet } from "@/components/BottomSheet";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { StatTile } from "@/components/StatTile";
 import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
 import { BODY_ASPECT_RATIO } from "@/data/body-muscle-paths";
@@ -183,7 +185,7 @@ function WorkoutTrayBadge({ item, gender }: { item: TrayItem; gender: Gender }) 
   return (
     <View
       style={{ width: BADGE_WIDTH + 20 }}
-      className="items-center gap-1.5 rounded-2xl border border-divider bg-surface p-2"
+      className="items-center gap-1.5 rounded-2xl bg-surface p-2"
     >
       {item.isRest ? (
         <View className="items-center justify-center" style={{ width: BADGE_WIDTH, height: BADGE_HEIGHT }}>
@@ -262,45 +264,33 @@ function MissingMuscleGroupsModal({
   onKeepEditing: () => void;
   onSaveAnyway: () => void;
 }) {
-  const insets = useSafeAreaInsets();
-
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onKeepEditing}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" }} onPress={onKeepEditing}>
-        <Pressable
-          onPress={() => {}}
-          style={{ backgroundColor: colors.neutral.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
-          className="gap-4 p-5"
-        >
-          <View className="flex-row items-center gap-3">
-            <View className="h-11 w-11 items-center justify-center rounded-full bg-background">
-              <Ionicons name="alert-circle" size={22} color={colors.semantic.warning} />
-            </View>
-            <View className="flex-1">
-              <Text className="heading-4 text-text-primary">A few muscles are uncovered</Text>
-              <Text className="caption text-text-secondary">Nothing in your week trains these — worth a look?</Text>
-            </View>
+    <BottomSheet visible={visible} onClose={onKeepEditing}>
+      <View className="gap-4 px-5 pb-4">
+        <View className="flex-row items-center gap-3">
+          <View className="h-11 w-11 items-center justify-center rounded-full bg-background">
+            <Ionicons name="alert-circle" size={22} color={colors.semantic.warning} />
           </View>
-
-          <View className="flex-row flex-wrap gap-2">
-            {missingGroups.map((group) => (
-              <View key={group} className="rounded-full border border-divider bg-background px-3 py-1.5">
-                <Text className="caption font-body-semibold text-text-primary">{formatMuscleLabel(group)}</Text>
-              </View>
-            ))}
+          <View className="flex-1">
+            <Text className="heading-4 text-text-primary">A few muscles are uncovered</Text>
+            <Text className="caption text-text-secondary">Nothing in your week trains these — worth a look?</Text>
           </View>
+        </View>
 
-          <Pressable onPress={onSaveAnyway} className="items-center rounded-full bg-brand-yellow py-4">
-            <Text className="body-md font-body-semibold text-brand-iron">Save Anyway</Text>
-          </Pressable>
-          <Pressable onPress={onKeepEditing} className="items-center py-1">
-            <Text className="body-md font-body-semibold text-text-secondary">Keep Editing</Text>
-          </Pressable>
+        <View className="flex-row flex-wrap gap-2">
+          {missingGroups.map((group) => (
+            <View key={group} className="rounded-full bg-background px-3 py-1.5">
+              <Text className="caption font-body-semibold text-text-primary">{formatMuscleLabel(group)}</Text>
+            </View>
+          ))}
+        </View>
 
-          <View style={{ height: insets.bottom }} />
+        <PrimaryButton label="Save Anyway" onPress={onSaveAnyway} />
+        <Pressable onPress={onKeepEditing} className="items-center py-1">
+          <Text className="body-md font-body-semibold text-text-secondary">Keep Editing</Text>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </View>
+    </BottomSheet>
   );
 }
 
@@ -387,7 +377,7 @@ export default function WorkoutSplitScreen() {
           <Text style={sectionHeaderStyle} className="text-text-primary">
             YOUR WEEK
           </Text>
-          <View style={heroShadow} className="flex-row rounded-3xl border border-divider bg-surface p-4">
+          <View style={heroShadow} className="flex-row rounded-3xl bg-surface p-4">
             {WEEKDAYS.map((weekday) => (
               <DaySlot
                 key={weekday}
@@ -416,8 +406,8 @@ export default function WorkoutSplitScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInUp.delay(60).springify().damping(16).mass(0.6)} className="flex-row gap-3">
-          <StatTile id="profile.workoutSplit.trainingDays" icon="barbell" value={String(trainingDays)} label="Training" />
-          <StatTile id="profile.workoutSplit.restDays" icon="moon" value={String(restDays)} label="Rest" />
+          <StatTile id="profile.workoutSplit.trainingDays" icon="barbell" value={String(trainingDays)} numericValue={trainingDays} label="Training" />
+          <StatTile id="profile.workoutSplit.restDays" icon="moon" value={String(restDays)} numericValue={restDays} label="Rest" />
           <StatTile
             id="profile.workoutSplit.coverage"
             icon="body"
@@ -448,7 +438,7 @@ export default function WorkoutSplitScreen() {
                 key={option.split}
                 onPress={() => updateSchedule(quickFillSchedule(option.split))}
                 style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
-                className="items-center gap-2 rounded-2xl border border-divider bg-surface px-4 py-3"
+                className="items-center gap-2 rounded-2xl bg-surface px-4 py-3"
               >
                 <Ionicons name={option.icon} size={20} color={accentColor} />
                 <Text className="caption font-body-semibold text-text-primary" numberOfLines={1}>

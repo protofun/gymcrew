@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Easing, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
@@ -12,6 +13,7 @@ import { EditableText } from "@/components/EditableText";
 import { HOME_ROW_DETAIL } from "@/components/homeStyle";
 import { InviteMembersModal } from "@/components/InviteMembersModal";
 import { ContextMenu } from "@/components/ui/molecules/context-menu";
+import { CircularProgress } from "@/components/ui/organisms/circular-progress";
 import { FLEX_TAGS } from "@/data/flex-tags";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
 import { toDateKey } from "@/lib/date";
@@ -205,6 +207,7 @@ export default function CrewMembersScreen() {
   const insets = useSafeAreaInsets();
   const posthog = usePostHog();
   const members = useCrewStore((state) => state.members);
+  const maxMembers = useCrewStore((state) => state.maxMembers);
   const crewName = useCrewStore((state) => state.name);
   const inviteCode = useCrewStore((state) => state.inviteCode);
   const todayPlan = useCrewStore((state) => state.todayPlan);
@@ -254,6 +257,14 @@ export default function CrewMembersScreen() {
     online: members.filter((member) => member.isOnline).length,
   };
 
+  // The capacity ring — same `CircularProgress` language every other tab/screen this pass has
+  // added, here showing how full the crew's real roster (vs. `maxMembers`) is.
+  const capacityPercent = maxMembers > 0 ? Math.round((members.length / maxMembers) * 100) : 0;
+  const capacityProgress = useSharedValue(0);
+  useEffect(() => {
+    capacityProgress.value = withTiming(capacityPercent, { duration: 800, easing: Easing.out(Easing.cubic) });
+  }, [capacityPercent, capacityProgress]);
+
   const filteredMembers = members
     .filter((member) => {
       if (filter === "admin") return member.isAdmin;
@@ -275,8 +286,27 @@ export default function CrewMembersScreen() {
         <Text className="heading-4 text-text-primary">Crew Members</Text>
       </View>
 
+      <View className="flex-row items-center gap-4 px-4 pt-4">
+        <View style={{ width: 56, height: 56 }} className="items-center justify-center">
+          <CircularProgress
+            progress={capacityProgress}
+            size={56}
+            strokeWidth={5}
+            gap={0}
+            outerCircleColor={colors.neutral.divider}
+            progressCircleColor={colors.brand.yellow}
+            backgroundColor="transparent"
+            renderIcon={() => <Ionicons name="people" size={18} color={colors.brand.yellow} />}
+          />
+        </View>
+        <View className="gap-0.5">
+          <Text className="body-md font-body-semibold text-text-primary">{`${members.length} of ${maxMembers} spots filled`}</Text>
+          <Text style={HOME_ROW_DETAIL}>{`${capacityPercent}% full`}</Text>
+        </View>
+      </View>
+
       <View className="gap-3 px-4 pt-4">
-        <View className="flex-row items-center gap-2 rounded-xl border border-divider bg-surface px-3 py-3">
+        <View className="flex-row items-center gap-2 rounded-xl bg-surface px-3 py-3">
           <Ionicons name="search-outline" size={18} color={colors.neutral.textSecondary} />
           <TextInput
             value={query}
@@ -295,7 +325,7 @@ export default function CrewMembersScreen() {
               <Pressable
                 key={key}
                 onPress={() => setFilter(key)}
-                className={`rounded-full border px-3 py-1.5 ${active ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"}`}
+                className={`rounded-full px-3 py-1.5 ${active ? "bg-brand-yellow" : "bg-surface"}`}
               >
                 <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>
                   {FILTER_LABEL[key]} ({counts[key]})

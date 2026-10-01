@@ -32,6 +32,8 @@
  *   GET    /admin/rank-tiers?scope=player|crew -> the player/crew division ladder (name + threshold,
  *                                              in order) — see db/schema.sql's `rank_tier_config`
  *   PUT    /admin/rank-tiers/:id           -> { name?, threshold? } edit one tier
+ *   GET    /admin/emails                   -> every email address in the database, tagged by source table
+ *                                              (see routes/admin-emails.php)
  *   GET/POST/PUT/DELETE /admin/contacts        -> saved outreach contacts (see routes/admin-contacts.php)
  *   GET/POST/PUT/DELETE /admin/marketing/socials -> tracked social platforms (routes/admin-marketing.php)
  *   GET/POST/PUT/DELETE /admin/marketing/ideas   -> post ideas + logged performance per platform
@@ -241,6 +243,11 @@ function handleAdmin(PDO $pdo, string $method, ?array $body, array $segments): v
     if ($sub === 'rank-tiers') {
         if ($id === null && $method === 'GET') { respondWithRankTiers($pdo); return; }
         if ($id !== null && $method === 'PUT') { updateRankTier($pdo, (string) $admin['sub'], (string) $admin['email'], $id, $data); return; }
+    }
+
+    if ($sub === 'emails' && $method === 'GET') {
+        respondWithAdminEmails($pdo);
+        return;
     }
 
     if ($sub === 'contacts') {

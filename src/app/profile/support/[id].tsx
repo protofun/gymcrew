@@ -85,7 +85,7 @@ export default function SupportTicketScreen() {
               onChangeText={setReply}
               placeholder="Type a reply…"
               placeholderTextColor={colors.neutral.textSecondary}
-              className="body-md flex-1 rounded-full border border-divider bg-surface px-4 py-2.5 text-text-primary"
+              className="body-md flex-1 rounded-full bg-surface px-4 py-2.5 text-text-primary"
               style={{ outlineWidth: 0, outlineColor: "transparent" }}
             />
             <Pressable

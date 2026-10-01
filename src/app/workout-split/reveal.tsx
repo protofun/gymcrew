@@ -8,6 +8,7 @@ import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { RankBadge } from "@/components/RankBadge";
 import { images } from "@/constants/images";
 import { WEEKDAYS, WEEKDAY_SHORT_LABEL } from "@/data/weekdays";
@@ -115,9 +116,9 @@ export default function WorkoutSplitRevealScreen() {
         <Ionicons name="checkmark-circle" size={64} color={colors.semantic.success} />
         <Text className="heading-3 text-center text-text-primary">Your split is locked in</Text>
         <Text className="body-md text-center text-text-secondary">Head to your training schedule to see it any time.</Text>
-        <Pressable onPress={() => router.replace("/(tabs)/profile")} style={PRESSED_STYLE} className="mt-2 items-center rounded-full bg-brand-yellow px-8 py-4">
-          <Text className="body-md font-body-semibold text-brand-iron">Done</Text>
-        </Pressable>
+        <View className="mt-2 self-stretch">
+          <PrimaryButton label="Done" onPress={() => router.replace("/(tabs)/profile")} />
+        </View>
       </View>
     );
   }
@@ -136,7 +137,7 @@ export default function WorkoutSplitRevealScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: insets.bottom + 120, gap: 24 }}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-2.5 rounded-2xl border border-brand-yellow/30 bg-brand-yellow/5 p-4">
+        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-2.5 rounded-2xl bg-brand-yellow/10 p-4">
           <View className="flex-row items-center gap-1.5">
             <Ionicons name="flag" size={14} color={colors.brand.yellow} />
             <Text className="caption font-body-semibold text-brand-yellow">THIS WEEK&apos;S MISSION</Text>
@@ -168,7 +169,7 @@ export default function WorkoutSplitRevealScreen() {
                   disabled={!day}
                   onPress={() => day && router.push({ pathname: "/workout-split/day/[weekday]", params: { weekday } })}
                   style={PRESSED_STYLE}
-                  className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface px-4 py-3"
+                  className="flex-row items-center gap-3 rounded-2xl bg-surface px-4 py-3"
                 >
                   <View className="w-10 items-center">
                     <Text className="caption font-body-semibold text-text-secondary">{WEEKDAY_SHORT_LABEL[weekday].toUpperCase()}</Text>
@@ -196,7 +197,7 @@ export default function WorkoutSplitRevealScreen() {
               spelled out in words underneath each badge so it's never ambiguous which is which. */}
           <View className="gap-2">
             {plan.explanation.map((entry) => (
-              <View key={entry.group} className="gap-2 rounded-2xl border border-divider bg-surface p-3">
+              <View key={entry.group} className="gap-2 rounded-2xl bg-surface p-3">
                 <View className="flex-row items-center justify-between">
                   <Text className="body-sm font-body-semibold text-text-primary">{formatMuscleLabel(entry.group)}</Text>
                   <View className="rounded-full bg-brand-yellow/15 px-2.5 py-1">
@@ -224,7 +225,7 @@ export default function WorkoutSplitRevealScreen() {
           <Text style={sectionHeaderStyle} className="text-text-primary">
             CURRENT → TARGET
           </Text>
-          <View className="gap-4 rounded-2xl border border-divider bg-surface p-4">
+          <View className="gap-4 rounded-2xl bg-surface p-4">
             <View className="gap-2">
               <Text className="caption font-body-semibold text-text-secondary">CURRENT</Text>
               <MuscleHeatmap
@@ -254,21 +255,19 @@ export default function WorkoutSplitRevealScreen() {
       </ScrollView>
 
       <View style={{ position: "absolute", left: 16, right: 16, bottom: insets.bottom + 12 }} className="gap-2">
-        <Pressable onPress={handleAccept} style={PRESSED_STYLE} className="items-center rounded-full bg-brand-yellow py-4">
-          <Text className="body-md font-body-semibold text-brand-iron">Accept Plan</Text>
-        </Pressable>
+        <PrimaryButton label="Accept Plan" onPress={handleAccept} />
         <View className="flex-row gap-2">
           <Pressable
             onPress={() => setRegenerationTick((tick) => tick + 1)}
             style={PRESSED_STYLE}
-            className="flex-1 items-center rounded-full border border-divider bg-surface py-3.5"
+            className="flex-1 items-center rounded-full bg-surface py-3.5"
           >
             <Text className="body-sm font-body-semibold text-text-primary">Regenerate</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push("/workout-split/setup")}
             style={PRESSED_STYLE}
-            className="flex-1 items-center rounded-full border border-divider bg-surface py-3.5"
+            className="flex-1 items-center rounded-full bg-surface py-3.5"
           >
             <Text className="body-sm font-body-semibold text-text-primary">Customize</Text>
           </Pressable>

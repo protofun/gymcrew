@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { EXERCISE_BY_ID } from "@/data/exercises";
 import type { Weekday } from "@/data/weekdays";
 import { formatMuscleLabel } from "@/lib/muscle-groups";
@@ -103,7 +104,7 @@ export default function WorkoutSplitDayScreen() {
             {day.focusGroups.map((group) => {
               const isPriority = (priorityByGroup.get(group)?.priorityScore ?? 0) > 0;
               return (
-                <View key={group} className="flex-row items-center gap-1 rounded-full border border-divider bg-surface px-2.5 py-1">
+                <View key={group} className="flex-row items-center gap-1 rounded-full bg-surface px-2.5 py-1">
                   <Ionicons name={isPriority ? "arrow-up" : "arrow-forward"} size={11} color={isPriority ? colors.brand.yellow : colors.neutral.textSecondary} />
                   <Text className="caption font-body-semibold text-text-primary">{formatMuscleLabel(group)}</Text>
                 </View>
@@ -115,7 +116,7 @@ export default function WorkoutSplitDayScreen() {
         <View className="gap-2.5">
           <Text className="caption font-body-semibold text-text-secondary">EXERCISES</Text>
           {exercises.map((exercise, index) => (
-            <View key={exercise.id} className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3">
+            <View key={exercise.id} className="flex-row items-center gap-3 rounded-2xl bg-surface p-3">
               <View className="h-8 w-8 items-center justify-center rounded-full bg-background">
                 <Text className="caption font-body-bold text-text-secondary">{index + 1}</Text>
               </View>
@@ -138,9 +139,7 @@ export default function WorkoutSplitDayScreen() {
       </ScrollView>
 
       <View style={{ position: "absolute", left: 16, right: 16, bottom: insets.bottom + 12 }}>
-        <Pressable onPress={handleStart} style={PRESSED_STYLE} className="items-center rounded-full bg-brand-yellow py-4">
-          <Text className="body-md font-body-semibold text-brand-iron">Start This Workout</Text>
-        </Pressable>
+        <PrimaryButton label="Start This Workout" onPress={handleStart} />
       </View>
     </View>
   );

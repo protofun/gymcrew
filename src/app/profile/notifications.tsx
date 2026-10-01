@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
 import { TimePickerModal } from "@/components/TimePickerModal";
+import { ToggleRow } from "@/components/ToggleRow";
 import {
   cancelDailyReminder,
   reconcileNotificationSchedules,
@@ -101,43 +102,31 @@ export default function NotificationsScreen() {
         <Text className="heading-4 text-text-primary">Notifications</Text>
       </View>
 
-      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
-        {TOGGLES.map((toggle) => {
-          const enabled = onboarding[toggle.key] ?? true;
-          const kind = reminderKindForToggle(toggle.key);
-          return (
-            <View key={toggle.key} className="gap-3 rounded-2xl border border-divider bg-surface px-4 py-3.5">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1 pr-3">
-                  <Text className="body-md text-text-primary">{toggle.label}</Text>
-                  <Text className="body-sm text-text-secondary">{toggle.description}</Text>
-                </View>
-                <Switch
-                  value={enabled}
-                  onValueChange={(value) => handleToggle(toggle.key, value)}
-                  trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
-                  thumbColor={colors.brand.white}
-                />
-              </View>
+      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
+        <View className="rounded-2xl bg-surface px-4">
+          {TOGGLES.map((toggle) => {
+            const enabled = onboarding[toggle.key] ?? true;
+            const kind = reminderKindForToggle(toggle.key);
+            return (
+              <View key={toggle.key}>
+                <ToggleRow title={toggle.label} subtitle={toggle.description} value={enabled} onValueChange={(value) => handleToggle(toggle.key, value)} />
 
-              {kind && enabled && (
-                <Pressable
-                  onPress={() => setEditingReminder(kind)}
-                  className="flex-row items-center justify-between rounded-xl border-t border-divider pt-3"
-                >
-                  <View className="flex-row items-center gap-2">
-                    <Ionicons name="time-outline" size={16} color={colors.neutral.textSecondary} />
-                    <Text className="body-sm text-text-secondary">Remind me at</Text>
-                  </View>
-                  <View className="flex-row items-center gap-1.5">
-                    <Text className="body-sm font-body-semibold text-brand-yellow">{formatTimeLabel(reminderTime[kind])}</Text>
-                    <Ionicons name="chevron-forward" size={14} color={colors.neutral.textSecondary} />
-                  </View>
-                </Pressable>
-              )}
-            </View>
-          );
-        })}
+                {kind && enabled && (
+                  <Pressable onPress={() => setEditingReminder(kind)} className="flex-row items-center justify-between border-b border-divider pb-3 pt-1">
+                    <View className="flex-row items-center gap-2">
+                      <Ionicons name="time-outline" size={16} color={colors.neutral.textSecondary} />
+                      <Text className="body-sm text-text-secondary">Remind me at</Text>
+                    </View>
+                    <View className="flex-row items-center gap-1.5">
+                      <Text className="body-sm font-body-semibold text-brand-yellow">{formatTimeLabel(reminderTime[kind])}</Text>
+                      <Ionicons name="chevron-forward" size={14} color={colors.neutral.textSecondary} />
+                    </View>
+                  </Pressable>
+                )}
+              </View>
+            );
+          })}
+        </View>
       </ScrollView>
 
       <TimePickerModal

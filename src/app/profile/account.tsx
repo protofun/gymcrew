@@ -8,6 +8,8 @@ import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { HomeRowLead } from "@/components/HomeRowLead";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { api, isApiConfigured } from "@/lib/api";
 import { resetLocalStateForAccountSwitch } from "@/lib/reset-local-state";
 import { DEVELOPER_MODE_EMAILS } from "@/store/developer-mode-store";
@@ -30,7 +32,7 @@ function PasswordField({ label, value, onChangeText }: { label: string; value: s
         autoCorrect={false}
         placeholder="••••••••"
         placeholderTextColor={colors.neutral.textSecondary}
-        className="body-md rounded-2xl border border-divider bg-surface px-4 py-3.5 text-text-primary"
+        className="body-md rounded-2xl bg-surface px-4 py-3.5 text-text-primary"
         style={{ outlineWidth: 0, outlineColor: "transparent" }}
       />
     </View>
@@ -137,7 +139,7 @@ export default function AccountScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="gap-1 rounded-2xl border border-divider bg-surface p-4">
+        <View className="gap-1 rounded-2xl bg-surface p-4">
           <Text className="caption font-body-semibold text-text-secondary">EMAIL</Text>
           <Text className="body-md text-text-primary">{user?.primaryEmailAddress?.emailAddress ?? "—"}</Text>
         </View>
@@ -149,32 +151,24 @@ export default function AccountScreen() {
           <PasswordField label="Confirm New Password" value={confirmPassword} onChangeText={setConfirmPassword} />
 
           {passwordError && (
-            <View className="flex-row items-start gap-2 rounded-2xl border border-error/40 bg-error/10 p-3">
+            <View className="flex-row items-start gap-2 rounded-2xl bg-error/10 p-3">
               <Ionicons name="warning" size={16} color={colors.semantic.error} style={{ marginTop: 1 }} />
               <Text className="body-sm flex-1 text-text-secondary">{passwordError}</Text>
             </View>
           )}
 
-          <Pressable
-            onPress={handleChangePassword}
-            disabled={passwordSaving}
-            style={({ pressed }) => ({ opacity: passwordSaving ? 0.6 : pressed ? 0.75 : 1 })}
-            className="items-center rounded-full bg-brand-yellow py-4"
-          >
-            <Text className="body-md font-body-semibold text-brand-iron">{passwordSaving ? "Saving…" : "Save Password"}</Text>
-          </Pressable>
+          <PrimaryButton label={passwordSaving ? "Saving…" : "Save Password"} loading={passwordSaving} onPress={handleChangePassword} />
         </View>
 
-        <Pressable onPress={() => setSignOutConfirmVisible(true)} className="items-center rounded-full border border-divider py-4">
+        <Pressable onPress={() => setSignOutConfirmVisible(true)} className="items-center rounded-full bg-surface py-4">
           <Text className="body-md font-body-bold text-text-primary">Sign Out</Text>
         </Pressable>
 
         {isChallengeAdmin && (
-          <Pressable
-            onPress={() => router.push("/profile/admin-challenges")}
-            className="flex-row items-center gap-3 rounded-2xl border border-brand-yellow/40 bg-surface p-4"
-          >
-            <Ionicons name="flag" size={18} color={colors.brand.yellow} />
+          <Pressable onPress={() => router.push("/profile/admin-challenges")} className="flex-row items-center gap-3 rounded-2xl bg-surface p-4">
+            <HomeRowLead kind="flat">
+              <Ionicons name="flag" size={17} color={colors.brand.yellow} />
+            </HomeRowLead>
             <View className="flex-1">
               <Text className="body-sm font-body-semibold text-text-primary">Manage Challenges</Text>
               <Text className="body-sm text-text-secondary">Create, edit, and start/stop app-wide challenges.</Text>
@@ -184,11 +178,10 @@ export default function AccountScreen() {
         )}
 
         {isDeveloper && (
-          <Pressable
-            onPress={() => router.push("/profile/developer-tools")}
-            className="flex-row items-center gap-3 rounded-2xl border border-brand-yellow/40 bg-surface p-4"
-          >
-            <Ionicons name="construct" size={18} color={colors.brand.yellow} />
+          <Pressable onPress={() => router.push("/profile/developer-tools")} className="flex-row items-center gap-3 rounded-2xl bg-surface p-4">
+            <HomeRowLead kind="flat">
+              <Ionicons name="construct" size={17} color={colors.brand.yellow} />
+            </HomeRowLead>
             <View className="flex-1">
               <Text className="body-sm font-body-semibold text-text-primary">Developer Tools</Text>
               <Text className="body-sm text-text-secondary">Test data, data editing, restore to database, tutorial wizard and more.</Text>
@@ -197,7 +190,7 @@ export default function AccountScreen() {
           </Pressable>
         )}
 
-        <View className="gap-1 rounded-2xl border border-divider bg-surface p-1">
+        <View className="gap-1 rounded-2xl bg-surface p-1">
           <Pressable onPress={() => router.push("/profile/support")} className="flex-row items-center justify-between rounded-xl px-3 py-3.5">
             <Text className="body-md text-text-primary">Contact & Support</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
@@ -216,12 +209,12 @@ export default function AccountScreen() {
           </Pressable>
         </View>
 
-        <View className="gap-2 rounded-2xl border border-error/40 bg-error/10 p-4">
+        <View className="gap-2 rounded-2xl bg-error/10 p-4">
           <Text className="body-sm font-body-semibold" style={{ color: colors.semantic.error }}>
             Danger Zone
           </Text>
           <Text className="body-sm text-text-secondary">Permanently delete your account and all of your data. This can&apos;t be undone.</Text>
-          <Pressable onPress={() => setDeleteConfirmVisible(true)} className="mt-1 items-center rounded-full border border-error py-3.5">
+          <Pressable onPress={() => setDeleteConfirmVisible(true)} className="mt-1 items-center rounded-full bg-error/20 py-3.5">
             <Text className="body-sm font-body-bold" style={{ color: colors.semantic.error }}>
               Delete Account
             </Text>

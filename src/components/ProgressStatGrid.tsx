@@ -31,7 +31,7 @@ export function ProgressStatGrid({ stats }: { stats: ProgressStat[] }) {
             className={`gap-1 py-4 ${index % 2 === 0 ? "border-r pr-4" : "pl-4"} ${isLastRow ? "" : "border-b"} border-divider`}
           >
             <View className="flex-row items-baseline gap-1">
-              <NumberFlow value={stat.value} decimals={stat.decimals} fontSize={32} color={colors.brand.white} fontWeight="800" style={{ transform: [{ skewX: "-8deg" }] }} />
+              <NumberFlow value={stat.value} decimals={stat.decimals} fontSize={32} color={colors.brand.white} fontWeight="800" />
               {stat.unit ? <Text className="caption font-body-semibold text-text-secondary">{stat.unit}</Text> : null}
             </View>
             <View className="flex-row items-center gap-1.5">

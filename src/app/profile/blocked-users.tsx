@@ -31,9 +31,9 @@ export default function BlockedUsersScreen() {
           blockedUserIds.map((id) => {
             const member = members.find((candidate) => candidate.id === id);
             return (
-              <View key={id} className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface p-4">
+              <View key={id} className="flex-row items-center justify-between rounded-2xl bg-surface p-4">
                 <Text className="body-md text-text-primary">{member?.name ?? "Unknown member"}</Text>
-                <Pressable onPress={() => unblockUser(id)} className="rounded-full border border-divider px-4 py-2">
+                <Pressable onPress={() => unblockUser(id)} className="rounded-full bg-background px-4 py-2">
                   <Text className="body-sm font-body-semibold text-text-primary">Unblock</Text>
                 </Pressable>
               </View>

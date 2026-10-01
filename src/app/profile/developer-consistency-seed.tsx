@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { isTestId } from "@/constants/test-data";
 import { seedConsistencyHistory } from "@/lib/dev-tools";
 import { goBack } from "@/lib/navigation";
@@ -38,7 +39,7 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      className={`rounded-full border px-4 py-2 ${active ? "border-brand-yellow bg-brand-yellow" : "border-divider bg-surface"}`}
+      className={`rounded-full px-4 py-2 ${active ? "bg-brand-yellow" : "bg-surface"}`}
     >
       <Text className={`body-sm font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{label}</Text>
     </Pressable>
@@ -129,9 +130,7 @@ export default function DeveloperConsistencySeedScreen() {
           </View>
         </Section>
 
-        <Pressable onPress={handleGenerate} className="items-center rounded-full bg-brand-yellow py-4">
-          <Text className="body-md font-body-bold text-brand-iron">Generate</Text>
-        </Pressable>
+        <PrimaryButton label="Generate" onPress={handleGenerate} hideArrow />
 
         <Text className="caption text-center text-text-secondary">{`${testWorkoutCount} test workouts currently in the app.`}</Text>
       </ScrollView>

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
+import { EditableNumberFlow } from "@/components/EditableAnimated";
 import { FLEX_TAGS } from "@/data/flex-tags";
 import { SPLIT_THEMES } from "@/data/split-themes";
 import { toDateKey } from "@/lib/date";
@@ -14,11 +15,7 @@ import { STREAK_FREEZE_COST, XP_BOOST_COST, useCurrencyStore } from "@/store/cur
 import { useProfileLevelStore } from "@/store/profile-level-store";
 import { useThemeStore } from "@/store/theme-store";
 import { useWorkoutHistoryStore } from "@/store/workout-history-store";
-import { colors, fontFamily } from "@/theme";
-
-// Inline-only: NativeWind doesn't reliably compile `transform`/`font-style` onto native when
-// combined with a sibling className (see TopBar's wordmarkStyle for the same constraint).
-const heroValueStyle = { fontFamily: fontFamily.heading, fontSize: 40, lineHeight: 42 };
+import { colors } from "@/theme";
 
 const EARN_SOURCES: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
   { icon: "barbell", label: "Workout" },
@@ -65,7 +62,7 @@ function BoostCard({
   onPress: () => void;
 }) {
   return (
-    <View className="flex-row items-stretch overflow-hidden rounded-2xl border border-divider bg-surface">
+    <View className="flex-row items-stretch overflow-hidden rounded-2xl bg-surface">
       <View style={{ width: 4, backgroundColor: iconColor }} />
       <View className="flex-1 gap-3 p-4">
         <View className="flex-row items-center gap-3">
@@ -132,7 +129,7 @@ export default function StoreScreen() {
       >
         <Animated.View
           entering={FadeInUp.springify().damping(16).mass(0.6)}
-          className="flex-row items-stretch overflow-hidden rounded-3xl border border-divider bg-surface"
+          className="flex-row items-stretch overflow-hidden rounded-3xl bg-surface"
         >
           <View style={{ width: 4, backgroundColor: colors.brand.yellow }} />
           <View className="flex-1 gap-3 p-5">
@@ -142,9 +139,7 @@ export default function StoreScreen() {
                   <Ionicons name="diamond" size={22} color={colors.brand.yellow} />
                 </View>
                 <View>
-                  <Text style={heroValueStyle} className="text-text-primary">
-                    {tokens}
-                  </Text>
+                  <EditableNumberFlow id="profile.store.tokens" value={tokens} fontSize={40} fontWeight="800" color={colors.brand.white} />
                   <Text className="caption font-body-semibold text-text-secondary">TOKENS</Text>
                 </View>
               </View>
@@ -202,14 +197,14 @@ export default function StoreScreen() {
         <Animated.View entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)} className="gap-3">
           <SectionHeader icon="color-palette" title="Themes" count={lockedThemes.length} />
           {lockedThemes.length === 0 ? (
-            <View className="items-center gap-1.5 rounded-2xl border border-dashed border-divider px-6 py-6">
+            <View className="items-center gap-1.5 rounded-2xl bg-surface px-6 py-6">
               <Ionicons name="checkmark-circle" size={20} color={colors.semantic.success} />
               <Text className="caption text-center text-text-secondary">Every Split Theme is unlocked.</Text>
             </View>
           ) : (
             <View className="gap-2.5">
               {lockedThemes.map((theme) => (
-                <View key={theme.key} className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3.5">
+                <View key={theme.key} className="flex-row items-center gap-3 rounded-2xl bg-surface p-3.5">
                   <View className="h-9 w-9 rounded-full" style={{ backgroundColor: theme.color }} />
                   <View className="flex-1 gap-0.5">
                     <Text className="body-sm font-body-semibold text-text-primary">{theme.label}</Text>
@@ -245,16 +240,14 @@ export default function StoreScreen() {
                 <View
                   key={tag.id}
                   style={{ width: "48%" }}
-                  className={`items-center gap-2 rounded-2xl border p-4 ${
-                    equipped ? "border-brand-yellow/40 bg-brand-yellow/5" : "border-divider bg-surface"
-                  }`}
+                  className={`items-center gap-2 rounded-2xl p-4 ${equipped ? "bg-brand-yellow/10" : "bg-surface"}`}
                 >
                   <Text style={{ fontSize: 34 }}>{tag.emoji}</Text>
                   <Text className="body-sm font-body-bold text-text-primary">{tag.label}</Text>
                   {owned ? (
                     <Pressable
                       onPress={() => equipTag(equipped ? null : tag.id)}
-                      className={`w-full items-center rounded-full py-2 ${equipped ? "bg-brand-yellow" : "border border-divider"}`}
+                      className={`w-full items-center rounded-full py-2 ${equipped ? "bg-brand-yellow" : "bg-background"}`}
                     >
                       <Text className={`caption font-body-bold ${equipped ? "text-brand-iron" : "text-text-secondary"}`}>
                         {equipped ? "Equipped" : "Equip"}

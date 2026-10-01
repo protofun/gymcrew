@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { RankBadge } from "@/components/RankBadge";
 import { TierPickerSheet } from "@/components/TierPickerSheet";
 import { EXERCISE_EQUIPMENT_OPTIONS, formatMuscleName } from "@/data/exercises";
@@ -72,7 +73,7 @@ function NumberField({ label, value, onChangeValue, suffix }: { label: string; v
   return (
     <View className="flex-1 gap-1.5">
       <Text className="caption text-text-secondary">{label}</Text>
-      <View className="flex-row items-center gap-1.5 rounded-2xl border border-divider bg-surface px-3 py-2.5">
+      <View className="flex-row items-center gap-1.5 rounded-2xl bg-surface px-3 py-2.5">
         <TextInput
           value={text}
           onChangeText={commit}
@@ -96,7 +97,7 @@ function SegmentedRow<T extends string>({ options, value, onChange }: { options:
           <Pressable
             key={key}
             onPress={() => onChange(key)}
-            className={`rounded-full px-4 py-2 ${active ? "bg-brand-yellow" : "border border-divider bg-surface"}`}
+            className={`rounded-full px-4 py-2 ${active ? "bg-brand-yellow" : "bg-surface"}`}
           >
             <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{label}</Text>
           </Pressable>
@@ -213,7 +214,7 @@ export default function WorkoutSplitSetupScreen() {
             <Pressable
               onPress={() => setPickerContext("target-rank")}
               style={PRESSED_STYLE}
-              className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface px-4 py-3"
+              className="flex-row items-center justify-between rounded-2xl bg-surface px-4 py-3"
             >
               <View className="flex-row items-center gap-2.5">
                 {targetTier ? <RankBadge tier={targetTier} size={22} /> : <Ionicons name="trophy-outline" size={18} color={colors.neutral.textSecondary} />}
@@ -232,7 +233,7 @@ export default function WorkoutSplitSetupScreen() {
                     key={group}
                     onPress={() => setPickerContext(group)}
                     style={PRESSED_STYLE}
-                    className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface px-4 py-2.5"
+                    className="flex-row items-center justify-between rounded-2xl bg-surface px-4 py-2.5"
                   >
                     <Text className="body-sm font-body-semibold text-text-primary">{formatMuscleLabel(group)}</Text>
                     <View className="flex-row items-center gap-1.5">
@@ -255,7 +256,7 @@ export default function WorkoutSplitSetupScreen() {
                 <Pressable
                   key={day}
                   onPress={() => toggleDay(day)}
-                  className={`h-11 w-11 items-center justify-center rounded-full ${active ? "bg-brand-yellow" : "border border-divider bg-surface"}`}
+                  className={`h-11 w-11 items-center justify-center rounded-full ${active ? "bg-brand-yellow" : "bg-surface"}`}
                 >
                   <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{WEEKDAY_SHORT_LABEL[day][0]}</Text>
                 </Pressable>
@@ -309,7 +310,7 @@ export default function WorkoutSplitSetupScreen() {
                 <Pressable
                   key={option}
                   onPress={() => toggleEquipment(option)}
-                  className={`rounded-full px-4 py-2 ${active ? "bg-brand-yellow" : "border border-divider bg-surface"}`}
+                  className={`rounded-full px-4 py-2 ${active ? "bg-brand-yellow" : "bg-surface"}`}
                 >
                   <Text className={`caption font-body-semibold ${active ? "text-brand-iron" : "text-text-secondary"}`}>{formatMuscleName(option)}</Text>
                 </Pressable>
@@ -325,14 +326,7 @@ export default function WorkoutSplitSetupScreen() {
       </ScrollView>
 
       <View style={{ position: "absolute", left: 16, right: 16, bottom: insets.bottom + 12 }}>
-        <Pressable
-          onPress={handleGenerate}
-          disabled={!canContinue}
-          style={({ pressed }) => ({ opacity: !canContinue ? 0.4 : pressed ? 0.85 : 1 })}
-          className="items-center rounded-full bg-brand-yellow py-4"
-        >
-          <Text className="body-md font-body-semibold text-brand-iron">Generate My Split</Text>
-        </Pressable>
+        <PrimaryButton label="Generate My Split" onPress={handleGenerate} disabled={!canContinue} />
       </View>
 
       <TierPickerSheet

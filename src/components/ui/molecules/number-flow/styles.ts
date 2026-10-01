@@ -5,6 +5,15 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+  /** GymCrew house style — the same skewed-italic look `SkewedStat`'s static numbers already use
+   * (body-log.tsx's weight readout, ChallengeCard/NewPrsBanner's titles, TopBar's wordmark), applied
+   * here to the outer wrapper only (not `row`, which is reused per-digit-column below it too — a
+   * transform on that would skew each column separately and throw digits out of alignment with each
+   * other). One skew on the whole rendered block reads as one skewed number, matching every other
+   * skewed number in the app rather than inventing a second "how numbers look" language. */
+  skewed: {
+    transform: [{ skewX: "-8deg" }],
+  },
   digit: {
     overflow: "hidden",
     alignItems: "center",

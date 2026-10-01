@@ -103,7 +103,7 @@ function StepperField({ label, value, onDecrement, onIncrement }: { label: strin
   return (
     <View className="flex-row items-center justify-between">
       <Text className="body-md text-text-primary">{label}</Text>
-      <View className="flex-row items-center gap-4 rounded-full border border-divider bg-background px-2 py-1.5">
+      <View className="flex-row items-center gap-4 rounded-full bg-background px-2 py-1.5">
         <Pressable onPress={onDecrement} hitSlop={8}>
           <Ionicons name="remove" size={16} color={colors.neutral.textPrimary} />
         </Pressable>
@@ -300,7 +300,7 @@ export default function CrewSettingsScreen() {
               }}
               placeholder="Crew name"
               placeholderTextColor={colors.neutral.textSecondary}
-              className={`rounded-xl border bg-background px-4 py-3 body-md text-text-primary ${editError ? "border-error" : "border-divider"}`}
+              className="rounded-xl bg-background px-4 py-3 body-md text-text-primary"
               style={{ outlineWidth: 0, outlineColor: "transparent" }}
             />
             {editError && <Text className="body-sm text-error">{editError}</Text>}
@@ -312,7 +312,7 @@ export default function CrewSettingsScreen() {
               onChangeText={setEditTagline}
               placeholder="Tagline"
               placeholderTextColor={colors.neutral.textSecondary}
-              className="rounded-xl border border-divider bg-background px-4 py-3 body-md text-text-primary"
+              className="rounded-xl bg-background px-4 py-3 body-md text-text-primary"
               style={{ outlineWidth: 0, outlineColor: "transparent" }}
             />
           </View>

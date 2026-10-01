@@ -21,10 +21,6 @@ type ChallengeCardProps = {
   xpReward: number;
   /** Only set for crew Battles (custom challenges with a real rival opponent) — whether the crew is currently ahead. */
   battleStatus?: "winning" | "losing";
-  /** Not playable yet (see the Summer Challenge section in ChallengesTab) — dims the row, swaps the
-   * usual percent/time readout for a lock notice, and disables the tap-through. */
-  locked?: boolean;
-  lockedLabel?: string;
   isLast: boolean;
   onPress: () => void;
 };
@@ -44,38 +40,30 @@ export function ChallengeCard({
   isComplete,
   xpReward,
   battleStatus,
-  locked = false,
-  lockedLabel = "Locked",
   isLast,
   onPress,
 }: ChallengeCardProps) {
   const ratio = target > 0 ? progress / target : 0;
   const percent = Math.min(100, Math.round(ratio * 100));
-  const accent = locked ? colors.neutral.textSecondary : isComplete ? colors.semantic.success : colors.brand.yellow;
+  const accent = isComplete ? colors.semantic.success : colors.brand.yellow;
 
   return (
     <Pressable
-      onPress={locked ? undefined : onPress}
-      disabled={locked}
-      style={({ pressed }) => ({ opacity: pressed && !locked ? 0.75 : locked ? 0.5 : 1 })}
+      onPress={onPress}
+      style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
       className={`gap-3 py-3.5 ${isLast ? "" : "border-b border-divider"}`}
     >
       <View className="flex-row items-center gap-3">
-        <Image source={challengeHeroImage(metric)} resizeMode="cover" style={{ width: 52, height: 52, borderRadius: 26, opacity: locked ? 0.5 : 1 }} />
+        <Image source={challengeHeroImage(metric)} resizeMode="cover" style={{ width: 52, height: 52, borderRadius: 26 }} />
 
         <View className="flex-1 gap-0.5">
-          <Text style={HOME_EYEBROW}>{locked ? "SUMMER CHALLENGE" : "CREW CHALLENGE"}</Text>
+          <Text style={HOME_EYEBROW}>CREW CHALLENGE</Text>
           <EditableText id={`${id}.name`} style={[HOME_ROW_TITLE, { fontSize: 17, lineHeight: 19 }]} numberOfLines={1}>
             {name.toUpperCase()}
           </EditableText>
         </View>
 
-        {locked ? (
-          <View className="flex-row items-center gap-1 rounded-full bg-surface px-2 py-0.5">
-            <Ionicons name="lock-closed" size={10} color={colors.neutral.textSecondary} />
-            <Text style={HOME_ROW_DETAIL}>LOCKED</Text>
-          </View>
-        ) : isComplete ? (
+        {isComplete ? (
           <View className="flex-row items-center gap-1 rounded-full bg-success px-2 py-0.5">
             <Ionicons name="checkmark" size={11} color={colors.brand.iron} />
             <Text style={{ fontFamily: fontFamily.bodyBold, fontSize: 10, color: colors.brand.iron }}>DONE</Text>
@@ -85,11 +73,11 @@ export function ChallengeCard({
         )}
       </View>
 
-      <AnimatedProgressBar progress={locked ? 0 : ratio} height={6} borderRadius={3} progressColor={accent} trackColor={colors.neutral.divider} animationDuration={700} />
+      <AnimatedProgressBar progress={ratio} height={6} borderRadius={3} progressColor={accent} trackColor={colors.neutral.divider} animationDuration={700} />
 
       <View className="flex-row items-center justify-between">
         <Text style={HOME_ROW_DETAIL} numberOfLines={1}>
-          {locked ? `${target.toLocaleString("en-US")} ${unit} / member` : `${progress.toLocaleString("en-US")} / ${target.toLocaleString("en-US")} ${unit}`}
+          {`${progress.toLocaleString("en-US")} / ${target.toLocaleString("en-US")} ${unit}`}
         </Text>
         <View className="flex-row items-center gap-3">
           {battleStatus && !isComplete && (
@@ -104,23 +92,14 @@ export function ChallengeCard({
               </Text>
             </View>
           )}
-          {locked ? (
-            <View className="flex-row items-center gap-1">
-              <Ionicons name="time-outline" size={11} color={colors.neutral.textSecondary} />
-              <Text style={HOME_ROW_DETAIL}>{lockedLabel}</Text>
-            </View>
-          ) : (
-            <>
-              <View className="flex-row items-center gap-1">
-                <Ionicons name="flash" size={11} color={colors.brand.yellow} />
-                <Text className="caption font-body-semibold text-brand-yellow">{`+${xpReward.toLocaleString("en-US")} XP`}</Text>
-              </View>
-              <View className="flex-row items-center gap-1">
-                <Ionicons name={isComplete ? "trophy" : "flame"} size={12} color={isComplete ? colors.semantic.success : colors.semantic.streak} />
-                <Text style={HOME_ROW_DETAIL}>{timeLabel}</Text>
-              </View>
-            </>
-          )}
+          <View className="flex-row items-center gap-1">
+            <Ionicons name="flash" size={11} color={colors.brand.yellow} />
+            <Text className="caption font-body-semibold text-brand-yellow">{`+${xpReward.toLocaleString("en-US")} XP`}</Text>
+          </View>
+          <View className="flex-row items-center gap-1">
+            <Ionicons name={isComplete ? "trophy" : "flame"} size={12} color={isComplete ? colors.semantic.success : colors.semantic.streak} />
+            <Text style={HOME_ROW_DETAIL}>{timeLabel}</Text>
+          </View>
         </View>
       </View>
     </Pressable>

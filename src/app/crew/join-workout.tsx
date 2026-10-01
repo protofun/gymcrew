@@ -154,7 +154,7 @@ export default function JoinWorkoutScreen() {
 
       <View style={{ position: "absolute", left: 16, right: 16, bottom: insets.bottom + 12 }} className="gap-2">
         {error && (
-          <View className="flex-row items-start gap-2 rounded-2xl border border-error/40 bg-error/10 p-3">
+          <View className="flex-row items-start gap-2 rounded-2xl bg-error/10 p-3">
             <Ionicons name="warning" size={16} color={colors.semantic.error} style={{ marginTop: 1 }} />
             <Text className="body-sm flex-1 text-text-secondary">{error}</Text>
           </View>

@@ -5,6 +5,7 @@ import Animated, { FadeInUp, ZoomIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { images } from "@/constants/images";
 import { colors } from "@/theme";
 
@@ -45,18 +46,8 @@ export default function WorkoutSplitIntroScreen() {
         </View>
 
         <Animated.View entering={FadeInUp.delay(240).springify().damping(14).mass(0.6)} className="gap-3">
-          <Pressable
-            onPress={() => router.push("/workout-split/analyze")}
-            style={PRESSED_STYLE}
-            className="items-center rounded-full bg-brand-yellow py-4"
-          >
-            <Text className="body-md font-body-semibold text-brand-iron">Build My Split</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push("/profile/workout-split")}
-            style={PRESSED_STYLE}
-            className="items-center rounded-full border border-divider py-4"
-          >
+          <PrimaryButton label="Build My Split" onPress={() => router.push("/workout-split/analyze")} />
+          <Pressable onPress={() => router.push("/profile/workout-split")} style={PRESSED_STYLE} className="items-center rounded-full bg-surface py-4">
             <Text className="body-md font-body-semibold text-text-primary">Create Manually</Text>
           </Pressable>
         </Animated.View>

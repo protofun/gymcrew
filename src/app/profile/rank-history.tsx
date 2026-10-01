@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { goBack } from "@/lib/navigation";
 import { ALL_MUSCLE_GROUPS } from "@/data/workout-log";
 import { DivisionBadge } from "@/components/DivisionBadge";
+import { EditableNumberFlow } from "@/components/EditableAnimated";
+import { HomeRowLead } from "@/components/HomeRowLead";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
 import { RankBadge } from "@/components/RankBadge";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
@@ -106,15 +108,20 @@ export default function RankHistoryScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: insets.bottom + 32, gap: 20 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4">
+        <View className="flex-row items-center gap-3 rounded-2xl bg-surface p-4">
           <DivisionBadge division={displayDivision} size={56} />
           <View className="flex-1">
             <Text className="body-lg font-body-bold" style={{ color: DIVISION_COLOR[displayDivision] }}>
               {displayDivision}
             </Text>
-            <Text className="caption text-text-secondary">
-              {snapshot == null ? `${xp.toLocaleString("en-US")} total XP earned` : "Division reached as of this date"}
-            </Text>
+            {snapshot == null ? (
+              <View className="flex-row items-baseline gap-1">
+                <EditableNumberFlow id="profile.rankHistory.xp" value={xp} fontSize={12} fontWeight="600" color={colors.neutral.textSecondary} />
+                <Text className="caption text-text-secondary">total XP earned</Text>
+              </View>
+            ) : (
+              <Text className="caption text-text-secondary">Division reached as of this date</Text>
+            )}
           </View>
         </View>
 
@@ -152,7 +159,7 @@ export default function RankHistoryScreen() {
         <View className="gap-2">
           <StatSectionHeader label="Overview" />
           <StatCard>
-            <StatRow label="Power Score" value={powerScore.toLocaleString("en-US")} />
+            <StatRow label="Power Score" value={powerScore.toLocaleString("en-US")} numericValue={powerScore} />
             <StatRow label="Highest Tier Reached" value={formatRankTier(topTier)} />
             <StatRow label="Weak Points" value={weakPoints.length > 0 ? weakPoints.map((card) => card.name).join(", ") : "None"} isLast />
           </StatCard>
@@ -161,12 +168,12 @@ export default function RankHistoryScreen() {
         <View className="gap-2">
           <StatSectionHeader label="Muscle Rank" />
           {distinctTiers.length === 0 ? (
-            <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-10">
+            <View className="items-center gap-2 rounded-2xl bg-surface py-10">
               <Ionicons name="body-outline" size={22} color={colors.neutral.textSecondary} />
               <Text className="body-sm text-center text-text-secondary">Log a bench, squat, deadlift, or overhead press to see ranks here.</Text>
             </View>
           ) : (
-            <View className="gap-4 rounded-2xl border border-divider bg-surface p-4">
+            <View className="gap-4 rounded-2xl bg-surface p-4">
               <MuscleHeatmap
                 muscleIntensity={muscleTierIndex}
                 height={220}
@@ -188,30 +195,28 @@ export default function RankHistoryScreen() {
 
         <View className="gap-2.5">
           <Text className="body-md font-body-semibold text-text-primary">More</Text>
-          <Pressable
-            onPress={() => router.push("/(tabs)/ranks")}
-            style={PRESSED_STYLE}
-            className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4"
-          >
-            <Ionicons name="trophy" size={18} color={colors.brand.yellow} />
-            <View className="flex-1">
-              <Text className="body-md font-body-semibold text-text-primary">Lift Ranks Overview</Text>
-              <Text className="caption text-text-secondary">Every tracked lift&apos;s current tier, gym & worldwide</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
-          </Pressable>
-          <Pressable
-            onPress={() => router.push("/ranks/history")}
-            style={PRESSED_STYLE}
-            className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4"
-          >
-            <Ionicons name="time" size={18} color={colors.brand.yellow} />
-            <View className="flex-1">
-              <Text className="body-md font-body-semibold text-text-primary">Rank-Up Timeline</Text>
-              <Text className="caption text-text-secondary">See when you climbed each tier, lift by lift</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
-          </Pressable>
+          <View className="rounded-2xl bg-surface px-4">
+            <Pressable onPress={() => router.push("/(tabs)/ranks")} style={PRESSED_STYLE} className="flex-row items-center gap-3 border-b border-divider py-3.5">
+              <HomeRowLead kind="flat">
+                <Ionicons name="trophy" size={17} color={colors.brand.yellow} />
+              </HomeRowLead>
+              <View className="flex-1">
+                <Text className="body-md font-body-semibold text-text-primary">Lift Ranks Overview</Text>
+                <Text className="caption text-text-secondary">Every tracked lift&apos;s current tier, gym & worldwide</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
+            </Pressable>
+            <Pressable onPress={() => router.push("/ranks/history")} style={PRESSED_STYLE} className="flex-row items-center gap-3 py-3.5">
+              <HomeRowLead kind="flat">
+                <Ionicons name="time" size={17} color={colors.brand.yellow} />
+              </HomeRowLead>
+              <View className="flex-1">
+                <Text className="body-md font-body-semibold text-text-primary">Rank-Up Timeline</Text>
+                <Text className="caption text-text-secondary">See when you climbed each tier, lift by lift</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.neutral.textSecondary} />
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
     </View>

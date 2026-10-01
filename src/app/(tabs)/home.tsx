@@ -52,7 +52,7 @@ export default function HomeScreen() {
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-12" showsVerticalScrollIndicator={false}>
       <PromoBanners placement="home" />
       <AttachStep index={ATTACH_INDEXES.home} fill>
-        <HomeHero name={firstName} workouts={workouts} onPressStartWorkout={handleStartWorkout} />
+        <HomeHero name={firstName} workouts={workouts} streak={streak} onPressStartWorkout={handleStartWorkout} />
       </AttachStep>
 
       {/* Objective Proof (the strength trend) now sits directly under the hero, above the carousel —

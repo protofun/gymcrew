@@ -4,6 +4,9 @@ import type { PathProps } from "react-native-svg";
 
 interface IStrokePath extends PathProps {
   animValue: SharedValue<number>;
+  /** GymCrew patch: the path's precomputed real length (`getTotalLength()`, measured once — see
+   * `conf.ts`'s own comment), passed explicitly instead of measured at runtime via `onLayout`. */
+  length: number;
 }
 
 interface ICheckbox {

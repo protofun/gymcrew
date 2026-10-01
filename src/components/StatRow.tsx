@@ -1,5 +1,6 @@
 import { Text, View } from "react-native";
 
+import { EditableNumberFlow } from "@/components/EditableAnimated";
 import { EditableText } from "@/components/EditableText";
 import { colors } from "@/theme";
 
@@ -13,21 +14,25 @@ export function StatSectionHeader({ label }: { label: string }) {
   );
 }
 
-/** Card shell for a stack of `StatRow`s — border/bg only, no padding, since each row owns its own. */
+/** Card shell for a stack of `StatRow`s — flat fill only, no padding, since each row owns its own. */
 export function StatCard({ children }: { children: React.ReactNode }) {
-  return <View className="overflow-hidden rounded-2xl border border-divider bg-surface">{children}</View>;
+  return <View className="overflow-hidden rounded-2xl bg-surface">{children}</View>;
 }
 
-/** Plain "label ... value" row, divided from the next — the reference screenshot's core unit. */
+/** Plain "label ... value" row, divided from the next — the reference screenshot's core unit.
+ * Pass `numericValue` for a headline number (e.g. a score) to roll it in via the app's standard
+ * `NumberFlow` instead of static text — `value` still supplies the Dev Mode fallback string. */
 export function StatRow({
   label,
   value,
+  numericValue,
   valueColor,
   isLast,
   id,
 }: {
   label: string;
   value: string;
+  numericValue?: number;
   valueColor?: string;
   isLast?: boolean;
   /** Dev Mode override id (see EditableText) — omit to render the value as plain, non-editable text. */
@@ -36,7 +41,9 @@ export function StatRow({
   return (
     <View className={`flex-row items-center justify-between px-4 py-3 ${!isLast ? "border-b border-divider" : ""}`}>
       <Text className="body-sm text-text-secondary">{label}</Text>
-      {id ? (
+      {numericValue != null ? (
+        <EditableNumberFlow id={id ?? label} value={numericValue} fontSize={13} fontWeight="700" color={valueColor ?? colors.neutral.textPrimary} />
+      ) : id ? (
         <EditableText id={id} className="body-sm font-body-bold" style={{ color: valueColor ?? colors.neutral.textPrimary }}>
           {value}
         </EditableText>

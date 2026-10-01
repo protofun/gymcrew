@@ -2,11 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
+import Animated, { Easing, FadeInUp, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { ChallengeCard } from "@/components/ChallengeCard";
 import { CreateChallengeModal } from "@/components/CreateChallengeModal";
+import { LockedChallengeTeaser } from "@/components/LockedChallengeTeaser";
 import { HOME_EYEBROW, HOME_SECTION_TITLE } from "@/components/homeStyle";
+import { CircularProgress } from "@/components/ui/organisms/circular-progress";
 import SegmentedControl from "@/components/ui/organisms/segmented-control";
 import { activeWeeklyChallenges, CHALLENGE_XP_REWARD, upcomingWeeklyChallenges, type ChallengeTemplate } from "@/data/challenges";
 import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
@@ -20,7 +22,7 @@ import { useCrewActivityStore } from "@/store/crew-activity-store";
 import { useCrewStore } from "@/store/crew-store";
 import { TOKENS_PER_BATTLE_WIN, TOKENS_PER_CHALLENGE_COMPLETE, useCurrencyStore } from "@/store/currency-store";
 import { useProfileLevelStore } from "@/store/profile-level-store";
-import { colors } from "@/theme";
+import { colors, fontFamily } from "@/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SCOPES = ["Active", "Upcoming", "Completed"] as const;
@@ -217,6 +219,19 @@ export function ChallengesTab() {
         ? upcoming
         : [...weekly, ...custom, ...admin].filter((c) => c.isComplete);
 
+  // The overall-progress ring — same `CircularProgress` language every other tab now uses, here
+  // averaging how far along every currently active challenge is, so there's a real "at a glance"
+  // number for the week instead of only reading it off each challenge row individually.
+  const activeChallenges = [...weekly, ...custom, ...admin].filter((c) => !c.isComplete);
+  const overallPercent =
+    activeChallenges.length > 0
+      ? Math.round((activeChallenges.reduce((sum, c) => sum + Math.min(1, c.target > 0 ? c.progress / c.target : 0), 0) / activeChallenges.length) * 100)
+      : 0;
+  const overallProgress = useSharedValue(0);
+  useEffect(() => {
+    overallProgress.value = withTiming(overallPercent, { duration: 800, easing: Easing.out(Easing.cubic) });
+  }, [overallPercent, overallProgress]);
+
   function handleCreate(template: ChallengeTemplate, opponent: RivalCrewInput, durationDays: number) {
     createCustomChallenge({
       opponentCrewName: opponent.name,
@@ -231,9 +246,9 @@ export function ChallengesTab() {
   }
 
   return (
-    <View className="mx-4 mt-4 gap-5">
+    <View className="mx-4 mt-4 gap-8">
       {summerChallenges.length > 0 && (
-        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-3 border-b border-divider pb-5">
+        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-3">
           <View className="gap-1">
             <Text style={HOME_EYEBROW}>LOCKED</Text>
             <Text style={HOME_SECTION_TITLE}>🦍 SUMMER CHALLENGE</Text>
@@ -242,84 +257,93 @@ export function ChallengesTab() {
               <Text className="caption font-body-semibold text-text-secondary">Unlocks when the app officially releases.</Text>
             </View>
           </View>
-          <View>
-            {summerChallenges.map((challenge, index) => (
-              <ChallengeCard
-                key={challenge.id}
-                id={`crew.challenges.summer.${challenge.id}`}
-                metric={challenge.metric}
-                name={challenge.name}
-                unit={challenge.unit}
-                progress={0}
-                target={challenge.perMemberTarget * members.length}
-                timeLabel=""
-                isComplete={false}
-                xpReward={CHALLENGE_XP_REWARD}
-                locked
-                lockedLabel="Waiting for app release"
-                isLast={index === summerChallenges.length - 1}
-                onPress={() => {}}
-              />
-            ))}
-          </View>
+          <LockedChallengeTeaser items={summerChallenges.map((challenge) => ({ id: challenge.id, name: challenge.name, metric: challenge.metric }))} />
         </Animated.View>
       )}
 
-      <Animated.View entering={FadeInUp.delay(60).springify().damping(16).mass(0.6)} className="gap-1">
-        <Text style={HOME_SECTION_TITLE}>{scope === "Upcoming" ? "WHAT'S COMING" : scope === "Completed" ? "VICTORIES" : "PROVE YOURSELVES"}</Text>
-        <View className="flex-row items-center gap-1.5">
-          <Ionicons name="flame" size={13} color={colors.semantic.streak} />
-          <Text className="caption font-body-semibold text-text-secondary">
-            {scope === "Active" && "Every rep counts toward the crew. No excuses."}
-            {scope === "Upcoming" && "Get ready — these drop soon."}
-            {scope === "Completed" && "Battles won. Wear it."}
-          </Text>
+      <Animated.View entering={FadeInUp.delay(60).springify().damping(16).mass(0.6)} className="flex-row items-center justify-between gap-3">
+        <View className="flex-1 gap-1">
+          <Text style={HOME_SECTION_TITLE}>{scope === "Upcoming" ? "WHAT'S COMING" : scope === "Completed" ? "VICTORIES" : "PROVE YOURSELVES"}</Text>
+          <View className="flex-row items-center gap-1.5">
+            <Ionicons name="flame" size={13} color={colors.semantic.streak} />
+            <Text className="caption font-body-semibold text-text-secondary">
+              {scope === "Active" && "Every rep counts toward the crew. No excuses."}
+              {scope === "Upcoming" && "Get ready — these drop soon."}
+              {scope === "Completed" && "Battles won. Wear it."}
+            </Text>
+          </View>
         </View>
+        {activeChallenges.length > 0 && (
+          <View style={{ width: 56, height: 56 }} className="items-center justify-center">
+            <CircularProgress
+              progress={overallProgress}
+              size={56}
+              strokeWidth={5}
+              gap={0}
+              outerCircleColor={colors.neutral.divider}
+              progressCircleColor={colors.brand.yellow}
+              backgroundColor="transparent"
+              renderIcon={() => <Text style={{ fontFamily: fontFamily.bodyBold, fontSize: 12, color: colors.brand.white }}>{`${overallPercent}%`}</Text>}
+            />
+          </View>
+        )}
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)}>
         <ScopeSwitcher scope={scope} onChange={setScope} />
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(140).springify().damping(16).mass(0.6)}>
-        <Pressable onPress={() => canIssueBattle && setCreateOpen(true)} className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-3.5" style={{ opacity: canIssueBattle ? 1 : 0.5 }}>
-          <Ionicons name={canIssueBattle ? "flag" : "lock-closed"} size={16} color={colors.brand.iron} />
-          <Text className="body-sm font-body-bold text-brand-iron">
-            {canIssueBattle ? "Challenge Another Crew" : `Reach ${BATTLE_LEADER_MIN_DIVISION} personally to challenge crews (you're ${personalDivision})`}
-          </Text>
-        </Pressable>
-      </Animated.View>
+      <Animated.View entering={FadeInUp.delay(140).springify().damping(16).mass(0.6)} className="gap-4">
+        {canIssueBattle ? (
+          <Pressable onPress={() => setCreateOpen(true)} className="flex-row items-center justify-center gap-2 rounded-full bg-brand-yellow py-3.5">
+            <Ionicons name="flag" size={16} color={colors.brand.iron} />
+            <Text className="body-sm font-body-bold text-brand-iron">Challenge Another Crew</Text>
+          </Pressable>
+        ) : (
+          // "verander bij chalenge tab de gele box met slot haal dat kanker ding weg of toon het totaal
+          // anders" — the old version was this same yellow CTA at half opacity with a lock icon crammed
+          // in next to wrapped sentence-length text, reading as a broken button rather than a real
+          // requirement. A flat neutral row (no yellow, no pill shape) reads as information, not a CTA
+          // you'd expect to tap.
+          <View className="flex-row items-center gap-3 rounded-2xl bg-surface px-4 py-3.5">
+            <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: colors.neutral.surfaceElevated }} className="items-center justify-center">
+              <Ionicons name="lock-closed" size={15} color={colors.neutral.textSecondary} />
+            </View>
+            <Text className="caption flex-1 font-body-semibold text-text-secondary">{`Reach ${BATTLE_LEADER_MIN_DIVISION} personally to challenge crews — you're ${personalDivision}`}</Text>
+          </View>
+        )}
 
-      {visible.length === 0 ? (
-        <Animated.View entering={FadeInUp.delay(200).springify().damping(16).mass(0.6)} className="items-center gap-2 py-12">
-          <Ionicons name={scope === "Completed" ? "trophy-outline" : "flag-outline"} size={26} color={colors.neutral.textSecondary} />
-          <Text className="body-sm text-center text-text-secondary">
-            {scope === "Active" && "No active challenges right now — check back Monday."}
-            {scope === "Upcoming" && "Nothing scheduled yet."}
-            {scope === "Completed" && "No completed challenges yet."}
-          </Text>
-        </Animated.View>
-      ) : (
-        <View>
-          {visible.map((challenge, index) => (
-            <ChallengeCard
-              key={challenge.key}
-              id={`crew.challenges.${challenge.key}`}
-              metric={challenge.metric}
-              name={challenge.name}
-              unit={challenge.unit}
-              progress={challenge.progress}
-              target={challenge.target}
-              timeLabel={challenge.timeLabel}
-              isComplete={challenge.isComplete}
-              xpReward={challenge.xpReward}
-              battleStatus={"isWinning" in challenge ? (challenge.isWinning ? "winning" : "losing") : undefined}
-              isLast={index === visible.length - 1}
-              onPress={() => router.push(`/crew/challenge/${challenge.key}`)}
-            />
-          ))}
-        </View>
-      )}
+        {visible.length === 0 ? (
+          <View className="items-center gap-2 py-10">
+            <Ionicons name={scope === "Completed" ? "trophy-outline" : "flag-outline"} size={26} color={colors.neutral.textSecondary} />
+            <Text className="body-sm text-center text-text-secondary">
+              {scope === "Active" && "No active challenges right now — check back Monday."}
+              {scope === "Upcoming" && "Nothing scheduled yet."}
+              {scope === "Completed" && "No completed challenges yet."}
+            </Text>
+          </View>
+        ) : (
+          <View>
+            {visible.map((challenge, index) => (
+              <ChallengeCard
+                key={challenge.key}
+                id={`crew.challenges.${challenge.key}`}
+                metric={challenge.metric}
+                name={challenge.name}
+                unit={challenge.unit}
+                progress={challenge.progress}
+                target={challenge.target}
+                timeLabel={challenge.timeLabel}
+                isComplete={challenge.isComplete}
+                xpReward={challenge.xpReward}
+                battleStatus={"isWinning" in challenge ? (challenge.isWinning ? "winning" : "losing") : undefined}
+                isLast={index === visible.length - 1}
+                onPress={() => router.push(`/crew/challenge/${challenge.key}`)}
+              />
+            ))}
+          </View>
+        )}
+      </Animated.View>
 
       <CreateChallengeModal visible={createOpen} rivalCrews={rivalCrews} onClose={() => setCreateOpen(false)} onCreate={handleCreate} />
     </View>

@@ -11,7 +11,7 @@ import {
   type LeagueStanding,
   type RivalCrewInput,
 } from "@/lib/crew-league";
-import { currentWeekKey } from "@/lib/date";
+import { currentWeekKey, toDateKey } from "@/lib/date";
 import { DIVISIONS, divisionIndex, nextDivision, type Division } from "@/lib/division";
 import { useCrewStore } from "@/store/crew-store";
 
@@ -65,6 +65,26 @@ export const useCrewLeagueStore = create<CrewLeagueState & CrewLeagueActions>()(
       syncWeek: ({ myCrewName, myCrewPower, rivalCrews, computeWeeklyPower }) => {
         const state = get();
         const nowWeekKey = currentWeekKey();
+
+        // First-ever run for a crew (no finalized week yet) — the branch below only updates
+        // `crewPower` once the real calendar week rolls all the way over, which left every new crew
+        // reading a hard 0 for up to 7 days with nothing else ever seeding it (confirmed: `crewPower`
+        // has no source anywhere but this file and `DEFAULT_CREW`'s own `0`). Seed it here instead,
+        // from the CURRENT week's real progress-to-date. `CREW_POWER_WEEKLY_GROWTH_RATIO` (0.005) is
+        // the INCREMENT added to an already-seeded `crewPower` each week, not the base scale — this
+        // file's own doc comment on that constant says the real relationship is "weekly power runs
+        // roughly 10-15x crewPower's own scale", so the seed divides by that instead (using the
+        // midpoint, ~12.5) to land at a realistic starting number comparable to `OTHER_CREWS_POWER`'s
+        // own seeded rival values (20k-32k for an established crew), not two orders of magnitude off.
+        if (state.weekKey === nowWeekKey && state.history.length === 0 && myCrewPower === 0) {
+          const { startKey } = weekKeyRange(nowWeekKey);
+          const weeklyPowerSoFar = computeWeeklyPower(startKey, toDateKey(new Date()));
+          if (weeklyPowerSoFar > 0) {
+            useCrewStore.setState({ crewPower: Math.max(1, Math.round(weeklyPowerSoFar / 12.5)) });
+          }
+          return;
+        }
+
         if (state.weekKey === nowWeekKey) return;
 
         const crew = useCrewStore.getState();

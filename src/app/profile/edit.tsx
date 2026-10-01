@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { SearchableSelectField } from "@/components/SearchableSelectField";
 import { displayWeight, lbsToKg } from "@/lib/units";
 import { useOnboardingStore, type Gender } from "@/store/onboarding-store";
@@ -44,7 +45,7 @@ function TextField({ label, value, onChangeText, keyboardType, placeholder }: { 
         keyboardType={keyboardType}
         placeholder={placeholder}
         placeholderTextColor={colors.neutral.textSecondary}
-        className="body-md rounded-2xl border border-divider bg-surface px-4 py-3.5 text-text-primary"
+        className="body-md rounded-2xl bg-surface px-4 py-3.5 text-text-primary"
         style={{ outlineWidth: 0, outlineColor: "transparent" }}
       />
     </View>
@@ -161,16 +162,14 @@ export default function EditProfileScreen() {
         <KeyedSelectField label="Goal" options={GOALS} value={goal} onChange={setGoal} />
         <KeyedSelectField label="Experience Level" options={EXPERIENCE_LEVELS} value={experienceLevel} onChange={setExperienceLevel} />
 
-        <View className="flex-row items-start gap-2 rounded-2xl border border-divider bg-surface p-3">
+        <View className="flex-row items-start gap-2 rounded-2xl bg-surface p-3">
           <Ionicons name="information-circle-outline" size={16} color={colors.neutral.textSecondary} style={{ marginTop: 1 }} />
           <Text className="body-sm flex-1 text-text-secondary">
             Weight and gender feed your rank calculations — keep them accurate for fair comparisons.
           </Text>
         </View>
 
-        <Pressable onPress={handleSave} className="items-center rounded-full bg-brand-yellow py-4">
-          <Text className="body-md font-body-semibold text-brand-iron">Save Changes</Text>
-        </Pressable>
+        <PrimaryButton label="Save Changes" onPress={handleSave} />
       </ScrollView>
     </View>
   );

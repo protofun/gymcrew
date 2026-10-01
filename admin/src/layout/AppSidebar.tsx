@@ -41,6 +41,7 @@ const navItems: NavItem[] = [
     icon: <BoxCubeIcon />,
     name: "Business",
     subItems: [
+      { name: "Email Addresses", path: "/email-addresses" },
       { name: "Contacts", path: "/contacts" },
       { name: "Marketing Plans", path: "/marketing" },
       { name: "Costs & Income", path: "/finance" },

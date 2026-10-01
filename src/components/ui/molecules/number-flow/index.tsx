@@ -71,7 +71,7 @@ const NumberFlow = memo(
     const glyphProps = { fontSize, color, fontWeight };
 
     return (
-      <View style={[styles.row, style]}>
+      <View style={[styles.row, styles.skewed, style]}>
         <Separator char="-" active={safeValue < 0} {...glyphProps} />
 
         {intColumns.map((col, i) => (

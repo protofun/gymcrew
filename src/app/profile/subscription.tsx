@@ -4,6 +4,8 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePostHog } from "posthog-react-native";
 
+import { HomeRowLead } from "@/components/HomeRowLead";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { goBack } from "@/lib/navigation";
 import { useCrewStore } from "@/store/crew-store";
 import { colors } from "@/theme";
@@ -31,10 +33,10 @@ export default function SubscriptionScreen() {
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
-        <View className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4">
-          <View className="h-10 w-10 items-center justify-center rounded-full bg-background">
+        <View className="flex-row items-center gap-3 rounded-2xl bg-surface p-4">
+          <HomeRowLead kind="flat">
             <Ionicons name="card" size={17} color={subscriptionActive ? colors.semantic.success : colors.neutral.textSecondary} />
-          </View>
+          </HomeRowLead>
           <View className="flex-1">
             <Text className="body-md font-body-semibold text-text-primary">{crewName}&apos;s Plan</Text>
             <Text className="body-sm text-text-secondary">
@@ -48,12 +50,12 @@ export default function SubscriptionScreen() {
           strength graph are always free.
         </Text>
 
-        <View className="gap-2.5">
-          {PAID_FEATURES.map((feature) => (
-            <View key={feature.label} className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-3.5">
-              <View className="h-10 w-10 items-center justify-center rounded-full bg-background">
+        <View className="gap-2.5 rounded-2xl bg-surface p-2">
+          {PAID_FEATURES.map((feature, index) => (
+            <View key={feature.label} className={`flex-row items-center gap-3 p-2.5 ${index === PAID_FEATURES.length - 1 ? "" : "border-b border-divider"}`}>
+              <HomeRowLead kind="flat">
                 <Ionicons name={feature.icon} size={17} color={colors.brand.yellow} />
-              </View>
+              </HomeRowLead>
               <View className="flex-1">
                 <Text className="body-md font-body-semibold text-text-primary">{feature.label}</Text>
                 <Text className="body-sm text-text-secondary">{feature.description}</Text>
@@ -62,15 +64,13 @@ export default function SubscriptionScreen() {
           ))}
         </View>
 
-        <Pressable
+        <PrimaryButton
+          label="Manage in Crew Settings"
           onPress={() => {
             posthog.capture("subscription_manage_clicked", { subscriptionActive });
             router.push("/crew/settings");
           }}
-          className="items-center rounded-full bg-brand-yellow py-4"
-        >
-          <Text className="body-md font-body-semibold text-brand-iron">Manage in Crew Settings</Text>
-        </Pressable>
+        />
       </ScrollView>
     </View>
   );

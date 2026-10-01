@@ -1,10 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useEffect } from "react";
 import { Text, View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
+import Animated, { Easing, FadeInUp, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { EditableText } from "@/components/EditableText";
-import { HOME_EYEBROW, HOME_ROW_DETAIL, HOME_ROW_TITLE, HOME_SECTION_TITLE } from "@/components/homeStyle";
+import { HOME_ROW_DETAIL, HOME_ROW_TITLE, HOME_SECTION_TITLE } from "@/components/homeStyle";
+import { SectionHeading } from "@/components/SectionHeading";
+import { CircularProgress } from "@/components/ui/organisms/circular-progress";
 import { OTHER_CREWS_POWER } from "@/data/crew-leaderboard";
 import {
   computeCrewWeeklyPower,
@@ -132,9 +135,20 @@ export function CrewLeagueTab() {
   const outcome = determineLeagueOutcome(standings);
   const total = standings.length;
   const zoneSize = leagueZoneSize(total);
+  const myRank = standings.findIndex((standing) => standing.isMine) + 1;
+  const rankPercent = total > 0 && myRank > 0 ? Math.round(((total - myRank + 1) / total) * 100) : 0;
+  const zone = myRank > 0 && myRank <= zoneSize ? "promotion" : myRank > total - zoneSize ? "relegation" : null;
+
+  // The standing ring — same `CircularProgress` language every other tab now uses, here showing how
+  // close to #1 the crew's current rank is, replacing the old plain division/days-left text row with
+  // a real visual instead of two lines of text.
+  const rankProgress = useSharedValue(0);
+  useEffect(() => {
+    rankProgress.value = withTiming(rankPercent, { duration: 800, easing: Easing.out(Easing.cubic) });
+  }, [rankPercent, rankProgress]);
 
   return (
-    <View className="mx-4 mt-4 gap-5">
+    <View className="mx-4 mt-4 gap-8">
       <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-1">
         <Text style={HOME_SECTION_TITLE}>WEEKLY LEAGUE</Text>
         <View className="flex-row items-center gap-1.5">
@@ -145,63 +159,86 @@ export function CrewLeagueTab() {
         </View>
       </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)} className="flex-row items-center justify-between border-y border-divider py-3">
-        <View className="flex-row items-center gap-2">
-          <Ionicons name="shield-outline" size={16} color={colors.neutral.textSecondary} />
-          <Text style={[HOME_ROW_TITLE, { fontSize: 15, lineHeight: 17 }]}>{`${crewDivision.toUpperCase()} DIVISION`}</Text>
-        </View>
-        <View className="flex-row items-center gap-2">
-          <Ionicons name="time-outline" size={16} color={colors.semantic.streak} />
-          <Text style={HOME_ROW_DETAIL}>{`${daysLeftInWeek()} days left`}</Text>
+      <Animated.View entering={FadeInUp.delay(80).springify().damping(16).mass(0.6)} className="gap-4">
+        <SectionHeading id="crew.league.standings" eyebrow="This Week" title="Standings" size={26} />
+
+        <View className="gap-4">
+          {total >= 3 && (
+            <View className="flex-row items-center justify-between">
+              <View style={{ width: 84, height: 84 }} className="items-center justify-center">
+                <CircularProgress
+                  progress={rankProgress}
+                  size={84}
+                  strokeWidth={7}
+                  gap={0}
+                  outerCircleColor={colors.neutral.divider}
+                  progressCircleColor={zone === "promotion" ? colors.semantic.success : zone === "relegation" ? colors.semantic.error : colors.brand.yellow}
+                  backgroundColor="transparent"
+                  renderIcon={() => (
+                    <Text style={{ fontFamily: fontFamily.heading, fontSize: 18, color: colors.brand.white }}>{`#${myRank}`}</Text>
+                  )}
+                />
+              </View>
+              <View className="gap-2.5">
+                <View className="flex-row items-center gap-2">
+                  <Ionicons name="shield-outline" size={16} color={colors.neutral.textSecondary} />
+                  <Text style={[HOME_ROW_TITLE, { fontSize: 15, lineHeight: 17 }]}>{`${crewDivision.toUpperCase()} DIVISION`}</Text>
+                </View>
+                <View className="flex-row items-center gap-2">
+                  <Ionicons name="time-outline" size={16} color={colors.semantic.streak} />
+                  <Text style={HOME_ROW_DETAIL}>{`${daysLeftInWeek()} days left`}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {total < 3 ? (
+            <View className="items-center gap-2 py-8">
+              <Ionicons name="hourglass-outline" size={26} color={colors.neutral.textSecondary} />
+              <Text style={[HOME_ROW_DETAIL, { textAlign: "center" }]}>{`Not enough crews in ${crewDivision} yet for a full bracket.`}</Text>
+            </View>
+          ) : (
+            <View>
+              {standings.map((standing, index) => {
+                const rank = index + 1;
+                const zone = rank <= zoneSize ? "promotion" : rank > total - zoneSize ? "relegation" : null;
+                return (
+                  <StandingRow
+                    key={standing.id}
+                    id={standing.id}
+                    rank={rank}
+                    name={standing.name}
+                    myCrewIcon={crewIcon}
+                    rivalIcon={standing.icon}
+                    rivalTint={standing.tint}
+                    weeklyPower={standing.weeklyPower}
+                    isMine={standing.isMine}
+                    zone={zone}
+                    isLast={index === standings.length - 1}
+                  />
+                );
+              })}
+
+              <View className="mt-3 flex-row items-center gap-1.5">
+                <Ionicons
+                  name={outcome === "promoted" ? "trending-up" : outcome === "relegated" ? "trending-down" : "remove"}
+                  size={13}
+                  color={OUTCOME_META[outcome].color}
+                />
+                <Text className="caption font-body-semibold" style={{ color: OUTCOME_META[outcome].color }}>
+                  {outcome === "promoted" && "In the promotion zone right now."}
+                  {outcome === "relegated" && "In the relegation zone right now."}
+                  {outcome === "held" && "Holding your division right now."}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
       </Animated.View>
 
-      {total < 3 ? (
-        <Animated.View entering={FadeInUp.delay(140).springify().damping(16).mass(0.6)} className="items-center gap-2 py-10">
-          <Ionicons name="hourglass-outline" size={26} color={colors.neutral.textSecondary} />
-          <Text style={[HOME_ROW_DETAIL, { textAlign: "center" }]}>{`Not enough crews in ${crewDivision} yet for a full bracket.`}</Text>
-        </Animated.View>
-      ) : (
-        <View>
-          {standings.map((standing, index) => {
-            const rank = index + 1;
-            const zone = rank <= zoneSize ? "promotion" : rank > total - zoneSize ? "relegation" : null;
-            return (
-              <Animated.View key={standing.id} entering={FadeInUp.delay(140 + index * 50).springify().damping(16).mass(0.6)}>
-                <StandingRow
-                  id={standing.id}
-                  rank={rank}
-                  name={standing.name}
-                  myCrewIcon={crewIcon}
-                  rivalIcon={standing.icon}
-                  rivalTint={standing.tint}
-                  weeklyPower={standing.weeklyPower}
-                  isMine={standing.isMine}
-                  zone={zone}
-                  isLast={index === standings.length - 1}
-                />
-              </Animated.View>
-            );
-          })}
-
-          <Animated.View entering={FadeInUp.delay(140 + standings.length * 50).springify().damping(16).mass(0.6)} className="mt-3 flex-row items-center gap-1.5">
-            <Ionicons
-              name={outcome === "promoted" ? "trending-up" : outcome === "relegated" ? "trending-down" : "remove"}
-              size={13}
-              color={OUTCOME_META[outcome].color}
-            />
-            <Text className="caption font-body-semibold" style={{ color: OUTCOME_META[outcome].color }}>
-              {outcome === "promoted" && "In the promotion zone right now."}
-              {outcome === "relegated" && "In the relegation zone right now."}
-              {outcome === "held" && "Holding your division right now."}
-            </Text>
-          </Animated.View>
-        </View>
-      )}
-
       {history.length > 0 && (
-        <View className="gap-2 border-t border-divider pt-4">
-          <Text style={HOME_EYEBROW}>PAST WEEKS</Text>
+        <View className="gap-3">
+          <SectionHeading id="crew.league.history" eyebrow="League History" title="Past Weeks" size={26} />
           <View>
             {history.map((result, index) => (
               <HistoryRow key={result.weekKey} result={result} isLast={index === history.length - 1} />

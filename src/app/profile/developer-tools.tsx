@@ -2,10 +2,11 @@ import { useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState, type ReactNode } from "react";
-import { Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { ToggleRow } from "@/components/ToggleRow";
 import { isTestId } from "@/constants/test-data";
 import { isApiConfigured } from "@/lib/api";
 import { appTourRef } from "@/lib/app-tour";
@@ -21,7 +22,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <View className="gap-2">
       <Text className="caption font-body-semibold text-text-secondary">{title.toUpperCase()}</Text>
-      <View className="gap-3 rounded-2xl border border-brand-yellow/40 bg-surface p-4">{children}</View>
+      <View className="gap-3 rounded-2xl bg-surface p-4">{children}</View>
     </View>
   );
 }
@@ -64,7 +65,7 @@ function RangeChips({ label, onPick }: { label: string; onPick: (days: number) =
             key={range.days}
             onPress={() => onPick(range.days)}
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            className="rounded-full border border-brand-yellow px-4 py-2"
+            className="rounded-full bg-background px-4 py-2"
           >
             <Text className="body-sm font-body-semibold text-brand-yellow">{range.label}</Text>
           </Pressable>
@@ -141,22 +142,14 @@ export default function DeveloperToolsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Section title="Developer Mode">
-          <View className="flex-row items-center gap-3">
-            <View className="flex-1">
-              <Text className="body-sm font-body-semibold text-text-primary">Tap-to-Edit Text</Text>
-              <Text className="body-sm text-text-secondary">
-                Tap text and numbers around the app to override them, for screenshots and videos. Local to this device only.
-              </Text>
-            </View>
-            <Switch
-              value={developerModeEnabled}
-              onValueChange={toggleDeveloperMode}
-              trackColor={{ false: colors.neutral.divider, true: colors.brand.yellow }}
-              thumbColor={colors.brand.white}
-            />
-          </View>
+          <ToggleRow
+            title="Tap-to-Edit Text"
+            subtitle="Tap text and numbers around the app to override them, for screenshots and videos. Local to this device only."
+            value={developerModeEnabled}
+            onValueChange={toggleDeveloperMode}
+          />
           {developerModeEnabled && (
-            <Pressable onPress={clearAllOverrides} className="items-center rounded-full border border-divider py-3">
+            <Pressable onPress={clearAllOverrides} className="items-center rounded-full bg-background py-3">
               <Text className="body-sm text-text-secondary">Reset All Text Overrides</Text>
             </Pressable>
           )}

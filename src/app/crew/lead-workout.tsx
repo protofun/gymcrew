@@ -80,13 +80,13 @@ export default function LeadWorkoutScreen() {
             onChangeText={setName}
             placeholder="e.g. Push Day"
             placeholderTextColor={colors.neutral.textSecondary}
-            className="body-md rounded-xl border border-divider bg-surface px-4 py-3 text-text-primary"
+            className="body-md rounded-xl bg-surface px-4 py-3 text-text-primary"
             style={{ outlineWidth: 0, outlineColor: "transparent" }}
           />
         </View>
 
         {error && (
-          <View className="flex-row items-start gap-2 rounded-2xl border border-error/40 bg-error/10 p-3">
+          <View className="flex-row items-start gap-2 rounded-2xl bg-error/10 p-3">
             <Ionicons name="warning" size={16} color={colors.semantic.error} style={{ marginTop: 1 }} />
             <Text className="body-sm flex-1 text-text-secondary">{error}</Text>
           </View>

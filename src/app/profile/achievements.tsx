@@ -84,7 +84,7 @@ export default function AchievementsScreen() {
 
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
         {prTimeline.length === 0 ? (
-          <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-14">
+          <View className="items-center gap-2 rounded-2xl bg-surface py-14">
             <Ionicons name="trophy-outline" size={28} color={colors.neutral.textSecondary} />
             <Text className="body-md text-text-secondary">No PRs logged yet.</Text>
             <Text className="body-sm text-text-secondary">Log a set to start building your history.</Text>

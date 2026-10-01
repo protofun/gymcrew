@@ -64,7 +64,7 @@ export default function TrainingConsistencyScreen() {
 
           <ContextMenu theme="dark">
             <ContextMenu.Trigger openTrigger="press">
-              <View className="flex-row items-center gap-1 rounded-full border border-divider bg-surface px-3 py-1.5">
+              <View className="flex-row items-center gap-1 rounded-full bg-surface px-3 py-1.5">
                 <Text className="caption font-body-semibold text-text-secondary">{range}</Text>
                 <Ionicons name="chevron-down" size={12} color={colors.neutral.textSecondary} />
               </View>

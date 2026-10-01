@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Text, View } from "react-native";
 
+import { EditableNumberFlow } from "@/components/EditableAnimated";
 import { EditableText } from "@/components/EditableText";
 import { colors, fontFamily } from "@/theme";
 
@@ -8,25 +9,35 @@ import { colors, fontFamily } from "@/theme";
  * The one metric-tile look for the whole app — matches the Crew tab's Stats "TOTAL_STATS" cards
  * exactly (flat card, icon top-left, value in the display font, label below), so a "Workouts"
  * number reads the same whether it's on your own profile, a workout split summary, or crew stats.
+ * Pass `numericValue` (+ optional `decimals`/`suffix`) for a real number so it rolls in via
+ * `NumberFlow` instead of appearing as static text — `value` still supplies the Dev Mode fallback.
  */
 export function StatTile({
   icon,
   value,
+  numericValue,
+  decimals,
+  suffix,
   label,
   iconColor,
   id,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   value: string;
+  numericValue?: number;
+  decimals?: number;
+  suffix?: string;
   label: string;
   iconColor?: string;
   /** Dev Mode override id (see EditableText) — omit to render the value as plain, non-editable text. */
   id?: string;
 }) {
   return (
-    <View className="flex-1 gap-2 rounded-2xl border border-divider bg-surface p-3">
+    <View className="flex-1 gap-2 rounded-2xl bg-surface p-3">
       <Ionicons name={icon} size={15} color={iconColor ?? colors.brand.yellow} />
-      {id ? (
+      {numericValue != null ? (
+        <EditableNumberFlow id={id ?? label} value={numericValue} decimals={decimals} suffix={suffix} fontSize={20} color={colors.brand.white} fontWeight="800" />
+      ) : id ? (
         <EditableText id={id} style={{ fontFamily: fontFamily.heading, fontSize: 20, lineHeight: 22 }} className="text-text-primary">
           {value}
         </EditableText>

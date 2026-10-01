@@ -2,15 +2,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import Animated, { Easing, FadeInDown, FadeInUp, useSharedValue, withTiming } from "react-native-reanimated";
 import { usePostHog } from "posthog-react-native";
 
 import { BrandBeamFrame } from "@/components/BrandBeamFrame";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
-import { HOME_EYEBROW, HOME_ROW_DETAIL, HOME_ROW_TITLE, HOME_SECTION_TITLE } from "@/components/homeStyle";
+import { HOME_ROW_DETAIL, HOME_ROW_TITLE, HOME_SECTION_TITLE } from "@/components/homeStyle";
+import { SectionHeading } from "@/components/SectionHeading";
 import { HomeRowLead } from "@/components/HomeRowLead";
-import { AnimatedProgressBar } from "@/components/ui/organisms/progress";
 import { NumberFlow } from "@/components/ui/molecules/number-flow";
+import { CircularProgress } from "@/components/ui/organisms/circular-progress";
 import { useCountdown } from "@/hooks/use-countdown";
 import { useWeightUnit } from "@/hooks/use-weight-unit";
 import { formatShortAgo } from "@/lib/time-since";
@@ -50,12 +51,11 @@ function WarSide({ iconKey, name, score, leading, weightUnit }: { iconKey: strin
 }
 
 /** The Crew War tab — a live, ongoing 1v1 between crews (real attacks, real scores, a real
- * countdown; see `useCrewWarStore`), rebuilt on the same flowing-list, no-boxed-cards system as the
- * rest of Crew: a VS hero (a bigger badge for whoever's ahead, no `ChromaFrame` ring — removed app-
- * wide) instead of two plain equal-size badges, one tug-of-war `AnimatedProgressBar` sized to each
- * side's share instead of two separate bars, `number-flow` for every score so a new attack visibly
- * rolls the digits rather than just replacing text, and the attack log entering one row at a time
- * instead of appearing at once. */
+ * countdown; see `useCrewWarStore`), on the same boxless, ring-based Nutrition-style system the rest
+ * of Crew moved to: a bigger badge for whoever's ahead, a `CircularProgress` share ring between the
+ * two badges (the same ring language `CrewOverviewHero`'s own division ring uses) instead of a flat
+ * tug-of-war bar, `number-flow` for every score so a new attack visibly rolls the digits rather than
+ * just replacing text, and the attack log entering one row at a time instead of appearing at once. */
 export function CrewWarTab() {
   const war = useCrewWarStore((state) => state.war);
   const loading = useCrewWarStore((state) => state.loading);
@@ -103,6 +103,14 @@ export function CrewWarTab() {
   const isBehind = !!war && war.status === "active" && war.myScore < war.opponentScore;
   const isUrgent = isBehind && remainingMs > 0 && remainingMs < URGENCY_THRESHOLD_MS;
   const leading = !!war && war.myScore >= war.opponentScore;
+
+  // The share ring — same `CircularProgress` language `CrewOverviewHero`'s own division ring
+  // already uses, here showing my crew's live share of the war's combined score instead of just a
+  // linear tug-of-war bar, the "sick visuals" pass this tab was missing relative to Overview.
+  const shareProgress = useSharedValue(0);
+  useEffect(() => {
+    shareProgress.value = withTiming(Math.round(share * 100), { duration: 800, easing: Easing.out(Easing.cubic) });
+  }, [share, shareProgress]);
 
   const todayStart = Date.now() - (Date.now() % DAY_MS);
   const todaysAttackCount = war?.recentAttacks.filter((attack) => attack.isMine && attack.attackedAt >= todayStart).length ?? 0;
@@ -155,15 +163,31 @@ export function CrewWarTab() {
           {startError && <Text className="body-sm text-center text-error">{startError}</Text>}
         </Animated.View>
       ) : war.status === "active" ? (
-        <Animated.View entering={FadeInUp.delay(100).springify().damping(16).mass(0.6)} className="gap-5">
-          <View className="flex-row items-center justify-center gap-4">
-            <WarSide iconKey={crewIcon} name={crewName} score={war.myScore} leading={leading} weightUnit={weightUnit} />
-            <Text style={{ fontFamily: fontFamily.heading, fontSize: 15, letterSpacing: 1, color: colors.neutral.textSecondary }}>VS</Text>
-            <WarSide iconKey={war.opponent.icon} name={war.opponent.name} score={war.opponentScore} leading={!leading} weightUnit={weightUnit} />
-          </View>
+        <Animated.View entering={FadeInUp.delay(100).springify().damping(16).mass(0.6)} className="gap-8">
+          <View className="gap-4">
+            <SectionHeading id="crew.war.matchup" eyebrow="Live Matchup" title="This Week's War" size={26} />
 
-          <View className="gap-1.5">
-            <AnimatedProgressBar progress={share} height={8} borderRadius={4} progressColor={leading ? colors.semantic.success : colors.semantic.error} trackColor={colors.neutral.divider} animationDuration={800} />
+            <View className="flex-row items-center justify-center gap-2">
+              <WarSide iconKey={crewIcon} name={crewName} score={war.myScore} leading={leading} weightUnit={weightUnit} />
+              <View style={{ width: 84, height: 84 }} className="items-center justify-center">
+                <CircularProgress
+                  progress={shareProgress}
+                  size={84}
+                  strokeWidth={7}
+                  gap={0}
+                  outerCircleColor={colors.neutral.divider}
+                  progressCircleColor={leading ? colors.semantic.success : colors.semantic.error}
+                  backgroundColor="transparent"
+                  renderIcon={() => (
+                    <Text style={{ fontFamily: fontFamily.heading, fontSize: 16, color: leading ? colors.semantic.success : colors.semantic.error }}>
+                      {`${Math.round(share * 100)}%`}
+                    </Text>
+                  )}
+                />
+              </View>
+              <WarSide iconKey={war.opponent.icon} name={war.opponent.name} score={war.opponentScore} leading={!leading} weightUnit={weightUnit} />
+            </View>
+
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-1">
                 <Ionicons name="time-outline" size={12} color={colors.neutral.textSecondary} />
@@ -173,18 +197,18 @@ export function CrewWarTab() {
                 {leading ? "AHEAD" : "BEHIND"}
               </Text>
             </View>
+
+            <BrandBeamFrame borderRadius={999}>
+              <Pressable onPress={handleAttack} style={{ backgroundColor: colors.neutral.background }} className="flex-row items-center justify-center gap-2 rounded-full py-4">
+                <Ionicons name="flash" size={18} color={colors.brand.yellow} />
+                <Text style={{ fontFamily: fontFamily.heading, fontSize: 17, letterSpacing: 1, color: colors.brand.yellow }}>ATTACK NOW</Text>
+              </Pressable>
+            </BrandBeamFrame>
           </View>
 
-          <BrandBeamFrame borderRadius={999}>
-            <Pressable onPress={handleAttack} style={{ backgroundColor: colors.neutral.background }} className="flex-row items-center justify-center gap-2 rounded-full py-4">
-              <Ionicons name="flash" size={18} color={colors.brand.yellow} />
-              <Text style={{ fontFamily: fontFamily.heading, fontSize: 17, letterSpacing: 1, color: colors.brand.yellow }}>ATTACK NOW</Text>
-            </Pressable>
-          </BrandBeamFrame>
-
           {war.topContributors.length > 0 && (
-            <View className="gap-3 border-t border-divider pt-4">
-              <Text style={HOME_EYEBROW}>TOP CONTRIBUTORS</Text>
+            <View className="gap-3">
+              <SectionHeading id="crew.war.contributors" eyebrow="This War" title="Top Contributors" size={26} />
               <View className="gap-3">
                 {war.topContributors.map((contributor, index) => (
                   <View key={contributor.userId} className="flex-row items-center gap-3">
@@ -204,8 +228,8 @@ export function CrewWarTab() {
       ) : null}
 
       {war && war.recentAttacks.length > 0 && (
-        <View className="gap-3 border-t border-divider pt-4">
-          <Text style={HOME_EYEBROW}>ATTACK LOG</Text>
+        <View className="gap-3">
+          <SectionHeading id="crew.war.attackLog" eyebrow="Live Feed" title="Attack Log" size={26} />
           <View className="gap-3">
             {war.recentAttacks.map((attack, index) => (
               <Animated.View key={`${attack.attackedAt}-${index}`} entering={FadeInDown.delay(index * 40).duration(260)} className="flex-row items-center gap-3">

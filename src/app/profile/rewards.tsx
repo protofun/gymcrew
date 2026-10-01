@@ -57,8 +57,8 @@ export default function RewardsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="flex-row gap-3">
-          <StatTile id="profile.rewards.tokens" icon="diamond" value={String(tokens)} label="Tokens" />
-          <StatTile id="profile.rewards.streak" icon="flame" value={String(currentStreak)} label="Day Streak" iconColor={colors.semantic.streak} />
+          <StatTile id="profile.rewards.tokens" icon="diamond" value={String(tokens)} numericValue={tokens} label="Tokens" />
+          <StatTile id="profile.rewards.streak" icon="flame" value={String(currentStreak)} numericValue={currentStreak} label="Day Streak" iconColor={colors.semantic.streak} />
         </View>
 
         <View className="gap-3">
@@ -66,7 +66,7 @@ export default function RewardsScreen() {
           <Pressable
             onPress={() => router.push("/profile/store")}
             style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
-            className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4"
+            className="flex-row items-center gap-3 rounded-2xl bg-surface p-4"
           >
             <View className="h-11 w-11 items-center justify-center rounded-full bg-background">
               <Ionicons name="diamond" size={18} color={colors.brand.yellow} />
@@ -81,7 +81,7 @@ export default function RewardsScreen() {
 
         <View className="gap-3">
           <SectionHeader icon="person-circle" title="Cosmetic · Division Frame" />
-          <View className="flex-row items-center gap-4 rounded-2xl border border-divider bg-surface p-4">
+          <View className="flex-row items-center gap-4 rounded-2xl bg-surface p-4">
             {me && <DivisionAvatarFrame source={{ uri: me.avatarUrl }} division={division} size={64} />}
             <View className="flex-1 gap-1">
               <Text className="body-sm font-body-semibold text-text-primary" style={{ color: DIVISION_COLOR[division] }}>
@@ -97,7 +97,7 @@ export default function RewardsScreen() {
           <Pressable
             onPress={() => router.push("/profile/workout-split")}
             style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
-            className="gap-3 rounded-2xl border border-divider bg-surface p-4"
+            className="gap-3 rounded-2xl bg-surface p-4"
           >
             <View className="flex-row items-center gap-2.5">
               {SPLIT_THEMES.map((theme) => {
@@ -122,7 +122,7 @@ export default function RewardsScreen() {
 
         <View className="gap-3">
           <SectionHeader icon="shield-checkmark" title="Prestige · Crew Battles" />
-          <View className="gap-2 rounded-2xl border border-divider bg-surface p-4">
+          <View className="gap-2 rounded-2xl bg-surface p-4">
             <View className="flex-row items-center gap-2">
               <Ionicons
                 name={canIssueBattle ? "checkmark-circle" : "lock-closed"}

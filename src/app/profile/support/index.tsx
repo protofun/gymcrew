@@ -7,6 +7,7 @@ import { useUser } from "@clerk/expo";
 import { usePostHog } from "posthog-react-native";
 
 import { goBack } from "@/lib/navigation";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { api, isApiConfigured, type ApiSupportTicket } from "@/lib/api";
 import { colors } from "@/theme";
 
@@ -83,7 +84,7 @@ export default function SupportScreen() {
               placeholderTextColor={colors.neutral.textSecondary}
               multiline
               numberOfLines={6}
-              className="body-md rounded-2xl border border-divider bg-surface px-4 py-3.5 text-text-primary"
+              className="body-md rounded-2xl bg-surface px-4 py-3.5 text-text-primary"
               style={{ outlineWidth: 0, outlineColor: "transparent", minHeight: 140, textAlignVertical: "top" }}
             />
 
@@ -91,14 +92,7 @@ export default function SupportScreen() {
               <Text className="body-sm text-text-secondary">We&apos;ll follow up at {user.primaryEmailAddress.emailAddress} if needed.</Text>
             )}
 
-            <Pressable
-              onPress={handleSubmit}
-              disabled={!message.trim() || submitting}
-              style={{ opacity: !message.trim() || submitting ? 0.5 : 1 }}
-              className="items-center rounded-full bg-brand-yellow py-4"
-            >
-              <Text className="body-md font-body-semibold text-brand-iron">{submitting ? "Sending…" : "Send Message"}</Text>
-            </Pressable>
+            <PrimaryButton label={submitting ? "Sending…" : "Send Message"} loading={submitting} onPress={handleSubmit} disabled={!message.trim()} />
 
             {tickets.length > 0 && (
               <Pressable onPress={() => setComposing(false)} className="items-center py-2">
@@ -113,7 +107,7 @@ export default function SupportScreen() {
             <Pressable
               key={ticket.id}
               onPress={() => router.push({ pathname: "/profile/support/[id]", params: { id: String(ticket.id) } })}
-              className="gap-2 rounded-2xl border border-divider bg-surface p-4"
+              className="gap-2 rounded-2xl bg-surface p-4"
             >
               <View className="flex-row items-center justify-between">
                 <Text className="body-sm font-body-semibold text-text-primary">

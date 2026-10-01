@@ -14,10 +14,12 @@ import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { EditableNumberFlow } from "@/components/EditableAnimated";
 import { EditableText } from "@/components/EditableText";
-import { ProgressBar } from "@/components/ProgressBar";
+import { HOME_ROW_DETAIL, HOME_ROW_TITLE } from "@/components/homeStyle";
+import { HomeRowLead } from "@/components/HomeRowLead";
 import { PromoBanners } from "@/components/PromoBanners";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
+import { AnimatedProgressBar } from "@/components/ui/organisms/progress";
 import { images, navIcons } from "@/constants/images";
 import { FLEX_TAGS } from "@/data/flex-tags";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
@@ -68,21 +70,17 @@ type ProgressCard = {
   route: SettingsRoute | "/(tabs)/ranks" | "/nutrition" | "/progress-photos/compare";
 };
 
-function SettingsRow({ icon, label, value, danger, isLast, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; value?: string; danger?: boolean; isLast?: boolean; onPress: () => void }) {
+/** One row of the settings list — the same flowing, icon-led shape Crew's own settings screen
+ * already uses (`HomeRowLead`, a hairline underneath, no bordered box around the row or the list). */
+function SettingsLink({ icon, label, value, danger, isLast, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; value?: string; danger?: boolean; isLast?: boolean; onPress: () => void }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={PRESSED_STYLE}
-      className={`flex-row items-center gap-3 px-4 py-4 ${!isLast ? "border-b border-divider" : ""}`}
-    >
-      <View className="h-9 w-9 items-center justify-center rounded-full bg-background">
-        <Ionicons name={icon} size={16} color={danger ? colors.semantic.error : colors.neutral.textSecondary} />
-      </View>
-      <Text className={`body-md flex-1 font-body-semibold ${danger ? "text-error" : "text-text-primary"}`}>{label}</Text>
-      <View className="flex-row items-center gap-1.5">
-        {value && <Text className="body-sm text-text-secondary">{value}</Text>}
-        <Ionicons name="chevron-forward" size={16} color={danger ? colors.semantic.error : colors.neutral.textSecondary} />
-      </View>
+    <Pressable onPress={onPress} style={PRESSED_STYLE} className={`flex-row items-center gap-3 py-3.5 ${!isLast ? "border-b border-divider" : ""}`}>
+      <HomeRowLead kind="flat">
+        <Ionicons name={icon} size={17} color={danger ? colors.semantic.error : colors.brand.yellow} />
+      </HomeRowLead>
+      <Text style={[HOME_ROW_TITLE, { fontSize: 15, lineHeight: 17, flex: 1, color: danger ? colors.semantic.error : colors.brand.white }]}>{label}</Text>
+      {!!value && <Text style={HOME_ROW_DETAIL}>{value}</Text>}
+      <Ionicons name="chevron-forward" size={16} color={danger ? colors.semantic.error : colors.neutral.textSecondary} />
     </Pressable>
   );
 }
@@ -116,7 +114,7 @@ function HeroStatColumn({
 
 function ProgressCardTile({ card, caption, onPress }: { card: ProgressCard; caption: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={PRESSED_STYLE} className="flex-1 gap-2 rounded-2xl border border-divider bg-surface p-4">
+    <Pressable onPress={onPress} style={PRESSED_STYLE} className="flex-1 gap-2 rounded-2xl bg-surface p-4">
       <Image source={card.icon} resizeMode="contain" style={{ width: 30, height: 30 }} />
       <Text className="body-md font-body-semibold text-text-primary">{card.label}</Text>
       <Text className="caption text-text-secondary" numberOfLines={2}>
@@ -234,7 +232,7 @@ export default function ProfileScreen() {
       )}
       <ScrollView className="flex-1" contentContainerClassName="pb-10" showsVerticalScrollIndicator={false}>
         <PromoBanners placement="profile" />
-        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="mx-4 mt-4 overflow-hidden rounded-3xl border border-divider bg-surface">
+        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="mx-4 mt-4 overflow-hidden rounded-3xl bg-surface">
             {/* Ties the whole card to the division color it's reporting on, the same way the old
             left-accent-bar sub-card did — just spanning the header this whole card shares now,
             instead of being scoped to one piece of it. */}
@@ -287,25 +285,30 @@ export default function ProfileScreen() {
                   </EditableText>
                 </View>
                 {snapshot == null && (
-                  <EditableText id="profile.division.percent" className="body-sm font-body-bold" style={{ color: DIVISION_COLOR[displayDivision] }}>
-                    {`${Math.min(100, Math.round((xp / xpToNextLevel) * 100))}%`}
-                  </EditableText>
+                  <EditableNumberFlow
+                    id="profile.division.percent"
+                    value={Math.min(100, Math.round((xp / xpToNextLevel) * 100))}
+                    suffix="%"
+                    fontSize={14}
+                    fontWeight="800"
+                    color={DIVISION_COLOR[displayDivision]}
+                    suffixColor={DIVISION_COLOR[displayDivision]}
+                  />
                 )}
               </View>
 
               {snapshot == null ? (
                 <>
-                  <ProgressBar ratio={xp / xpToNextLevel} color={DIVISION_COLOR[displayDivision]} height={7} />
+                  <AnimatedProgressBar progress={xp / xpToNextLevel} progressColor={DIVISION_COLOR[displayDivision]} trackColor={colors.neutral.divider} height={7} borderRadius={999} />
 
                   <View className="flex-row items-center justify-between">
-                    <EditableText id="profile.division.xpProgress" className="caption font-body-semibold text-text-secondary">
-                      {`${xp.toLocaleString("en-US")} / ${xpToNextLevel.toLocaleString("en-US")} XP`}
-                    </EditableText>
+                    <View className="flex-row items-baseline gap-1">
+                      <EditableNumberFlow id="profile.division.xp" value={xp} fontSize={12} fontWeight="600" color={colors.neutral.textSecondary} />
+                      <Text className="caption font-body-semibold text-text-secondary">{`/ ${xpToNextLevel.toLocaleString("en-US")} XP`}</Text>
+                    </View>
                     <View className="flex-row items-center gap-1">
                       <Ionicons name="flash" size={11} color={colors.brand.yellow} />
-                      <EditableText id="profile.division.xpToNext" className="caption font-body-semibold text-brand-yellow">
-                        {`${Math.max(0, xpToNextLevel - xp).toLocaleString("en-US")} XP to next`}
-                      </EditableText>
+                      <EditableNumberFlow id="profile.division.xpToNext" value={Math.max(0, xpToNextLevel - xp)} fontSize={12} fontWeight="600" color={colors.brand.yellow} suffix=" XP to next" suffixColor={colors.brand.yellow} />
                     </View>
                   </View>
                 </>
@@ -338,17 +341,17 @@ export default function ProfileScreen() {
           <Text style={sectionHeaderStyle} className="text-brand-white">
             SETTINGS
           </Text>
-          <View className="overflow-hidden rounded-2xl border border-divider bg-surface">
-            <SettingsRow icon="person-outline" label="Edit Profile" onPress={() => goTo("/profile/edit")} />
-            <SettingsRow icon="calendar-outline" label="Workout Split" onPress={() => goTo("/workout-split/intro")} />
-            <SettingsRow icon="swap-vertical-outline" label="Units" value={weightUnit === "kg" ? "Kilograms" : "Pounds"} onPress={() => goTo("/profile/units")} />
-            <SettingsRow icon="notifications-outline" label="Notifications" onPress={() => goTo("/profile/notifications")} />
-            <SettingsRow icon="people-outline" label="My Crew" value={crewName} onPress={() => goTo("/crew/settings")} />
-            <SettingsRow icon="card-outline" label="Subscription" onPress={() => goTo("/profile/subscription")} />
-            <SettingsRow icon="help-buoy-outline" label="Contact & Support" onPress={() => goTo("/profile/support")} />
-            <SettingsRow icon="sparkles-outline" label="Changelog" onPress={() => goTo("/profile/changelog")} />
-            <SettingsRow icon="map-outline" label="What's Coming" onPress={() => goTo("/profile/roadmap")} />
-            <SettingsRow icon="settings-outline" label="Account" isLast onPress={() => goTo("/profile/account")} />
+          <View className="rounded-2xl bg-surface px-4">
+            <SettingsLink icon="person-outline" label="Edit Profile" onPress={() => goTo("/profile/edit")} />
+            <SettingsLink icon="calendar-outline" label="Workout Split" onPress={() => goTo("/workout-split/intro")} />
+            <SettingsLink icon="swap-vertical-outline" label="Units" value={weightUnit === "kg" ? "Kilograms" : "Pounds"} onPress={() => goTo("/profile/units")} />
+            <SettingsLink icon="notifications-outline" label="Notifications" onPress={() => goTo("/profile/notifications")} />
+            <SettingsLink icon="people-outline" label="My Crew" value={crewName} onPress={() => goTo("/crew/settings")} />
+            <SettingsLink icon="card-outline" label="Subscription" onPress={() => goTo("/profile/subscription")} />
+            <SettingsLink icon="help-buoy-outline" label="Contact & Support" onPress={() => goTo("/profile/support")} />
+            <SettingsLink icon="sparkles-outline" label="Changelog" onPress={() => goTo("/profile/changelog")} />
+            <SettingsLink icon="map-outline" label="What's Coming" onPress={() => goTo("/profile/roadmap")} />
+            <SettingsLink icon="settings-outline" label="Account" isLast onPress={() => goTo("/profile/account")} />
           </View>
         </Animated.View>
       </ScrollView>

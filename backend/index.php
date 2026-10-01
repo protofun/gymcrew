@@ -35,6 +35,7 @@ require_once __DIR__ . '/routes/admin.php';
 require_once __DIR__ . '/routes/admin-ops.php';
 require_once __DIR__ . '/routes/admin-content.php';
 require_once __DIR__ . '/routes/admin-contacts.php';
+require_once __DIR__ . '/routes/admin-emails.php';
 require_once __DIR__ . '/routes/admin-marketing.php';
 require_once __DIR__ . '/routes/admin-finance.php';
 require_once __DIR__ . '/routes/analytics-events.php';

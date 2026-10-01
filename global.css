@@ -119,6 +119,19 @@ body {
   overscroll-behavior: none;
 }
 
+/* Web only: as an installed PWA (manifest's display: "standalone"), Expo's own injected reset
+   sizes html/body/#root with `height: 100%` — that resolves against the browser's LAYOUT viewport,
+   which on a real device still reserves space for the address bar even once it's hidden/collapsed
+   in standalone mode, leaving a dead gap at the bottom the exact height of that bar. `100dvh`
+   (dynamic viewport height) tracks the actual VISUAL viewport instead, so the app genuinely fills
+   the screen edge to edge once installed. No effect on native, and falls back silently to the
+   100% above on any browser old enough not to support dvh. */
+html,
+body,
+#root {
+  height: 100dvh !important;
+}
+
 /* Web only: mobile Safari/Chrome auto-zoom the whole page when focusing an input whose font-size
    is under 16px (most of ours are body-md/14px) — forcing 16px here stops that zoom-in-then-have-
    to-zoom-back-out on every field tap. No effect on native, and the visual size difference on web

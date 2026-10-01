@@ -113,7 +113,7 @@ export default function DivisionInfoScreen() {
 
         <Pressable
           onPress={() => router.push("/crew/all-divisions")}
-          className="items-center rounded-full border border-divider py-4"
+          className="items-center rounded-full bg-surface py-4"
         >
           <Text className="body-md font-body-semibold text-text-primary">VIEW ALL DIVISIONS</Text>
         </Pressable>

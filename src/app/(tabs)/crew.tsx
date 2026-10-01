@@ -9,9 +9,10 @@ import { AttachStep } from "react-native-spotlight-tour";
 
 import { ATTACH_INDEXES } from "@/components/AppTourOverlay";
 import { ChallengesTab } from "@/components/ChallengesTab";
+import { AvatarStack } from "@/components/AvatarStack";
 import { CrewActivitySheet } from "@/components/CrewActivitySheet";
-import { CrewCarousel } from "@/components/CrewCarousel";
 import { CrewEventReactionBar } from "@/components/CrewEventReactionBar";
+import { CrewOverviewHero } from "@/components/CrewOverviewHero";
 import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { CrewLeagueRecapCard } from "@/components/CrewLeagueRecapCard";
 import { CrewLeagueTab } from "@/components/CrewLeagueTab";
@@ -32,7 +33,8 @@ import { RankBadge } from "@/components/RankBadge";
 import { ShareCardModal } from "@/components/ShareCardModal";
 import { StatsTab } from "@/components/StatsTab";
 import { TodayWorkoutModal } from "@/components/TodayWorkoutModal";
-import { images, rankTierImages } from "@/constants/images";
+import { exerciseImages, images, rankTierImages } from "@/constants/images";
+import { WORKOUT_NAME_HERO_IMAGE } from "@/data/workout-templates";
 import type { MuscleGroup } from "@/data/workout-log";
 import { useTodayWorkout } from "@/hooks/use-today-workout";
 import { useWeightUnit } from "@/hooks/use-weight-unit";
@@ -42,7 +44,7 @@ import { crewMuscleBalance } from "@/lib/crew-muscle-balance";
 import { describeEvent, divisionFromEvent, EVENT_ICON, EVENT_TINT, tierForPrEvent } from "@/lib/crew-feed";
 import { describeResolvedDuel, duelMetricLabel, duelOpponentName } from "@/lib/crew-duel-format";
 import { realCurrentWeekMuscleIntensity } from "@/lib/member-real-profile";
-import { formatMuscleLabel, intensityToRedGreenColor } from "@/lib/muscle-groups";
+import { formatMuscleLabel, intensityToColor } from "@/lib/muscle-groups";
 import { formatRankTier } from "@/lib/rank";
 import { formatShortAgo } from "@/lib/time-since";
 import { formatWeight } from "@/lib/units";
@@ -221,6 +223,41 @@ function LiveSessionBanner({ session, onPress }: { session: ApiCrewLiveSession; 
   );
 }
 
+/** Today's collective plan (who's training, what) — used to be its own card in the now-removed
+ * `CrewCarousel`; kept as a plain flowing row instead, the same shape `LiveSessionBanner` right
+ * above it already uses, matching Nutrition's own "no card, just a row" language. */
+function TodayPlanRow({ onPress }: { onPress: () => void }) {
+  const members = useCrewStore((state) => state.members);
+  const todayPlan = useCrewStore((state) => state.todayPlan);
+  const today = useTodayWorkout();
+  const workoutName = today.workoutName;
+  const trainingAvatars = todayPlan.memberIdsTraining
+    .map((id) => members.find((member) => member.id === id)?.avatarUrl)
+    .filter((url): url is string => Boolean(url));
+  const trainingCount = todayPlan.memberIdsTraining.length;
+  const heroImage = WORKOUT_NAME_HERO_IMAGE[workoutName] ?? exerciseImages.benchPress;
+
+  return (
+    <HomeRow onPress={onPress}>
+      <View className="flex-row items-center gap-3">
+        <Image source={heroImage} resizeMode="cover" style={{ width: 44, height: 44, borderRadius: 22 }} />
+        <View className="flex-1 gap-0.5">
+          <Text style={HOME_EYEBROW}>TODAY&apos;S PLAN</Text>
+          <Text style={HOME_ROW_TITLE} numberOfLines={1}>
+            {workoutName.toUpperCase()}
+          </Text>
+          {trainingCount > 0 ? (
+            <Text style={[HOME_ROW_DETAIL, { color: colors.semantic.success }]}>{`${trainingCount} training now`}</Text>
+          ) : (
+            <Text style={HOME_ROW_DETAIL}>Nobody&apos;s training yet</Text>
+          )}
+        </View>
+        {trainingAvatars.length > 0 && <AvatarStack avatarUrls={trainingAvatars} />}
+      </View>
+    </HomeRow>
+  );
+}
+
 /** The crew-internal motivation feed — real, timestamped crewmate moments (PR / streak milestone /
  * long session / division up), logged from workout/active.tsx and profile-level-store.ts right when
  * each is detected. See backend/routes/crew-activity-events.php. Renders nothing until there's at
@@ -244,9 +281,12 @@ function CrewFeedSection() {
   if (events.length === 0) return null;
 
   return (
-    <View className="mx-4 gap-4 border-b border-divider pb-5">
-      <View className="flex-row items-center justify-between">
-        <Text style={HOME_EYEBROW}>CREW ACTIVITY</Text>
+    <View className="gap-4">
+      <View className="flex-row items-center gap-3">
+        <View style={{ width: 4, height: 30, borderRadius: 2, backgroundColor: colors.brand.yellow }} />
+        <Text style={{ fontFamily: fontFamily.heading, fontSize: 28, letterSpacing: 0.8, color: colors.brand.white }} className="flex-1">
+          CREW ACTIVITY
+        </Text>
         <Pressable onPress={() => router.push("/crew/activity")} hitSlop={6} style={PRESSED_STYLE}>
           <Text className="caption font-body-semibold text-brand-yellow">View all</Text>
         </Pressable>
@@ -309,8 +349,11 @@ function PeerDuelsSection() {
   if (myDuels.length === 0) return null;
 
   return (
-    <View className="mx-4 gap-4 border-b border-divider pb-5">
-      <Text style={HOME_EYEBROW}>PEER DUELS</Text>
+    <View className="gap-4">
+      <View className="flex-row items-center gap-3">
+        <View style={{ width: 4, height: 30, borderRadius: 2, backgroundColor: colors.brand.yellow }} />
+        <Text style={{ fontFamily: fontFamily.heading, fontSize: 28, letterSpacing: 0.8, color: colors.brand.white }}>PEER DUELS</Text>
+      </View>
 
       <View className="gap-4">
         {myDuels.map((duel) =>
@@ -323,7 +366,7 @@ function PeerDuelsSection() {
                 <Pressable onPress={() => respond(duel.id, true)} className="flex-1 items-center rounded-full bg-brand-yellow py-2">
                   <Text className="caption font-body-bold text-brand-iron">Accept</Text>
                 </Pressable>
-                <Pressable onPress={() => respond(duel.id, false)} className="flex-1 items-center rounded-full border border-divider py-2">
+                <Pressable onPress={() => respond(duel.id, false)} className="flex-1 items-center rounded-full bg-surface py-2">
                   <Text className="caption font-body-semibold text-text-secondary">Decline</Text>
                 </Pressable>
               </View>
@@ -359,22 +402,20 @@ function RecentAchievementRow() {
   const isMe = member.id === CURRENT_MEMBER_ID;
 
   return (
-    <HomeRow>
-      <View className="flex-row items-center gap-3">
-        <HomeRowLead kind="flat">
-          <Image source={rankTierImages[rankTier]} resizeMode="contain" style={{ width: 30, height: 30 }} />
-        </HomeRowLead>
-        <View className="flex-1 gap-0.5">
-          <Text style={HOME_EYEBROW}>RECENT ACHIEVEMENT</Text>
-          <EditableText id="crew.achievement.memberName" style={HOME_ROW_TITLE} numberOfLines={1}>
-            {(isMe ? "You" : member.name).toUpperCase()}
-          </EditableText>
-          <EditableText id="crew.achievement.detail" style={HOME_ROW_DETAIL} numberOfLines={1}>
-            {`${formatRankTier(rankTier)} · ${achievement.exerciseName} · ${formatWeight(achievement.weightKg, weightUnit)} · ${formatShortAgo(achievement.achievedAt)}`}
-          </EditableText>
-        </View>
+    <View className="flex-row items-center gap-3">
+      <HomeRowLead kind="flat">
+        <Image source={rankTierImages[rankTier]} resizeMode="contain" style={{ width: 30, height: 30 }} />
+      </HomeRowLead>
+      <View className="flex-1 gap-0.5">
+        <Text style={HOME_EYEBROW}>RECENT ACHIEVEMENT</Text>
+        <EditableText id="crew.achievement.memberName" style={HOME_ROW_TITLE} numberOfLines={1}>
+          {(isMe ? "You" : member.name).toUpperCase()}
+        </EditableText>
+        <EditableText id="crew.achievement.detail" style={HOME_ROW_DETAIL} numberOfLines={1}>
+          {`${formatRankTier(rankTier)} · ${achievement.exerciseName} · ${formatWeight(achievement.weightKg, weightUnit)} · ${formatShortAgo(achievement.achievedAt)}`}
+        </EditableText>
       </View>
-    </HomeRow>
+    </View>
   );
 }
 
@@ -406,9 +447,12 @@ function MuscleBalanceSection() {
 
   return (
     <View className="gap-4">
-      <View className="gap-1">
-        <Text style={HOME_EYEBROW}>{`ACROSS ALL ${members.length} MEMBERS`}</Text>
-        <Text style={HOME_SECTION_TITLE}>MUSCLE BALANCE</Text>
+      <View className="flex-row items-center gap-3">
+        <View style={{ width: 4, height: 30, borderRadius: 2, backgroundColor: colors.brand.yellow }} />
+        <View className="flex-1">
+          <Text style={{ fontFamily: fontFamily.heading, fontSize: 28, letterSpacing: 0.8, color: colors.brand.white }}>MUSCLE BALANCE</Text>
+          <Text className="caption text-text-secondary">{`Across all ${members.length} members`}</Text>
+        </View>
       </View>
 
       <View className="items-center">
@@ -418,17 +462,19 @@ function MuscleBalanceSection() {
           view="front"
           showLegend={false}
           showViewLabel={false}
-          colorForIntensity={intensityToRedGreenColor}
+          colorForIntensity={intensityToColor}
           onPressGroup={(group) => setSelected((prev) => (prev === group ? null : group))}
         />
       </View>
 
       <View className="gap-1.5">
         {/* No native linear-gradient view here, so the scale is approximated with evenly spaced
-            solid bands matching the same red-green function the body silhouette uses. */}
+            solid bands matching the same neutral→brand-yellow function the body silhouette uses —
+            the same two-color scale the single-person heatmap already uses (`intensityToColor`),
+            not the old 4-stop red-green rainbow ("te veel verschillende kleuren"). */}
         <View className="flex-row overflow-hidden rounded-full" style={{ height: 8 }}>
           {Array.from({ length: 20 }).map((_, index) => (
-            <View key={index} className="flex-1" style={{ backgroundColor: intensityToRedGreenColor((index / 19) * 10) }} />
+            <View key={index} className="flex-1" style={{ backgroundColor: intensityToColor((index / 19) * 10) }} />
           ))}
         </View>
         <View className="flex-row justify-between">
@@ -622,42 +668,39 @@ export default function CrewScreen() {
             </View>
           )}
 
-          {/* Division, Crew Power, Members and Today's Plan — Crew's own "glance at one number"
-              content, moved off flowing rows onto the same swipeable Reacticx `tilt-carousel` deck
-              Home's own quick-glance cards use ("style de crew page waar het kan ook zoals de home
-              met die cards"). Everything below this (the crew feed, peer duels, the recent-
-              achievement row, muscle balance) stays a full-width flowing section — the same call
-              `HomeCarousel` itself makes for content that needs real reading width rather than a
-              one-glance card. */}
+          {/* Overview rebuilt to take over Nutrition's own style ("het moet de stijl overnemen van
+              de nutrition page") — the Home-style card deck/flat-card system this tab used from
+              round 12 through round 34 is gone. `CrewOverviewHero` is built exactly the way
+              Nutrition's own `DiaryRings` is (one ring + a legend beside it + a cycling caption
+              underneath) instead of three separate flat cards in a carousel; everything below it is
+              a plain flowing section with a big heading-style title (matching `DiaryMealSection`'s
+              own "4px color bar + heading-font title" shape), not a bordered or `FlatCard`-boxed
+              module — Nutrition itself has no boxes anywhere on its own diary page. */}
           <AttachStep index={ATTACH_INDEXES.crew} fill>
-            <HomeReveal index={2} bleed tight>
-              <CrewCarousel onPressPlan={() => setActivitySheetOpen(true)} />
-            </HomeReveal>
+            <View className="mx-4 mt-4">
+              <CrewOverviewHero />
+            </View>
           </AttachStep>
 
-          <HomeReveal index={5}>
-            <CrewFeedSection />
-          </HomeReveal>
-          <HomeReveal index={6}>
-            <PeerDuelsSection />
-          </HomeReveal>
-          <View className="mx-4">
-            <HomeReveal index={7} tight>
+          <View className="mx-4 mt-6">
+            <TodayPlanRow onPress={() => setActivitySheetOpen(true)} />
+          </View>
+
+          <View className="mx-4 mt-8 gap-8">
+            {/* `bleed tight` on each — `bleed` drops HomeReveal's own `mx-4` (this outer View already
+                owns the page margin, avoiding a doubled-up 32px inset), `tight` drops its `mt-9`
+                (this View's own `gap-8` owns the rhythm between sections instead). */}
+            <HomeReveal index={5} bleed tight>
+              <CrewFeedSection />
+            </HomeReveal>
+            <HomeReveal index={6} bleed tight>
+              <PeerDuelsSection />
+            </HomeReveal>
+            <HomeReveal index={7} bleed tight>
               <RecentAchievementRow />
             </HomeReveal>
-          </View>
-          {/* Home's own flat-card treatment (see `home.tsx`'s `VisualTrainingCalendar` wrapper, and
-              `HomeStrengthTrend`'s own "Objective Proof" card) applied here too — "bij de crew pages
-              moet je ook de card styling gebruiken van de home zoals je objective proof bij sommige
-              dingen." A data-viz section like this one (a heatmap + legend + a leaderboard that
-              expands under it) reads as a distinct module the same way the calendar does on Home,
-              so it gets the same rounded, flat `colors.neutral.surface` boundary instead of just
-              running straight into the page background like the flowing rows above it. */}
-          <View className="mx-4">
-            <HomeReveal index={8} tight>
-              <View style={{ borderRadius: 28, backgroundColor: colors.neutral.surface, padding: 20 }}>
-                <MuscleBalanceSection />
-              </View>
+            <HomeReveal index={8} bleed tight>
+              <MuscleBalanceSection />
             </HomeReveal>
           </View>
         </View>

@@ -44,7 +44,7 @@ export default function RoadmapScreen() {
           {items.map((item) => {
             const config = STATUS_CONFIG[item.status];
             return (
-              <View key={item.id} className="gap-2 rounded-2xl border border-divider bg-surface p-4">
+              <View key={item.id} className="gap-2 rounded-2xl bg-surface p-4">
                 <View className="flex-row items-center justify-between">
                   <Text className="body-md font-body-semibold text-text-primary">{item.title}</Text>
                   <View className="flex-row items-center gap-1.5 rounded-full px-2.5 py-1" style={{ backgroundColor: `${config.color}22` }}>

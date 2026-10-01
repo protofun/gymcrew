@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Easing, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
@@ -13,11 +14,11 @@ import { ReportModal } from "@/components/ReportModal";
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
 import { HomeRowLead } from "@/components/HomeRowLead";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
-import { ProgressBar } from "@/components/ProgressBar";
 import { RankBadge } from "@/components/RankBadge";
 import { ShareCardModal } from "@/components/ShareCardModal";
 import { StatTile } from "@/components/StatTile";
 import { StrengthProgressChart } from "@/components/StrengthProgressChart";
+import { CircularProgress } from "@/components/ui/organisms/circular-progress";
 import { VisualTrainingCalendar, type CalendarWorkout } from "@/components/VisualTrainingCalendar";
 import { WorkoutListRow } from "@/components/WorkoutListRow";
 import { WorkoutShareCard } from "@/components/WorkoutShareCard";
@@ -115,10 +116,29 @@ function OverviewTab({
   const roleLabel = ROLE_LABEL[member.role];
   const weightUnit = useWeightUnit();
 
+  // The division ring — same `CircularProgress` language `CrewOverviewHero` already uses for the
+  // CURRENT user's own crew, applied here to a single member's own XP-to-next-division instead of a
+  // flat linear bar underneath a separate avatar.
+  const xpProgress = useSharedValue(0);
+  useEffect(() => {
+    xpProgress.value = withTiming(Math.min(100, Math.round((xp / xpToNextLevel) * 100)), { duration: 900, easing: Easing.out(Easing.cubic) });
+  }, [xp, xpToNextLevel, xpProgress]);
+
   return (
     <View className="gap-5 p-4">
       <View className="items-center gap-2">
-        <DivisionAvatarFrame source={{ uri: member.avatarUrl }} division={division} size={88} />
+        <View style={{ width: 108, height: 108 }} className="items-center justify-center">
+          <CircularProgress
+            progress={xpProgress}
+            size={108}
+            strokeWidth={6}
+            gap={4}
+            outerCircleColor={colors.neutral.divider}
+            progressCircleColor={colors.brand.yellow}
+            backgroundColor="transparent"
+            renderIcon={() => <DivisionAvatarFrame source={{ uri: member.avatarUrl }} division={division} size={80} />}
+          />
+        </View>
         <EditableText id={`crew.member.${member.id}.name`} className="heading-4 text-text-primary">
           {member.name}
         </EditableText>
@@ -132,16 +152,13 @@ function OverviewTab({
         )}
       </View>
 
-      <View className="gap-1.5">
-        <View className="flex-row items-center justify-between">
-          <EditableText id={`crew.member.${member.id}.level`} className="caption font-body-semibold text-text-secondary">
-            {division.toUpperCase()}
-          </EditableText>
-          <EditableText id={`crew.member.${member.id}.xpProgress`} className="caption text-text-secondary">
-            {`${xp.toLocaleString("en-US")} / ${xpToNextLevel.toLocaleString("en-US")} XP`}
-          </EditableText>
-        </View>
-        <ProgressBar ratio={xp / xpToNextLevel} color={colors.brand.yellow} height={8} />
+      <View className="flex-row items-center justify-between">
+        <EditableText id={`crew.member.${member.id}.level`} className="caption font-body-semibold text-text-secondary">
+          {division.toUpperCase()}
+        </EditableText>
+        <EditableText id={`crew.member.${member.id}.xpProgress`} className="caption text-text-secondary">
+          {`${xp.toLocaleString("en-US")} / ${xpToNextLevel.toLocaleString("en-US")} XP`}
+        </EditableText>
       </View>
 
       <View className="flex-row gap-3">
@@ -308,7 +325,7 @@ function StatsTab({
         <Pressable
           onPress={() => router.push(`/ranks/body-graph?memberId=${memberId}`)}
           style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
-          className="flex-row items-center justify-center gap-2 rounded-full border border-divider py-3"
+          className="flex-row items-center justify-center gap-2 rounded-full bg-surface py-3"
         >
           <Ionicons name="body-outline" size={15} color={colors.brand.yellow} />
           <Text className="body-sm font-body-semibold text-brand-yellow">View Full Muscle Rank</Text>
@@ -319,7 +336,7 @@ function StatsTab({
         <Text className="body-md font-body-semibold text-text-primary">Exercise Progress</Text>
         <Pressable
           onPress={onOpenExercisePicker}
-          className="flex-row items-center justify-between rounded-xl border border-divider bg-surface px-4 py-4"
+          className="flex-row items-center justify-between rounded-xl bg-surface px-4 py-4"
         >
           <Text className="body-md text-text-primary">{selectedExerciseName}</Text>
           <Ionicons name="chevron-down" size={18} color={colors.neutral.textSecondary} />

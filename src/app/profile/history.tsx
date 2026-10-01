@@ -5,6 +5,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
+import { HomeRowLead } from "@/components/HomeRowLead";
 import { ShareCardModal } from "@/components/ShareCardModal";
 import { SnapshotBanner } from "@/components/SnapshotBanner";
 import { StatCard, StatRow, StatSectionHeader } from "@/components/StatRow";
@@ -100,11 +101,11 @@ export default function TrainingHistoryScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="flex-row gap-3">
-          <StatTile id="profile.history.currentStreak" icon="flame" label="Current Streak" value={`${currentStreak}d`} />
-          <StatTile id="profile.history.longestStreak" icon="trophy" label="Longest Streak" value={`${longestStreak}d`} />
+          <StatTile id="profile.history.currentStreak" icon="flame" label="Current Streak" value={`${currentStreak}d`} numericValue={currentStreak} suffix="d" />
+          <StatTile id="profile.history.longestStreak" icon="trophy" label="Longest Streak" value={`${longestStreak}d`} numericValue={longestStreak} suffix="d" />
         </View>
 
-        <View className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface p-4">
+        <View className="flex-row items-center justify-between rounded-2xl bg-surface p-4">
           {weekDates.map((date, index) => {
             const trained = trainedThisWeek[index];
             const isToday = toDateKey(date) === today;
@@ -124,11 +125,11 @@ export default function TrainingHistoryScreen() {
         <Pressable
           onPress={() => router.push("/profile/training-consistency")}
           style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
-          className="flex-row items-center gap-3 rounded-2xl border border-divider bg-surface p-4"
+          className="flex-row items-center gap-3 rounded-2xl bg-surface p-4"
         >
-          <View className="h-11 w-11 items-center justify-center rounded-full bg-background">
-            <Ionicons name="calendar" size={18} color={colors.brand.yellow} />
-          </View>
+          <HomeRowLead kind="flat">
+            <Ionicons name="calendar" size={17} color={colors.brand.yellow} />
+          </HomeRowLead>
           <View className="flex-1 gap-0.5">
             <Text className="body-md font-body-semibold text-text-primary">Training Consistency</Text>
             <Text className="caption text-text-secondary">Every year, one square per day</Text>
@@ -140,7 +141,7 @@ export default function TrainingHistoryScreen() {
 
         <View className="gap-3">
           <Text className="heading-4 text-text-primary">Performance</Text>
-          <View className="flex-row rounded-full border border-divider bg-surface p-1">
+          <View className="flex-row rounded-full bg-surface p-1">
             {CHART_METRICS.map((option) => {
               const active = option.key === metric;
               return (
@@ -155,7 +156,7 @@ export default function TrainingHistoryScreen() {
             })}
           </View>
 
-          <View className="rounded-2xl border border-divider bg-surface p-4">
+          <View className="rounded-2xl bg-surface p-4">
             <StrengthProgressChart
               exerciseName={activeMetric.label}
               points={series}
@@ -168,9 +169,9 @@ export default function TrainingHistoryScreen() {
         <View className="gap-2">
           <StatSectionHeader label="All-Time Totals" />
           <StatCard>
-            <StatRow id="profile.history.totalWorkouts" label="Total Workouts" value={String(totals.workouts)} />
-            <StatRow id="profile.history.totalSets" label="Total Sets" value={totals.sets.toLocaleString("en-US")} />
-            <StatRow id="profile.history.totalReps" label="Total Reps" value={totals.reps.toLocaleString("en-US")} />
+            <StatRow id="profile.history.totalWorkouts" label="Total Workouts" value={String(totals.workouts)} numericValue={totals.workouts} />
+            <StatRow id="profile.history.totalSets" label="Total Sets" value={totals.sets.toLocaleString("en-US")} numericValue={totals.sets} />
+            <StatRow id="profile.history.totalReps" label="Total Reps" value={totals.reps.toLocaleString("en-US")} numericValue={totals.reps} />
             <StatRow id="profile.history.totalVolume" label="Total Volume" value={formatWeight(totals.volumeKg, weightUnit)} />
             <StatRow id="profile.history.totalTime" label="Total Training Time" value={formatDuration(totals.durationSeconds)} />
             <StatRow id="profile.history.avgDuration" label="Avg Workout Duration" value={formatDuration(totals.avgDurationSeconds)} isLast />
@@ -210,7 +211,7 @@ export default function TrainingHistoryScreen() {
           </View>
 
           {recentWorkouts.length === 0 ? (
-            <View className="items-center gap-2 rounded-2xl border border-dashed border-divider py-14">
+            <View className="items-center gap-2 rounded-2xl bg-surface py-14">
               <Ionicons name="calendar-outline" size={28} color={colors.neutral.textSecondary} />
               <Text className="body-md text-text-secondary">No workouts logged yet.</Text>
             </View>

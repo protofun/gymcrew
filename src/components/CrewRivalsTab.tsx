@@ -2,7 +2,7 @@ import { useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
+import Animated, { Easing, FadeInUp, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { BrandBeamFrame } from "@/components/BrandBeamFrame";
 import { CrewSwitcher } from "@/components/CrewSwitcher";
@@ -10,6 +10,8 @@ import { DivisionAvatarFrame } from "@/components/DivisionAvatarFrame";
 import { type DuelMetric, DuelChallengeSheet } from "@/components/DuelChallengeSheet";
 import { EditableText } from "@/components/EditableText";
 import { HOME_EYEBROW, HOME_ROW_DETAIL, HOME_ROW_TITLE, HOME_SECTION_TITLE } from "@/components/homeStyle";
+import { SectionHeading } from "@/components/SectionHeading";
+import { CircularProgress } from "@/components/ui/organisms/circular-progress";
 import { HomeRowLead } from "@/components/HomeRowLead";
 import { NumberFlow } from "@/components/ui/molecules/number-flow";
 import { type MemberContribution, perMemberContributions } from "@/lib/challenge-progress";
@@ -132,7 +134,7 @@ function DuelRow({ text, onRespond, isLast }: { text: string; onRespond?: (accep
           <Pressable onPress={() => onRespond(true)} className="flex-1 items-center rounded-full bg-brand-yellow py-2">
             <Text className="caption font-body-bold text-brand-iron">Accept</Text>
           </Pressable>
-          <Pressable onPress={() => onRespond(false)} className="flex-1 items-center rounded-full border border-divider py-2">
+          <Pressable onPress={() => onRespond(false)} className="flex-1 items-center rounded-full bg-background py-2">
             <Text className="caption font-body-semibold text-text-secondary">Decline</Text>
           </Pressable>
         </View>
@@ -210,10 +212,19 @@ export function CrewRivalsTab() {
   const metricUnit = metricKey === "totalVolume" ? weightUnit : metric.unit;
   const leader = leaderboard[0];
 
+  // The leader's share ring — same `CircularProgress` language every other tab now uses, here
+  // showing how much of the CREW's combined total the leader alone represents.
+  const leaderboardTotal = leaderboard.reduce((sum, entry) => sum + entry.amount, 0);
+  const leaderSharePercent = leader && leaderboardTotal > 0 ? Math.round((leader.amount / leaderboardTotal) * 100) : 0;
+  const leaderShareProgress = useSharedValue(0);
+  useEffect(() => {
+    leaderShareProgress.value = withTiming(leaderSharePercent, { duration: 800, easing: Easing.out(Easing.cubic) });
+  }, [leaderSharePercent, leaderShareProgress]);
+
   const myDuels = duels.filter((duel) => duel.challengerId === user?.id || duel.opponentId === user?.id);
 
   return (
-    <View className="mx-4 mt-4 gap-5">
+    <View className="mx-4 mt-4 gap-8">
       <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-1">
         <Text style={HOME_SECTION_TITLE}>RIVALRY</Text>
         <View className="flex-row items-center gap-1.5">
@@ -232,12 +243,31 @@ export function CrewRivalsTab() {
         />
       </Animated.View>
 
-      {leader && leader.amount > 0 && <MvpSpotlight leader={leader} division={divisionFor(leader.member.id, leader.member.division)} unit={metricUnit} />}
+      <Animated.View entering={FadeInUp.delay(120).springify().damping(16).mass(0.6)} className="gap-2">
+        <View className="flex-row items-center justify-between gap-3">
+          <SectionHeading id="crew.rivals.leaderboard" eyebrow={`${RANGE_LABEL[range]} · ${metric.label.toUpperCase()}`} title="Leaderboard" size={26} />
+          {leader && leader.amount > 0 && (
+            <View style={{ width: 56, height: 56 }} className="items-center justify-center">
+              <CircularProgress
+                progress={leaderShareProgress}
+                size={56}
+                strokeWidth={5}
+                gap={0}
+                outerCircleColor={colors.neutral.divider}
+                progressCircleColor={colors.brand.yellow}
+                backgroundColor="transparent"
+                renderIcon={() => <Text style={{ fontFamily: fontFamily.bodyBold, fontSize: 12, color: colors.brand.white }}>{`${leaderSharePercent}%`}</Text>}
+              />
+            </View>
+          )}
+        </View>
 
-      <View className="border-t border-divider">
-        {leaderboard.map((contribution, index) => (
-          <Animated.View key={contribution.member.id} entering={FadeInUp.delay(180 + index * 40).springify().damping(16).mass(0.6)}>
+        {leader && leader.amount > 0 && <MvpSpotlight leader={leader} division={divisionFor(leader.member.id, leader.member.division)} unit={metricUnit} />}
+
+        <View>
+          {leaderboard.map((contribution, index) => (
             <LeaderboardRow
+              key={contribution.member.id}
               contribution={contribution}
               rank={index + 1}
               unit={metricUnit}
@@ -246,12 +276,12 @@ export function CrewRivalsTab() {
               onChallenge={() => setChallengingId(contribution.member.id)}
               isLast={index === leaderboard.length - 1}
             />
-          </Animated.View>
-        ))}
-      </View>
+          ))}
+        </View>
+      </Animated.View>
 
-      <Animated.View entering={FadeInUp.delay(240).springify().damping(16).mass(0.6)} className="gap-3 border-t border-divider pt-4">
-        <Text style={HOME_EYEBROW}>PEER DUELS</Text>
+      <Animated.View entering={FadeInUp.delay(240).springify().damping(16).mass(0.6)} className="gap-3">
+        <SectionHeading id="crew.rivals.duels" eyebrow="1-on-1" title="Peer Duels" size={26} />
 
         {myDuels.length === 0 ? (
           <View className="items-center gap-2 py-8">

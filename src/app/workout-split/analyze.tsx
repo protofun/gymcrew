@@ -6,7 +6,9 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
+import { EditableNumberFlow } from "@/components/EditableAnimated";
 import { MuscleHeatmap } from "@/components/MuscleHeatmap";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { RankBadge } from "@/components/RankBadge";
 import { ALL_MUSCLE_GROUPS, type MuscleGroup } from "@/data/workout-log";
 import { buildLiftRankCards } from "@/lib/lift-rank-cards";
@@ -19,7 +21,6 @@ import { usePersonalRecordsStore } from "@/store/personal-records-store";
 import { useTrackedLiftsStore } from "@/store/tracked-lifts-store";
 import { colors } from "@/theme";
 
-const PRESSED_STYLE = ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.85 : 1 });
 /** How many "next opportunities" to surface — enough to feel real, not an overwhelming full list. */
 const OPPORTUNITY_COUNT = 4;
 
@@ -72,7 +73,7 @@ export default function WorkoutSplitAnalyzeScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: insets.bottom + 100, gap: 20 }}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-4 rounded-2xl border border-divider bg-surface p-4">
+        <Animated.View entering={FadeInUp.springify().damping(16).mass(0.6)} className="gap-4 rounded-2xl bg-surface p-4">
           <MuscleHeatmap
             muscleIntensity={tierIndexByGroup}
             showLegend={false}
@@ -81,11 +82,11 @@ export default function WorkoutSplitAnalyzeScreen() {
           />
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.delay(60).springify().damping(16).mass(0.6)} className="gap-3 rounded-2xl border border-divider bg-surface p-4">
+        <Animated.View entering={FadeInUp.delay(60).springify().damping(16).mass(0.6)} className="gap-3 rounded-2xl bg-surface p-4">
           <Text className="caption font-body-semibold text-text-secondary">YOUR CURRENT BALANCE</Text>
           <View className="flex-row items-center justify-between">
             <Text className="body-sm text-text-secondary">Overall Power</Text>
-            <Text className="body-md font-body-bold text-text-primary">{power.toLocaleString("en-US")}</Text>
+            <EditableNumberFlow id="workoutSplit.analyze.power" value={power} fontSize={15} fontWeight="700" color={colors.brand.white} />
           </View>
           {strongest && (
             <View className="flex-row items-center justify-between">
@@ -115,7 +116,7 @@ export default function WorkoutSplitAnalyzeScreen() {
           <Text className="body-md font-body-semibold text-text-primary">Your biggest opportunities</Text>
           <View className="gap-2">
             {opportunities.map(({ group, tierIndex }) => (
-              <View key={group} className="flex-row items-center justify-between rounded-2xl border border-divider bg-surface px-4 py-3">
+              <View key={group} className="flex-row items-center justify-between rounded-2xl bg-surface px-4 py-3">
                 <Text className="body-sm font-body-semibold text-text-primary">{formatMuscleLabel(group)}</Text>
                 {tierIndex >= 0 ? (
                   <View className="flex-row items-center gap-1.5">
@@ -132,9 +133,7 @@ export default function WorkoutSplitAnalyzeScreen() {
       </ScrollView>
 
       <View style={{ position: "absolute", left: 16, right: 16, bottom: insets.bottom + 12 }}>
-        <Pressable onPress={() => router.push("/workout-split/setup")} style={PRESSED_STYLE} className="items-center rounded-full bg-brand-yellow py-4">
-          <Text className="body-md font-body-semibold text-brand-iron">Continue</Text>
-        </Pressable>
+        <PrimaryButton label="Continue" onPress={() => router.push("/workout-split/setup")} />
       </View>
     </View>
   );

@@ -40,6 +40,7 @@ import Retention from "./pages/Retention";
 import Journal from "./pages/Journal";
 import RankTiers from "./pages/RankTiers";
 import Contacts from "./pages/Contacts";
+import EmailAddresses from "./pages/EmailAddresses";
 import Marketing from "./pages/Marketing";
 import Finance from "./pages/Finance";
 
@@ -66,6 +67,7 @@ export default function App() {
             <Route path="/support/:id" element={<SupportDetail />} />
             <Route path="/rank-moderation" element={<RankModeration />} />
             <Route path="/rank-tiers" element={<RankTiers />} />
+            <Route path="/email-addresses" element={<EmailAddresses />} />
             <Route path="/contacts" element={<Contacts />} />
             <Route path="/marketing" element={<Marketing />} />
             <Route path="/finance" element={<Finance />} />

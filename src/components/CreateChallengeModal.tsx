@@ -1,8 +1,9 @@
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
+import { Pressable, Text, View } from "react-native";
 
+import { BottomSheet } from "@/components/BottomSheet";
 import { HomeRowLead } from "@/components/HomeRowLead";
 import { PillRow } from "@/components/PillRow";
 import { CHALLENGE_TEMPLATES, type ChallengeTemplate } from "@/data/challenges";
@@ -33,70 +34,62 @@ export function CreateChallengeModal({ visible, rivalCrews, onClose, onCreate }:
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.7)", paddingHorizontal: 24 }}>
-        <Animated.View
-          entering={FadeInUp.springify().damping(16).mass(0.7)}
-          className="w-full gap-4 rounded-3xl border border-divider bg-surface p-5"
-          style={{ maxHeight: "85%" }}
-        >
-          <View className="flex-row items-center justify-between">
-            <Text className="heading-4 text-text-primary">Challenge a Crew</Text>
-            <Pressable onPress={onClose} hitSlop={12}>
-              <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
-            </Pressable>
+    <BottomSheet visible={visible} onClose={onClose} snapPoints={["65%", "92%"]}>
+      <View className="flex-row items-center justify-between px-5 pb-2">
+        <Text className="heading-4 text-text-primary">Challenge a Crew</Text>
+        <Pressable onPress={onClose} hitSlop={12}>
+          <Ionicons name="close" size={22} color={colors.neutral.textSecondary} />
+        </Pressable>
+      </View>
+
+      <BottomSheetScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+        <View className="gap-5">
+          <View className="gap-2">
+            <Text className="body-sm text-text-secondary">Challenge Type</Text>
+            <View>
+              {CHALLENGE_TEMPLATES.map((option, index) => {
+                const selected = option.id === template.id;
+                return (
+                  <Pressable
+                    key={option.id}
+                    onPress={() => setTemplate(option)}
+                    className={`flex-row items-center gap-3 py-3 active:opacity-70 ${index === CHALLENGE_TEMPLATES.length - 1 ? "" : "border-b border-divider"}`}
+                  >
+                    <HomeRowLead kind="flat">
+                      <Ionicons name={option.icon} size={18} color={selected ? colors.brand.yellow : colors.neutral.textSecondary} />
+                    </HomeRowLead>
+                    <View className="flex-1 gap-0.5">
+                      <Text className={`body-sm font-body-semibold ${selected ? "text-brand-yellow" : "text-text-primary"}`}>{option.name}</Text>
+                      <Text className="caption text-text-secondary" numberOfLines={1}>
+                        {option.description}
+                      </Text>
+                    </View>
+                    {selected && <Ionicons name="checkmark-circle" size={20} color={colors.brand.yellow} />}
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <View className="gap-5">
-              <View className="gap-2">
-                <Text className="body-sm text-text-secondary">Challenge Type</Text>
-                <View>
-                  {CHALLENGE_TEMPLATES.map((option, index) => {
-                    const selected = option.id === template.id;
-                    return (
-                      <Pressable
-                        key={option.id}
-                        onPress={() => setTemplate(option)}
-                        className={`flex-row items-center gap-3 py-3 active:opacity-70 ${index === CHALLENGE_TEMPLATES.length - 1 ? "" : "border-b border-divider"}`}
-                      >
-                        <HomeRowLead kind="flat">
-                          <Ionicons name={option.icon} size={18} color={selected ? colors.brand.yellow : colors.neutral.textSecondary} />
-                        </HomeRowLead>
-                        <View className="flex-1 gap-0.5">
-                          <Text className={`body-sm font-body-semibold ${selected ? "text-brand-yellow" : "text-text-primary"}`}>{option.name}</Text>
-                          <Text className="caption text-text-secondary" numberOfLines={1}>
-                            {option.description}
-                          </Text>
-                        </View>
-                        {selected && <Ionicons name="checkmark-circle" size={20} color={colors.brand.yellow} />}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
+          <View className="gap-2">
+            <Text className="body-sm text-text-secondary">Opponent Crew (your division)</Text>
+            {rivalCrews.length === 0 ? (
+              <Text className="caption text-text-secondary">No rival crews in your division yet — check back after this week&apos;s league.</Text>
+            ) : (
+              <PillRow options={rivalCrews.map((crew) => ({ key: crew.name, label: crew.name }))} value={opponentCrewName ?? null} onChange={setOpponentCrewName} wrap bleed={0} />
+            )}
+          </View>
 
-              <View className="gap-2">
-                <Text className="body-sm text-text-secondary">Opponent Crew (your division)</Text>
-                {rivalCrews.length === 0 ? (
-                  <Text className="caption text-text-secondary">No rival crews in your division yet — check back after this week&apos;s league.</Text>
-                ) : (
-                  <PillRow options={rivalCrews.map((crew) => ({ key: crew.name, label: crew.name }))} value={opponentCrewName ?? null} onChange={setOpponentCrewName} wrap bleed={0} />
-                )}
-              </View>
-
-              <View className="gap-2">
-                <Text className="body-sm text-text-secondary">Duration</Text>
-                <PillRow
-                  options={DURATION_OPTIONS.map((days) => ({ key: String(days), label: `${days} days` }))}
-                  value={String(durationDays)}
-                  onChange={(key) => setDurationDays(Number(key) as (typeof DURATION_OPTIONS)[number])}
-                  wrap
-                  bleed={0}
-                />
-              </View>
-            </View>
-          </ScrollView>
+          <View className="gap-2">
+            <Text className="body-sm text-text-secondary">Duration</Text>
+            <PillRow
+              options={DURATION_OPTIONS.map((days) => ({ key: String(days), label: `${days} days` }))}
+              value={String(durationDays)}
+              onChange={(key) => setDurationDays(Number(key) as (typeof DURATION_OPTIONS)[number])}
+              wrap
+              bleed={0}
+            />
+          </View>
 
           <Pressable
             onPress={handleCreate}
@@ -105,8 +98,8 @@ export function CreateChallengeModal({ visible, rivalCrews, onClose, onCreate }:
           >
             <Text className={`body-md font-body-bold ${opponent ? "text-brand-iron" : "text-text-secondary"}`}>Send Challenge</Text>
           </Pressable>
-        </Animated.View>
-      </View>
-    </Modal>
+        </View>
+      </BottomSheetScrollView>
+    </BottomSheet>
   );
 }

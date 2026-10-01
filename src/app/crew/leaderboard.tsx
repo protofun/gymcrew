@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Easing, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { goBack } from "@/lib/navigation";
@@ -9,12 +10,13 @@ import { CrewIconBadge } from "@/components/CrewIconBadge";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { EditableText } from "@/components/EditableText";
 import { HOME_EYEBROW, HOME_SECTION_TITLE } from "@/components/homeStyle";
+import { CircularProgress } from "@/components/ui/organisms/circular-progress";
 import SegmentedControl from "@/components/ui/organisms/segmented-control";
 import { api, isApiConfigured, type ApiCrewLeaderboardEntry, type ApiPlayerLeaderboardEntry } from "@/lib/api";
 import { DIVISION_COLOR, type Division } from "@/lib/division";
 import { useCrewStore } from "@/store/crew-store";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { colors } from "@/theme";
+import { colors, fontFamily } from "@/theme";
 
 const SCOPES = ["Global", "Gym", "Crews"] as const;
 type Scope = (typeof SCOPES)[number];
@@ -169,6 +171,16 @@ export default function CrewLeaderboardScreen() {
   const myCrewDivision = (crewsData.myDivision ?? "Rookie") as Division;
   const myGlobalDivision = (globalData.myDivision ?? "Rookie") as Division;
 
+  // The "my rank" ring — same `CircularProgress` language every other ranked list in the app now
+  // uses (Crew League's own standing ring), here for whichever pool the current scope is showing.
+  const activePool = scope === "Crews" ? crewPool : scope === "Global" ? globalPool : gymPool;
+  const myRank = activePool.findIndex((entry) => entry.isMe) + 1;
+  const myRankPercent = activePool.length > 0 && myRank > 0 ? Math.round(((activePool.length - myRank + 1) / activePool.length) * 100) : 0;
+  const myRankProgress = useSharedValue(0);
+  useEffect(() => {
+    myRankProgress.value = withTiming(myRankPercent, { duration: 800, easing: Easing.out(Easing.cubic) });
+  }, [myRankPercent, myRankProgress]);
+
   return (
     <View style={{ flex: 1, paddingTop: insets.top }} className="bg-background">
       <View className="relative flex-row items-center justify-center border-b border-divider px-4 pb-3">
@@ -181,11 +193,27 @@ export default function CrewLeaderboardScreen() {
         </Pressable>
       </View>
 
-      <View className="mx-4 mt-4 gap-1">
-        <Text style={HOME_EYEBROW}>
-          {scope === "Crews" ? "Crews rank within their own division — no mismatches." : scope === "Global" ? "Ranked within your division. Climb to earn a bigger stage." : myGymName || "Set your gym in Settings to see gym rankings"}
-        </Text>
-        <Text style={HOME_SECTION_TITLE}>{scope === "Crews" ? "TOP CREWS" : scope === "Global" ? "WORLD STAGE" : "HOME TURF"}</Text>
+      <View className="mx-4 mt-4 flex-row items-center justify-between gap-3">
+        <View className="flex-1 gap-1">
+          <Text style={HOME_EYEBROW}>
+            {scope === "Crews" ? "Crews rank within their own division — no mismatches." : scope === "Global" ? "Ranked within your division. Climb to earn a bigger stage." : myGymName || "Set your gym in Settings to see gym rankings"}
+          </Text>
+          <Text style={HOME_SECTION_TITLE}>{scope === "Crews" ? "TOP CREWS" : scope === "Global" ? "WORLD STAGE" : "HOME TURF"}</Text>
+        </View>
+        {myRank > 0 && (
+          <View style={{ width: 56, height: 56 }} className="items-center justify-center">
+            <CircularProgress
+              progress={myRankProgress}
+              size={56}
+              strokeWidth={5}
+              gap={0}
+              outerCircleColor={colors.neutral.divider}
+              progressCircleColor={colors.brand.yellow}
+              backgroundColor="transparent"
+              renderIcon={() => <Text style={{ fontFamily: fontFamily.bodyBold, fontSize: 12, color: colors.brand.white }}>{`#${myRank}`}</Text>}
+            />
+          </View>
+        )}
       </View>
 
       <ScopeSwitcher scope={scope} onChange={setScope} />

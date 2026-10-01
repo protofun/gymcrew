@@ -604,6 +604,9 @@ export const api = {
   getStatusHistory: () => request<StatusUpdate[]>("/status"),
   createStatusUpdate: (status: SystemStatus, message?: string) => request<{ ok: true }>("/status", { method: "POST", body: { status, message } }),
 
+  // ---- Every email address in the database, tagged by source table ----
+  getAdminEmails: () => request<{ emails: AdminEmailEntry[] }>("/emails"),
+
   // ---- Contacts (saved outreach emails — leads, gyms, influencers, press) ----
   getAdminContacts: () => request<{ contacts: AdminContact[] }>("/contacts"),
   createAdminContact: (data: { email: string; name?: string; category?: string; note?: string }) =>
@@ -656,6 +659,10 @@ export const api = {
   ) => request<{ ok: true }>(`/finance/${id}`, { method: "PUT", body: data }),
   deleteFinanceEntry: (id: number) => request<{ ok: true }>(`/finance/${id}`, { method: "DELETE" }),
 };
+
+export type EmailSource = "users" | "founding_athletes" | "waitlist" | "support" | "contacts" | "admins";
+
+export type AdminEmailEntry = { email: string; source: EmailSource; name: string | null; createdAt: number };
 
 export type AdminContact = {
   id: number;

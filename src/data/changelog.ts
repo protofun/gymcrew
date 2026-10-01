@@ -12,6 +12,54 @@ export type ChangelogEntry = {
 /** Newest first — top of the list renders first. Add new entries to the top when shipping. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "home-muscle-balance-radar",
+    publishedAtMs: Date.UTC(2026, 9, 1),
+    type: "feature",
+    title: "See Your Muscle Balance Right on Home",
+    description:
+      "Home now opens with a real at-a-glance look at your week — a chart showing how your training load this week is spread across every muscle group, so you can tell in one look what's getting enough work and what's being neglected before you even start your next session.",
+  },
+  {
+    id: "crew-visual-refresh",
+    publishedAtMs: Date.UTC(2026, 8, 29),
+    type: "update",
+    title: "Crew Gets a Visual Refresh",
+    description:
+      "Every tab on the Crew page — Overview, War, League, Challenges, Rivals, and Stats — has a lighter, cleaner new look, with charts and numbers that are easier to scan at a glance. Crew Power and Members are now clearly tappable from Overview to jump straight to the leaderboard or member list.",
+  },
+  {
+    id: "challenges-locked-teaser",
+    publishedAtMs: Date.UTC(2026, 8, 28),
+    type: "update",
+    title: "Clearer \"Coming Soon\" Challenges",
+    description:
+      "Challenges that aren't unlocked yet (like seasonal events) now show as a proper preview card instead of a grayed-out, hard-to-read row — so you can see what's coming without it looking broken.",
+  },
+  {
+    id: "crew-power-zero-fix",
+    publishedAtMs: Date.UTC(2026, 8, 27),
+    type: "bug",
+    title: "Fixed Crew Power showing 0 for new crews",
+    description:
+      "A crew created partway through the week used to show 0 Crew Power until the week rolled over. It now starts from real progress right away instead of sitting at zero for days.",
+  },
+  {
+    id: "pwa-fullscreen-fix",
+    publishedAtMs: Date.UTC(2026, 8, 26),
+    type: "bug",
+    title: "Fixed blank space at the bottom on installed app",
+    description:
+      "If you'd added GymCrew to your home screen as an app (PWA), there could be a strip of empty space left at the bottom of the screen. GymCrew now fills the whole screen properly.",
+  },
+  {
+    id: "animated-numbers-everywhere",
+    publishedAtMs: Date.UTC(2026, 8, 25),
+    type: "update",
+    title: "Animated Numbers Across the App",
+    description:
+      "Stats and scores throughout the app now roll up into place with a bit of style instead of just appearing — small touch, but it makes the whole app feel snappier wherever a number updates.",
+  },
+  {
     id: "ai-meal-scan",
     publishedAtMs: Date.UTC(2026, 8, 20),
     type: "feature",

@@ -5,6 +5,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ExercisePickerModal } from "@/components/ExercisePickerModal";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import type { Exercise } from "@/data/exercises";
 import { addTestWeighIn, setTestPersonalRecord } from "@/lib/dev-tools";
 import { goBack } from "@/lib/navigation";
@@ -23,23 +24,10 @@ function NumberField({ label, value, onChangeText, placeholder }: { label: strin
         keyboardType="decimal-pad"
         placeholder={placeholder}
         placeholderTextColor={colors.neutral.textSecondary}
-        className="body-md rounded-2xl border border-divider bg-background px-4 py-3.5 text-text-primary"
+        className="body-md rounded-2xl bg-background px-4 py-3.5 text-text-primary"
         style={{ outlineWidth: 0, outlineColor: "transparent" }}
       />
     </View>
-  );
-}
-
-function SaveButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled: boolean }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => ({ opacity: disabled ? 0.4 : pressed ? 0.75 : 1 })}
-      className="items-center rounded-full bg-brand-yellow py-3.5"
-    >
-      <Text className="body-md font-body-semibold text-brand-iron">{label}</Text>
-    </Pressable>
   );
 }
 
@@ -126,11 +114,11 @@ export default function DeveloperEditDataScreen() {
           Tools to undo them.
         </Text>
 
-        <View className="gap-3 rounded-2xl border border-brand-yellow/40 bg-surface p-4">
+        <View className="gap-3 rounded-2xl bg-surface p-4">
           <Text className="body-md font-body-semibold text-text-primary">Personal Record</Text>
           <Pressable
             onPress={() => setPickerVisible(true)}
-            className="flex-row items-center justify-between rounded-2xl border border-divider bg-background px-4 py-3.5"
+            className="flex-row items-center justify-between rounded-2xl bg-background px-4 py-3.5"
           >
             <Text className={`body-md ${exercise ? "text-text-primary" : "text-text-secondary"}`}>{exercise?.name ?? "Pick a lift"}</Text>
             <Ionicons name="chevron-down" size={16} color={colors.neutral.textSecondary} />
@@ -144,10 +132,10 @@ export default function DeveloperEditDataScreen() {
             <NumberField label="Weight (kg)" value={recordWeight} onChangeText={setRecordWeight} placeholder="100" />
             <NumberField label="Reps" value={recordReps} onChangeText={setRecordReps} placeholder="5" />
           </View>
-          <SaveButton label="Save Record" onPress={handleSaveRecord} disabled={!canSaveRecord} />
+          <PrimaryButton label="Save Record" onPress={handleSaveRecord} disabled={!canSaveRecord} hideArrow />
         </View>
 
-        <View className="gap-3 rounded-2xl border border-brand-yellow/40 bg-surface p-4">
+        <View className="gap-3 rounded-2xl bg-surface p-4">
           <Text className="body-md font-body-semibold text-text-primary">Weigh-In</Text>
           <View className="flex-row gap-3">
             <NumberField label="Weight (kg)" value={weighInWeight} onChangeText={setWeighInWeight} placeholder="82.5" />
@@ -157,7 +145,7 @@ export default function DeveloperEditDataScreen() {
             <NumberField label="Days Ago" value={weighInDaysAgo} onChangeText={setWeighInDaysAgo} placeholder="0" />
             <View className="flex-1" />
           </View>
-          <SaveButton label="Add Weigh-In" onPress={handleSaveWeighIn} disabled={!canSaveWeighIn} />
+          <PrimaryButton label="Add Weigh-In" onPress={handleSaveWeighIn} disabled={!canSaveWeighIn} hideArrow />
         </View>
       </ScrollView>
 
