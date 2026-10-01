@@ -22,18 +22,25 @@ SplashScreen.preventAutoHideAsync();
 
 /** Syncs the authenticated Clerk user to PostHog for accurate identification. */
 function PostHogUserSync() {
-  const { user, isSignedIn } = useUser();
+  const { user, isLoaded, isSignedIn } = useUser();
   const posthogClient = usePostHog();
+  const wasSignedIn = useRef(false);
 
   useEffect(() => {
+    if (!isLoaded) return;
+
     if (isSignedIn && user) {
       posthogClient.identify(user.id, {
         $set: { clerk_id: user.id },
       });
-    } else if (!isSignedIn) {
+      wasSignedIn.current = true;
+    } else if (!isSignedIn && wasSignedIn.current) {
+      // Reset only on sign-out. A reset on every signed-out launch gives
+      // each app open a new anonymous person, which breaks retention.
       posthogClient.reset();
+      wasSignedIn.current = false;
     }
-  }, [isSignedIn, user, posthogClient]);
+  }, [isLoaded, isSignedIn, user, posthogClient]);
 
   return null;
 }
